@@ -1,0 +1,206 @@
+.subtitle {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: -18px 0 24px;
+}
+
+.error-banner {
+  background: #fdecea;
+  color: #a33;
+  border: 1px solid #f3c6c1;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .error-banner {
+    background: #3a1f1f;
+    color: #ff9b93;
+    border-color: #5a2c2c;
+  }
+}
+
+/* Stat pills */
+.stat-pills {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.stat-pill {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 16px;
+  min-width: 100px;
+  background: var(--bg-subtle);
+}
+
+.stat-pill .value {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.stat-pill .label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Filter bar */
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.filter-bar input,
+.filter-bar select {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.filter-bar input {
+  flex: 1;
+}
+
+/* Jobs table */
+.jobs-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+table.jobs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.jobs-table th,
+.jobs-table td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.jobs-table th {
+  color: var(--text-muted);
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  background: var(--bg-subtle);
+  position: sticky;
+  top: 0;
+}
+
+.jobs-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.jobs-table tbody tr:hover {
+  background: var(--bg-subtle);
+}
+
+.jobs-table td.title-cell {
+  white-space: normal;
+  max-width: 340px;
+}
+
+.jobs-table td.title-cell a {
+  text-decoration: none;
+}
+
+.jobs-table td.title-cell a:hover {
+  text-decoration: underline;
+}
+
+.empty-state {
+  padding: 40px 12px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* Score pill */
+.score-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.score-pill.high {
+  background: #d7f3df;
+  color: #1a7a3c;
+}
+
+.score-pill.mid {
+  background: #fdf1c7;
+  color: #97690b;
+}
+
+.score-pill.low {
+  background: #f3f1ee;
+  color: #7a7871;
+}
+
+.score-pill.none {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+@media (prefers-color-scheme: dark) {
+  .score-pill.high {
+    background: #163a24;
+    color: #6fd996;
+  }
+  .score-pill.mid {
+    background: #3a2f0e;
+    color: #f0c14b;
+  }
+  .score-pill.low {
+    background: #2a2a28;
+    color: #a8a69f;
+  }
+}
+
+/* Stage badge */
+.stage-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.stage-discovered { background: #f1f1ef; color: #6b6b68; }
+.stage-enriched { background: #e1ecf7; color: #1c5a96; }
+.stage-scored { background: #ede3fa; color: #6b3fa0; }
+.stage-tailored { background: #e4e0fb; color: #4c3d99; }
+.stage-cover-letter-ready { background: #d9f3ee; color: #1c7d6c; }
+.stage-applying { background: #fdf1c7; color: #97690b; }
+.stage-applied { background: #d7f3df; color: #1a7a3c; }
+.stage-failed { background: #fbe1df; color: #a83c33; }
+
+@media (prefers-color-scheme: dark) {
+  .stage-discovered { background: #2a2a28; color: #a8a69f; }
+  .stage-enriched { background: #16283a; color: #7fb4e8; }
+  .stage-scored { background: #2c2038; color: #c39ff2; }
+  .stage-tailored { background: #241c3d; color: #a898f0; }
+  .stage-cover-letter-ready { background: #0f2e28; color: #6fd4c0; }
+  .stage-applying { background: #3a2f0e; color: #f0c14b; }
+  .stage-applied { background: #163a24; color: #6fd996; }
+  .stage-failed { background: #3a1f1f; color: #ff9b93; }
+}

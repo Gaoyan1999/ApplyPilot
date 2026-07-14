@@ -39,3 +39,8 @@ Thumbs.db
 
 # Claude Code
 .claude/
+
+# Web app (frontend)
+webapp/node_modules/
+webapp/dist/
+webapp/.vite/

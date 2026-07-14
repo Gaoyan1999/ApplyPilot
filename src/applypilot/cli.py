@@ -333,6 +333,20 @@ def dashboard() -> None:
 
 
 @app.command()
+def serve(
+    host: str = typer.Option("127.0.0.1", "--host", help="Host to bind the dashboard server to."),
+    port: int = typer.Option(8420, "--port", "-p", help="Port to bind the dashboard server to."),
+    open_browser: bool = typer.Option(True, "--open/--no-open", help="Open the dashboard in your browser."),
+) -> None:
+    """Launch the ApplyPilot web dashboard (FastAPI + React)."""
+    _bootstrap()
+
+    from applypilot.server.app import run_server
+
+    run_server(host=host, port=port, open_browser=open_browser)
+
+
+@app.command()
 def doctor() -> None:
     """Check your setup and diagnose missing requirements."""
     import shutil
