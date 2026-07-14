@@ -1,4 +1,5 @@
 import type { Job } from '../api/types'
+import { formatDate } from '../lib/format'
 import { ScorePill } from './ScorePill'
 import { StageBadge } from './StageBadge'
 import { SiteIcon } from './SiteIcon'
@@ -14,15 +15,6 @@ interface Props {
   onPreview: (job: Job) => void
 }
 
-function EyeIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  )
-}
-
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'title', label: 'Title' },
   { key: 'site', label: 'Link' },
@@ -31,13 +23,6 @@ const COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'stage', label: 'Stage' },
   { key: 'discovered_at', label: 'Discovered' },
 ]
-
-function formatDate(iso: string | null): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
-}
 
 export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview }: Props) {
   if (jobs.length === 0) {
@@ -61,20 +46,9 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview }: Props) 
           {jobs.map((job) => (
             <tr key={job.url}>
               <td className="title-cell">
-                <div className="title-cell-row">
-                  <a href={job.url} target="_blank" rel="noreferrer">
-                    {job.title || '(untitled)'}
-                  </a>
-                  <button
-                    type="button"
-                    className="preview-button"
-                    onClick={() => onPreview(job)}
-                    title="Preview job description"
-                    aria-label="Preview job description"
-                  >
-                    <EyeIcon />
-                  </button>
-                </div>
+                <button type="button" className="title-button" onClick={() => onPreview(job)}>
+                  {job.title || '(untitled)'}
+                </button>
               </td>
               <td className="site-cell">
                 <a href={job.url} target="_blank" rel="noreferrer" aria-label={`Open ${job.title || 'job'} listing`}>
