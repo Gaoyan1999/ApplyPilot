@@ -2,9 +2,12 @@ import { useMemo, useState } from 'react'
 import { getJobs, getStatus } from './api/client'
 import type { Job, Stage } from './api/types'
 import { usePolling } from './hooks/usePolling'
+import { useTheme } from './hooks/useTheme'
 import { StatPills } from './components/StatPills'
 import { SearchFilterBar } from './components/SearchFilterBar'
 import { JobsTable, type SortDir, type SortKey } from './components/JobsTable'
+import { ThemeToggle } from './components/ThemeToggle'
+import { JobPreviewModal } from './components/JobPreviewModal'
 import './styles/index.css'
 
 function sortJobs(jobs: Job[], key: SortKey, dir: SortDir): Job[] {
@@ -22,6 +25,7 @@ function sortJobs(jobs: Job[], key: SortKey, dir: SortDir): Job[] {
 }
 
 function App() {
+  const { theme, toggleTheme } = useTheme()
   const { data: status, error: statusError } = usePolling(getStatus)
   const { data: jobs, error: jobsError } = usePolling(getJobs)
 
@@ -29,6 +33,8 @@ function App() {
   const [stageFilter, setStageFilter] = useState<Stage | 'All'>('All')
   const [sortKey, setSortKey] = useState<SortKey>('discovered_at')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const previewJob = jobs?.find((j) => j.url === previewUrl) ?? null
 
   const visibleJobs = useMemo(() => {
     if (!jobs) return []
@@ -58,7 +64,10 @@ function App() {
 
   return (
     <>
-      <h1>ApplyPilot Dashboard</h1>
+      <div className="app-header">
+        <h1>ApplyPilot Dashboard</h1>
+        <ThemeToggle theme={theme} onToggle={toggleTheme} />
+      </div>
       <p className="subtitle">Live view of your job pipeline, refreshed every few seconds.</p>
 
       {error && (
@@ -76,7 +85,15 @@ function App() {
         onStageFilterChange={setStageFilter}
       />
 
-      <JobsTable jobs={visibleJobs} sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+      <JobsTable
+        jobs={visibleJobs}
+        sortKey={sortKey}
+        sortDir={sortDir}
+        onSort={handleSort}
+        onPreview={(job) => setPreviewUrl(job.url)}
+      />
+
+      {previewJob && <JobPreviewModal job={previewJob} onClose={() => setPreviewUrl(null)} />}
     </>
   )
 }
