@@ -49,7 +49,6 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview }: Props) 
       <table className="jobs-table">
         <thead>
           <tr>
-            <th className="preview-col" />
             {COLUMNS.map((col) => (
               <th key={col.key} onClick={() => onSort(col.key)}>
                 {col.label}
@@ -61,21 +60,21 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview }: Props) 
         <tbody>
           {jobs.map((job) => (
             <tr key={job.url}>
-              <td className="preview-col">
-                <button
-                  type="button"
-                  className="preview-button"
-                  onClick={() => onPreview(job)}
-                  title="Preview job description"
-                  aria-label="Preview job description"
-                >
-                  <EyeIcon />
-                </button>
-              </td>
               <td className="title-cell">
-                <a href={job.url} target="_blank" rel="noreferrer">
-                  {job.title || '(untitled)'}
-                </a>
+                <div className="title-cell-row">
+                  <a href={job.url} target="_blank" rel="noreferrer">
+                    {job.title || '(untitled)'}
+                  </a>
+                  <button
+                    type="button"
+                    className="preview-button"
+                    onClick={() => onPreview(job)}
+                    title="Preview job description"
+                    aria-label="Preview job description"
+                  >
+                    <EyeIcon />
+                  </button>
+                </div>
               </td>
               <td className="site-cell">
                 <SiteIcon site={job.site} />

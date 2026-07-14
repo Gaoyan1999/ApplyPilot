@@ -137,6 +137,13 @@ table.jobs-table {
   max-width: 340px;
 }
 
+.title-cell-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .jobs-table td.title-cell a {
   text-decoration: none;
 }
@@ -147,12 +154,6 @@ table.jobs-table {
 
 .jobs-table td.site-cell {
   text-align: center;
-}
-
-.jobs-table th.preview-col,
-.jobs-table td.preview-col {
-  width: 32px;
-  padding: 8px 4px 8px 12px;
 }
 
 .preview-button {
@@ -167,6 +168,13 @@ table.jobs-table {
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0;
+}
+
+.jobs-table tbody tr:hover .preview-button,
+.preview-button:focus-visible {
+  opacity: 1;
 }
 
 .preview-button:hover {
