@@ -302,11 +302,19 @@ def fetch_details(employer: dict, jobs: list[dict]) -> list[dict]:
 
 def store_results(conn: sqlite3.Connection, jobs: list[dict], employers: dict) -> tuple[int, int]:
     """Store corporate jobs in DB. Returns (new, existing)."""
+    from applypilot.config import get_excluded_titles
+
+    exclude_titles = get_excluded_titles()
+
     now = datetime.now(timezone.utc).isoformat()
     new = 0
     existing = 0
 
     for job in jobs:
+        title = job.get("title") or ""
+        if any(term in title.lower() for term in exclude_titles):
+            continue
+
         url = job.get("apply_url", "")
         if not url:
             emp = employers.get(job.get("employer_key", ""), {})

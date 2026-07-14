@@ -94,6 +94,10 @@ def _store_jobs_filtered(
     reject_locs: list[str],
 ) -> tuple[int, int]:
     """Store jobs with location filtering. Returns (new, existing)."""
+    from applypilot.config import get_excluded_titles
+
+    exclude_titles = get_excluded_titles()
+
     now = datetime.now(timezone.utc).isoformat()
     new = 0
     existing = 0
@@ -102,6 +106,10 @@ def _store_jobs_filtered(
     for job in jobs:
         url = job.get("url")
         if not url:
+            continue
+        title = job.get("title") or ""
+        if any(term in title.lower() for term in exclude_titles):
+            filtered += 1
             continue
         if not _location_ok(job.get("location"), accept_locs, reject_locs):
             filtered += 1

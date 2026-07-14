@@ -42,6 +42,25 @@ export interface SiteStat {
   count: number
 }
 
+export interface SearchForm {
+  query: string
+  location: string
+  remote: boolean
+  sites: string[]
+  hours_old: number
+}
+
+export interface SearchStatus {
+  running: boolean
+  started_at: string | null
+  finished_at: string | null
+  found: number
+  total: number
+  error: string | null
+  query: string | null
+  location: string | null
+}
+
 export interface Status {
   total: number
   with_description: number

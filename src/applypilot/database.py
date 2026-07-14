@@ -339,10 +339,6 @@ def store_jobs(conn: sqlite3.Connection, jobs: list[dict],
     Returns:
         Tuple of (new_count, duplicate_count).
     """
-    from applypilot.config import load_search_config
-
-    exclude_titles = [t.lower() for t in load_search_config().get("exclude_titles", [])]
-
     now = datetime.now(timezone.utc).isoformat()
     new = 0
     existing = 0
@@ -350,9 +346,6 @@ def store_jobs(conn: sqlite3.Connection, jobs: list[dict],
     for job in jobs:
         url = job.get("url")
         if not url:
-            continue
-        title = (job.get("title") or "").lower()
-        if any(term in title for term in exclude_titles):
             continue
         try:
             conn.execute(

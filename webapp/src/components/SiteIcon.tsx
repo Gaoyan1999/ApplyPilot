@@ -4,7 +4,7 @@ interface SiteMeta {
   color: string
 }
 
-const SITE_META: Record<string, SiteMeta> = {
+export const SITE_META: Record<string, SiteMeta> = {
   linkedin: { label: 'LinkedIn', abbr: 'in', color: '#0a66c2' },
   indeed: { label: 'Indeed', abbr: 'Id', color: '#2164f3' },
   glassdoor: { label: 'Glassdoor', abbr: 'gd', color: '#0caa41' },
@@ -12,6 +12,10 @@ const SITE_META: Record<string, SiteMeta> = {
   ziprecruiter: { label: 'ZipRecruiter', abbr: 'zr', color: '#4776e6' },
   google: { label: 'Google', abbr: 'g', color: '#ea4335' },
 }
+
+// Valid jobspy site_name values for the quick-search form (excludes the
+// "ziprecruiter" alias and "google", which jobspy doesn't accept directly).
+export const SEARCHABLE_SITES = ['indeed', 'linkedin', 'glassdoor', 'zip_recruiter']
 
 const FALLBACK_COLOR = '#787774'
 

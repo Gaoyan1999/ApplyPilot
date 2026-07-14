@@ -119,6 +119,10 @@ def _location_ok(location: str | None, accept: list[str], reject: list[str]) -> 
 
 def store_jobspy_results(conn: sqlite3.Connection, df, source_label: str) -> tuple[int, int]:
     """Store JobSpy DataFrame results into the DB. Returns (new, existing)."""
+    from applypilot.config import get_excluded_titles
+
+    exclude_titles = get_excluded_titles()
+
     now = datetime.now(timezone.utc).isoformat()
     new = 0
     existing = 0
@@ -129,6 +133,8 @@ def store_jobspy_results(conn: sqlite3.Connection, df, source_label: str) -> tup
             continue
 
         title = str(row.get("title", "")) if str(row.get("title", "")) != "nan" else None
+        if title and any(term in title.lower() for term in exclude_titles):
+            continue
         company = str(row.get("company", "")) if str(row.get("company", "")) != "nan" else None
         location_str = str(row.get("location", "")) if str(row.get("location", "")) != "nan" else None
 

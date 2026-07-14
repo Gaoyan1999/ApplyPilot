@@ -8,6 +8,7 @@ import { SearchFilterBar } from './components/SearchFilterBar'
 import { JobsTable, type SortDir, type SortKey } from './components/JobsTable'
 import { ThemeToggle } from './components/ThemeToggle'
 import { JobPreviewModal } from './components/JobPreviewModal'
+import { SearchPanel } from './components/SearchPanel'
 import './styles/index.css'
 
 function sortJobs(jobs: Job[], key: SortKey, dir: SortDir): Job[] {
@@ -66,7 +67,10 @@ function App() {
     <>
       <div className="app-header">
         <h1>ApplyPilot Dashboard</h1>
-        <ThemeToggle theme={theme} onToggle={toggleTheme} />
+        <div className="app-header-actions">
+          <SearchPanel />
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
+        </div>
       </div>
       <p className="subtitle">Live view of your job pipeline, refreshed every few seconds.</p>
 
