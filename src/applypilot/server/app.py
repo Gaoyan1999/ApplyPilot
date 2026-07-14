@@ -10,11 +10,14 @@ import threading
 import webbrowser
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from rich.console import Console
 
+from applypilot.config import load_web_search_defaults, save_web_search_defaults
 from applypilot.database import get_connection, get_stats
+from applypilot.server import search_state
 from applypilot.server.stages import STAGE_ORDER, compute_stage
 
 console = Console()
@@ -92,6 +95,34 @@ def get_jobs() -> list[dict]:
         out["stage"] = compute_stage(job)
         result.append(out)
     return result
+
+
+class SearchRunRequest(BaseModel):
+    query: str
+    location: str
+    remote: bool = False
+    sites: list[str] = ["indeed", "linkedin"]
+
+
+@app.get("/api/search/form")
+def get_search_form() -> dict:
+    return load_web_search_defaults()
+
+
+@app.post("/api/search/run", status_code=202)
+def run_search(body: SearchRunRequest) -> dict:
+    save_web_search_defaults(body.model_dump())
+
+    started = search_state.start_search(body.query, body.location, body.sites, body.remote)
+    if not started:
+        raise HTTPException(status_code=409, detail="A search is already running")
+
+    return search_state.get_status()
+
+
+@app.get("/api/search/status")
+def get_search_status() -> dict:
+    return search_state.get_status()
 
 
 def _resolve_static_dir() -> Path | None:

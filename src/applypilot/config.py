@@ -15,6 +15,7 @@ RESUME_PATH = APP_DIR / "resume.txt"
 RESUME_PDF_PATH = APP_DIR / "resume.pdf"
 SEARCH_CONFIG_PATH = APP_DIR / "searches.yaml"
 ENV_PATH = APP_DIR / ".env"
+WEB_SEARCH_PATH = APP_DIR / "web_search.json"
 
 # Generated output
 TAILORED_DIR = APP_DIR / "tailored_resumes"
@@ -111,6 +112,31 @@ def load_search_config() -> dict:
             return yaml.safe_load(example.read_text(encoding="utf-8"))
         return {}
     return yaml.safe_load(SEARCH_CONFIG_PATH.read_text(encoding="utf-8"))
+
+
+def load_web_search_defaults() -> dict:
+    """Load the last-used web dashboard quick-search form values.
+
+    Separate from searches.yaml on purpose — never touches the user's
+    hand-tuned tiered search config (a YAML round-trip write would also
+    strip their comments).
+    """
+    import json
+    if not WEB_SEARCH_PATH.exists():
+        return {"query": "", "location": "", "remote": False, "sites": ["indeed", "linkedin"]}
+    return json.loads(WEB_SEARCH_PATH.read_text(encoding="utf-8"))
+
+
+def save_web_search_defaults(data: dict) -> None:
+    """Persist the web dashboard quick-search form values for next time."""
+    import json
+    APP_DIR.mkdir(parents=True, exist_ok=True)
+    WEB_SEARCH_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def get_excluded_titles() -> list[str]:
+    """Lowercased exclude_titles terms from searches.yaml, for title filtering at storage time."""
+    return [t.lower() for t in load_search_config().get("exclude_titles", [])]
 
 
 def load_sites_config() -> dict:

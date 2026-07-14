@@ -8,6 +8,7 @@ import { SearchFilterBar } from './components/SearchFilterBar'
 import { JobsTable, type SortDir, type SortKey } from './components/JobsTable'
 import { ThemeToggle } from './components/ThemeToggle'
 import { JobPreviewModal } from './components/JobPreviewModal'
+import { SearchPanel } from './components/SearchPanel'
 import './styles/index.css'
 
 function sortJobs(jobs: Job[], key: SortKey, dir: SortDir): Job[] {
@@ -75,6 +76,8 @@ function App() {
           Connection lost — retrying... ({error.message})
         </div>
       )}
+
+      <SearchPanel />
 
       {status && <StatPills status={status} />}
 
