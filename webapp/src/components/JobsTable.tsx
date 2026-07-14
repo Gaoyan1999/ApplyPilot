@@ -1,6 +1,7 @@
 import type { Job } from '../api/types'
 import { ScorePill } from './ScorePill'
 import { StageBadge } from './StageBadge'
+import { SiteIcon } from './SiteIcon'
 
 export type SortKey = 'title' | 'site' | 'location' | 'fit_score' | 'stage' | 'discovered_at'
 export type SortDir = 'asc' | 'desc'
@@ -54,7 +55,9 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort }: Props) {
                   {job.title || '(untitled)'}
                 </a>
               </td>
-              <td>{job.site || '—'}</td>
+              <td className="site-cell">
+                <SiteIcon site={job.site} />
+              </td>
               <td>{job.location || '—'}</td>
               <td>
                 <ScorePill score={job.fit_score} />

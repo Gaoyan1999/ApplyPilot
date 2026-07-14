@@ -4,6 +4,35 @@
   --border: #e9e9e7;
   --text: #37352f;
   --text-muted: #787774;
+
+  --error-bg: #fdecea;
+  --error-fg: #a33;
+  --error-border: #f3c6c1;
+
+  --score-high-bg: #d7f3df;
+  --score-high-fg: #1a7a3c;
+  --score-mid-bg: #fdf1c7;
+  --score-mid-fg: #97690b;
+  --score-low-bg: #f3f1ee;
+  --score-low-fg: #7a7871;
+
+  --stage-discovered-bg: #f1f1ef;
+  --stage-discovered-fg: #6b6b68;
+  --stage-enriched-bg: #e1ecf7;
+  --stage-enriched-fg: #1c5a96;
+  --stage-scored-bg: #ede3fa;
+  --stage-scored-fg: #6b3fa0;
+  --stage-tailored-bg: #e4e0fb;
+  --stage-tailored-fg: #4c3d99;
+  --stage-cover-bg: #d9f3ee;
+  --stage-cover-fg: #1c7d6c;
+  --stage-applying-bg: #fdf1c7;
+  --stage-applying-fg: #97690b;
+  --stage-applied-bg: #d7f3df;
+  --stage-applied-fg: #1a7a3c;
+  --stage-failed-bg: #fbe1df;
+  --stage-failed-fg: #a83c33;
+
   color-scheme: light;
 }
 
@@ -14,7 +43,115 @@
     --border: #2f2f2f;
     --text: #e9e9e7;
     --text-muted: #9b9b9b;
+
+    --error-bg: #3a1f1f;
+    --error-fg: #ff9b93;
+    --error-border: #5a2c2c;
+
+    --score-high-bg: #163a24;
+    --score-high-fg: #6fd996;
+    --score-mid-bg: #3a2f0e;
+    --score-mid-fg: #f0c14b;
+    --score-low-bg: #2a2a28;
+    --score-low-fg: #a8a69f;
+
+    --stage-discovered-bg: #2a2a28;
+    --stage-discovered-fg: #a8a69f;
+    --stage-enriched-bg: #16283a;
+    --stage-enriched-fg: #7fb4e8;
+    --stage-scored-bg: #2c2038;
+    --stage-scored-fg: #c39ff2;
+    --stage-tailored-bg: #241c3d;
+    --stage-tailored-fg: #a898f0;
+    --stage-cover-bg: #0f2e28;
+    --stage-cover-fg: #6fd4c0;
+    --stage-applying-bg: #3a2f0e;
+    --stage-applying-fg: #f0c14b;
+    --stage-applied-bg: #163a24;
+    --stage-applied-fg: #6fd996;
+    --stage-failed-bg: #3a1f1f;
+    --stage-failed-fg: #ff9b93;
+
+    color-scheme: dark;
   }
+}
+
+/* Explicit overrides from the theme toggle — must win in both directions
+   regardless of the OS preference above. */
+:root[data-theme='light'] {
+  --bg: #ffffff;
+  --bg-subtle: #fbfbfa;
+  --border: #e9e9e7;
+  --text: #37352f;
+  --text-muted: #787774;
+
+  --error-bg: #fdecea;
+  --error-fg: #a33;
+  --error-border: #f3c6c1;
+
+  --score-high-bg: #d7f3df;
+  --score-high-fg: #1a7a3c;
+  --score-mid-bg: #fdf1c7;
+  --score-mid-fg: #97690b;
+  --score-low-bg: #f3f1ee;
+  --score-low-fg: #7a7871;
+
+  --stage-discovered-bg: #f1f1ef;
+  --stage-discovered-fg: #6b6b68;
+  --stage-enriched-bg: #e1ecf7;
+  --stage-enriched-fg: #1c5a96;
+  --stage-scored-bg: #ede3fa;
+  --stage-scored-fg: #6b3fa0;
+  --stage-tailored-bg: #e4e0fb;
+  --stage-tailored-fg: #4c3d99;
+  --stage-cover-bg: #d9f3ee;
+  --stage-cover-fg: #1c7d6c;
+  --stage-applying-bg: #fdf1c7;
+  --stage-applying-fg: #97690b;
+  --stage-applied-bg: #d7f3df;
+  --stage-applied-fg: #1a7a3c;
+  --stage-failed-bg: #fbe1df;
+  --stage-failed-fg: #a83c33;
+
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --bg: #191919;
+  --bg-subtle: #202020;
+  --border: #2f2f2f;
+  --text: #e9e9e7;
+  --text-muted: #9b9b9b;
+
+  --error-bg: #3a1f1f;
+  --error-fg: #ff9b93;
+  --error-border: #5a2c2c;
+
+  --score-high-bg: #163a24;
+  --score-high-fg: #6fd996;
+  --score-mid-bg: #3a2f0e;
+  --score-mid-fg: #f0c14b;
+  --score-low-bg: #2a2a28;
+  --score-low-fg: #a8a69f;
+
+  --stage-discovered-bg: #2a2a28;
+  --stage-discovered-fg: #a8a69f;
+  --stage-enriched-bg: #16283a;
+  --stage-enriched-fg: #7fb4e8;
+  --stage-scored-bg: #2c2038;
+  --stage-scored-fg: #c39ff2;
+  --stage-tailored-bg: #241c3d;
+  --stage-tailored-fg: #a898f0;
+  --stage-cover-bg: #0f2e28;
+  --stage-cover-fg: #6fd4c0;
+  --stage-applying-bg: #3a2f0e;
+  --stage-applying-fg: #f0c14b;
+  --stage-applied-bg: #163a24;
+  --stage-applied-fg: #6fd996;
+  --stage-failed-bg: #3a1f1f;
+  --stage-failed-fg: #ff9b93;
+
+  color-scheme: dark;
 }
 
 * {
@@ -28,6 +165,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
   font-size: 14px;
   line-height: 1.5;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 #root {
@@ -39,7 +177,7 @@ body {
 h1 {
   font-size: 22px;
   font-weight: 700;
-  margin: 0 0 24px;
+  margin: 0;
 }
 
 a {
