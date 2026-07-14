@@ -23,12 +23,11 @@ app = FastAPI(title="ApplyPilot Dashboard")
 
 # Curated job fields returned to the frontend — excludes internal/unused
 # columns (strategy, agent_id, last_attempted_at, apply_duration_ms,
-# apply_task_id, verification_confidence) and the full description text,
-# which isn't needed for the table view.
+# apply_task_id, verification_confidence).
 _JOB_FIELDS = [
     "url", "title", "site", "location", "salary",
     "fit_score", "score_reasoning",
-    "application_url",
+    "application_url", "full_description",
     "discovered_at", "scored_at",
     "tailored_at", "tailor_attempts",
     "cover_letter_at", "cover_attempts",

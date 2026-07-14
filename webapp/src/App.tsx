@@ -7,6 +7,7 @@ import { StatPills } from './components/StatPills'
 import { SearchFilterBar } from './components/SearchFilterBar'
 import { JobsTable, type SortDir, type SortKey } from './components/JobsTable'
 import { ThemeToggle } from './components/ThemeToggle'
+import { JobPreviewModal } from './components/JobPreviewModal'
 import './styles/index.css'
 
 function sortJobs(jobs: Job[], key: SortKey, dir: SortDir): Job[] {
@@ -32,6 +33,8 @@ function App() {
   const [stageFilter, setStageFilter] = useState<Stage | 'All'>('All')
   const [sortKey, setSortKey] = useState<SortKey>('discovered_at')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const previewJob = jobs?.find((j) => j.url === previewUrl) ?? null
 
   const visibleJobs = useMemo(() => {
     if (!jobs) return []
@@ -82,7 +85,15 @@ function App() {
         onStageFilterChange={setStageFilter}
       />
 
-      <JobsTable jobs={visibleJobs} sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+      <JobsTable
+        jobs={visibleJobs}
+        sortKey={sortKey}
+        sortDir={sortDir}
+        onSort={handleSort}
+        onPreview={(job) => setPreviewUrl(job.url)}
+      />
+
+      {previewJob && <JobPreviewModal job={previewJob} onClose={() => setPreviewUrl(null)} />}
     </>
   )
 }

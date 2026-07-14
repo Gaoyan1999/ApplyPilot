@@ -11,6 +11,16 @@ interface Props {
   sortKey: SortKey
   sortDir: SortDir
   onSort: (key: SortKey) => void
+  onPreview: (job: Job) => void
+}
+
+function EyeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
 }
 
 const COLUMNS: { key: SortKey; label: string }[] = [
@@ -29,7 +39,7 @@ function formatDate(iso: string | null): string {
   return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
-export function JobsTable({ jobs, sortKey, sortDir, onSort }: Props) {
+export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview }: Props) {
   if (jobs.length === 0) {
     return <div className="empty-state">No jobs match the current filters.</div>
   }
@@ -39,6 +49,7 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort }: Props) {
       <table className="jobs-table">
         <thead>
           <tr>
+            <th className="preview-col" />
             {COLUMNS.map((col) => (
               <th key={col.key} onClick={() => onSort(col.key)}>
                 {col.label}
@@ -50,6 +61,17 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort }: Props) {
         <tbody>
           {jobs.map((job) => (
             <tr key={job.url}>
+              <td className="preview-col">
+                <button
+                  type="button"
+                  className="preview-button"
+                  onClick={() => onPreview(job)}
+                  title="Preview job description"
+                  aria-label="Preview job description"
+                >
+                  <EyeIcon />
+                </button>
+              </td>
               <td className="title-cell">
                 <a href={job.url} target="_blank" rel="noreferrer">
                   {job.title || '(untitled)'}
