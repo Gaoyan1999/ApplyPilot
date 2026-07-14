@@ -102,6 +102,7 @@ class SearchRunRequest(BaseModel):
     location: str
     remote: bool = False
     sites: list[str] = ["indeed", "linkedin"]
+    hours_old: int = 168
 
 
 @app.get("/api/search/form")
@@ -113,7 +114,9 @@ def get_search_form() -> dict:
 def run_search(body: SearchRunRequest) -> dict:
     save_web_search_defaults(body.model_dump())
 
-    started = search_state.start_search(body.query, body.location, body.sites, body.remote)
+    started = search_state.start_search(
+        body.query, body.location, body.sites, body.remote, body.hours_old
+    )
     if not started:
         raise HTTPException(status_code=409, detail="A search is already running")
 

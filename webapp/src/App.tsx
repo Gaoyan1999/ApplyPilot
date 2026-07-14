@@ -67,7 +67,10 @@ function App() {
     <>
       <div className="app-header">
         <h1>ApplyPilot Dashboard</h1>
-        <ThemeToggle theme={theme} onToggle={toggleTheme} />
+        <div className="app-header-actions">
+          <SearchPanel />
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
+        </div>
       </div>
       <p className="subtitle">Live view of your job pipeline, refreshed every few seconds.</p>
 
@@ -76,8 +79,6 @@ function App() {
           Connection lost — retrying... ({error.message})
         </div>
       )}
-
-      <SearchPanel />
 
       {status && <StatPills status={status} />}
 

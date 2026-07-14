@@ -47,6 +47,7 @@ export interface SearchForm {
   location: string
   remote: boolean
   sites: string[]
+  hours_old: number
 }
 
 export interface SearchStatus {

@@ -123,7 +123,10 @@ def load_web_search_defaults() -> dict:
     """
     import json
     if not WEB_SEARCH_PATH.exists():
-        return {"query": "", "location": "", "remote": False, "sites": ["indeed", "linkedin"]}
+        return {
+            "query": "", "location": "", "remote": False,
+            "sites": ["indeed", "linkedin"], "hours_old": 168,
+        }
     return json.loads(WEB_SEARCH_PATH.read_text(encoding="utf-8"))
 
 

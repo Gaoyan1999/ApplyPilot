@@ -29,7 +29,7 @@ def get_status() -> dict:
         return dict(_state)
 
 
-def start_search(query: str, location: str, sites: list[str], remote: bool) -> bool:
+def start_search(query: str, location: str, sites: list[str], remote: bool, hours_old: int = 168) -> bool:
     """Start a background quick search. Returns False if one is already running."""
     with _lock:
         if _state["running"]:
@@ -45,16 +45,16 @@ def start_search(query: str, location: str, sites: list[str], remote: bool) -> b
             location=location,
         )
 
-    thread = threading.Thread(target=_run, args=(query, location, sites, remote), daemon=True)
+    thread = threading.Thread(target=_run, args=(query, location, sites, remote, hours_old), daemon=True)
     thread.start()
     return True
 
 
-def _run(query: str, location: str, sites: list[str], remote: bool) -> None:
+def _run(query: str, location: str, sites: list[str], remote: bool, hours_old: int) -> None:
     from applypilot.discovery.jobspy import search_jobs
 
     try:
-        result = search_jobs(query, location, sites=sites, remote_only=remote)
+        result = search_jobs(query, location, sites=sites, remote_only=remote, hours_old=hours_old)
         with _lock:
             if "error" in result:
                 _state["error"] = result["error"]
