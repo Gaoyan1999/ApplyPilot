@@ -25,7 +25,7 @@ function EyeIcon() {
 
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'title', label: 'Title' },
-  { key: 'site', label: 'Site' },
+  { key: 'site', label: 'Link' },
   { key: 'location', label: 'Location' },
   { key: 'fit_score', label: 'Score' },
   { key: 'stage', label: 'Stage' },
@@ -77,7 +77,9 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview }: Props) 
                 </div>
               </td>
               <td className="site-cell">
-                <SiteIcon site={job.site} />
+                <a href={job.url} target="_blank" rel="noreferrer" aria-label={`Open ${job.title || 'job'} listing`}>
+                  <SiteIcon site={job.site} />
+                </a>
               </td>
               <td>{job.location || '—'}</td>
               <td>
