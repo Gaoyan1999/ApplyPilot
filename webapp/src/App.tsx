@@ -31,8 +31,8 @@ function App() {
   const { data: jobs, error: jobsError } = usePolling(getJobs)
 
   const [search, setSearch] = useState('')
-  const [stageFilter, setStageFilter] = useState<Stage | 'All'>('All')
-  const [jobTypeFilter, setJobTypeFilter] = useState<JobType | 'All'>('All')
+  const [stageFilter, setStageFilter] = useState<Stage[]>([])
+  const [jobTypeFilter, setJobTypeFilter] = useState<JobType[]>([])
   const [sortKey, setSortKey] = useState<SortKey>('discovered_at')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -42,8 +42,8 @@ function App() {
     if (!jobs) return []
     const q = search.trim().toLowerCase()
     const filtered = jobs.filter((job) => {
-      if (stageFilter !== 'All' && job.stage !== stageFilter) return false
-      if (jobTypeFilter !== 'All' && (job.job_type ?? 'unknown') !== jobTypeFilter) return false
+      if (stageFilter.length > 0 && !stageFilter.includes(job.stage)) return false
+      if (jobTypeFilter.length > 0 && !jobTypeFilter.includes(job.job_type ?? 'unknown')) return false
       if (!q) return true
       return (
         (job.title || '').toLowerCase().includes(q) ||

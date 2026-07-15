@@ -1,6 +1,6 @@
 import type { Stage } from '../api/types'
 
-const CLASS_BY_STAGE: Record<Stage, string> = {
+export const CLASS_BY_STAGE: Record<Stage, string> = {
   Discovered: 'stage-discovered',
   Enriched: 'stage-enriched',
   Scored: 'stage-scored',
