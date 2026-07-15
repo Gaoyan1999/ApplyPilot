@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from rich.console import Console
 
-from applypilot.config import load_web_search_defaults, save_web_search_defaults
+from applypilot.config import get_tier, load_web_search_defaults, save_web_search_defaults
 from applypilot.database import get_connection, get_stats
 from applypilot.server import search_state
 from applypilot.server.stages import STAGE_ORDER, compute_stage
@@ -112,6 +112,17 @@ def get_search_form() -> dict:
 
 @app.post("/api/search/run", status_code=202)
 def run_search(body: SearchRunRequest) -> dict:
+    # Search now chains discover -> enrich -> score, so it needs an LLM key
+    # (Tier 2) even though the "discover" half alone would work at Tier 1.
+    if get_tier() < 2:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Search now includes AI scoring and requires an LLM API key. "
+                "Run 'applypilot init' or set GEMINI_API_KEY / OPENAI_API_KEY / LLM_URL."
+            ),
+        )
+
     save_web_search_defaults(body.model_dump())
 
     started = search_state.start_search(

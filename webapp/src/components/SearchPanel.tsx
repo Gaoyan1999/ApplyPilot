@@ -1,7 +1,18 @@
 import { useEffect, useState } from 'react'
 import { ApiError, getSearchForm, getSearchStatus, runSearch } from '../api/client'
-import type { SearchForm } from '../api/types'
+import type { SearchForm, SearchRunStage } from '../api/types'
 import { SEARCHABLE_SITES, SITE_META } from './SiteIcon'
+
+const STAGE_LABELS: Record<Exclude<SearchRunStage, null>, string> = {
+  discover: 'Searching…',
+  enrich: 'Fetching details…',
+  score: 'Rating fit…',
+  done: 'Done',
+}
+
+function stageLabel(stage: SearchRunStage): string {
+  return stage ? STAGE_LABELS[stage] : 'Searching…'
+}
 
 const EMPTY_FORM: SearchForm = {
   query: '',
@@ -21,13 +32,17 @@ export function SearchPanel() {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState<SearchForm>(EMPTY_FORM)
   const [running, setRunning] = useState(false)
+  const [stage, setStage] = useState<SearchRunStage>(null)
   const [result, setResult] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     getSearchForm().then((f) => setForm({ ...EMPTY_FORM, ...f })).catch(() => {})
     getSearchStatus().then((status) => {
-      if (status.running) setRunning(true)
+      if (status.running) {
+        setRunning(true)
+        setStage(status.stage)
+      }
     }).catch(() => {})
   }, [])
 
@@ -45,10 +60,20 @@ export function SearchPanel() {
     const timer = setInterval(async () => {
       try {
         const status = await getSearchStatus()
+        setStage(status.stage)
         if (!status.running) {
           setRunning(false)
-          setResult(status.error ? null : `${status.found} new job${status.found === 1 ? '' : 's'} found`)
-          setError(status.error)
+          if (status.error) {
+            setResult(null)
+            const where = status.error_stage ? ` during ${status.error_stage}` : ''
+            setError(`${status.error}${where}`)
+          } else {
+            setResult(
+              `${status.found} new job${status.found === 1 ? '' : 's'} found, ` +
+                `${status.enriched} enriched, ${status.scored} rated`
+            )
+            setError(null)
+          }
         }
       } catch {
         // keep polling — transient network hiccup
@@ -69,8 +94,9 @@ export function SearchPanel() {
     setResult(null)
     setError(null)
     try {
-      await runSearch(form)
+      const status = await runSearch(form)
       setRunning(true)
+      setStage(status.stage ?? 'discover')
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         setRunning(true)
@@ -83,7 +109,7 @@ export function SearchPanel() {
   return (
     <>
       <button type="button" className="search-trigger" onClick={() => setOpen(true)}>
-        {running ? 'Searching…' : 'Search'}
+        {running ? stageLabel(stage) : 'Search'}
       </button>
 
       {open && (
@@ -141,7 +167,7 @@ export function SearchPanel() {
                 ))}
               </div>
               <button type="submit" disabled={running || form.sites.length === 0}>
-                {running ? 'Searching…' : 'Search'}
+                {running ? stageLabel(stage) : 'Search'}
               </button>
               {result && <span className="search-result">{result}</span>}
               {error && <span className="search-result search-error">{error}</span>}

@@ -50,13 +50,19 @@ export interface SearchForm {
   hours_old: number
 }
 
+export type SearchRunStage = 'discover' | 'enrich' | 'score' | 'done' | null
+
 export interface SearchStatus {
   running: boolean
+  stage: SearchRunStage
   started_at: string | null
   finished_at: string | null
   found: number
   total: number
+  enriched: number
+  scored: number
   error: string | null
+  error_stage: SearchRunStage
   query: string | null
   location: string | null
 }
