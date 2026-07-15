@@ -91,7 +91,7 @@
 }
 
 .search-modal {
-  max-width: 440px;
+  max-width: 560px;
 }
 
 .search-panel {
@@ -99,21 +99,119 @@
   flex-direction: column;
   gap: 12px;
   padding: 20px;
+  overflow-y: auto;
+  max-height: 70vh;
 }
 
 .search-panel input[type='text'],
-.search-panel select {
+.search-panel input[type='number'],
+.search-panel select,
+.search-panel textarea {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px 10px;
   font-size: 13px;
   background: var(--bg);
   color: var(--text);
+  font-family: inherit;
+}
+
+.search-panel textarea {
+  resize: vertical;
+  width: 100%;
 }
 
 .site-checks {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Search config editor */
+.config-section {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.config-section:last-of-type {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.config-section h3 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 0 0 8px;
+}
+
+.search-panel .config-section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  font-weight: normal;
+}
+
+.config-section-toggle h3 {
+  margin: 0;
+}
+
+.config-section-toggle .chevron {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.config-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.config-row input[type='text'] {
+  flex: 1;
+}
+
+.field-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.search-panel .add-btn,
+.search-panel .remove-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px 6px;
+}
+
+.search-panel .add-btn {
+  align-self: flex-start;
+  font-weight: 600;
+  padding-left: 0;
+}
+
+.search-panel .add-btn:hover,
+.search-panel .remove-btn:hover {
+  color: var(--text);
+}
+
+.config-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .toggle-check {

@@ -1,8 +1,10 @@
 """FastAPI backend for the ApplyPilot web dashboard.
 
-Read-only v1: serves job/pipeline state from the SQLite database to the
-React frontend in ../../webapp. No write endpoints, no auth (local-only
-tool). Live updates are done via client-side polling, not WebSockets.
+Mostly read-only: serves job/pipeline state from the SQLite database to the
+React frontend in ../../webapp. The only writes are editing searches.yaml
+(/api/search/config) and triggering a discover -> enrich -> score run
+(/api/search/run). No auth (local-only tool). Live updates are done via
+client-side polling, not WebSockets.
 """
 
 import sys
@@ -15,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from rich.console import Console
 
-from applypilot.config import load_web_search_defaults, save_web_search_defaults
+from applypilot.config import get_tier, load_search_config, save_search_config
 from applypilot.database import get_connection, get_stats
 from applypilot.server import search_state
 from applypilot.server.stages import STAGE_ORDER, compute_stage
@@ -97,26 +99,73 @@ def get_jobs() -> list[dict]:
     return result
 
 
-class SearchRunRequest(BaseModel):
+class SearchQuery(BaseModel):
     query: str
+    tier: int = 1
+
+
+class SearchLocation(BaseModel):
     location: str
     remote: bool = False
-    sites: list[str] = ["indeed", "linkedin"]
-    hours_old: int = 168
 
 
-@app.get("/api/search/form")
-def get_search_form() -> dict:
-    return load_web_search_defaults()
+class SearchConfigDefaults(BaseModel):
+    results_per_site: int = 100
+    hours_old: int = 72
+
+
+class SearchConfigBody(BaseModel):
+    queries: list[SearchQuery] = []
+    locations: list[SearchLocation] = []
+    exclude_titles: list[str] = []
+    boards: list[str] = []
+    defaults: SearchConfigDefaults = SearchConfigDefaults()
+
+
+def _public_search_config(cfg: dict) -> dict:
+    """Shape a full searches.yaml dict down to the fields the web editor manages."""
+    defaults = cfg.get("defaults", {})
+    return {
+        "queries": cfg.get("queries", []),
+        "locations": cfg.get("locations", []),
+        "exclude_titles": cfg.get("exclude_titles", []),
+        "boards": cfg.get("boards", []),
+        "defaults": {
+            "results_per_site": defaults.get("results_per_site", 100),
+            "hours_old": defaults.get("hours_old", 72),
+        },
+    }
+
+
+@app.get("/api/search/config")
+def get_search_config() -> dict:
+    try:
+        cfg = load_search_config()
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    return _public_search_config(cfg)
+
+
+@app.put("/api/search/config")
+def put_search_config(body: SearchConfigBody) -> dict:
+    saved = save_search_config(body.model_dump())
+    return _public_search_config(saved)
 
 
 @app.post("/api/search/run", status_code=202)
-def run_search(body: SearchRunRequest) -> dict:
-    save_web_search_defaults(body.model_dump())
+def run_search() -> dict:
+    # The chained discover -> enrich -> score run needs an LLM key (Tier 2)
+    # even though "discover" alone would work at Tier 1.
+    if get_tier() < 2:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Search now includes AI scoring and requires an LLM API key. "
+                "Run 'applypilot init' or set GEMINI_API_KEY / OPENAI_API_KEY / LLM_URL."
+            ),
+        )
 
-    started = search_state.start_search(
-        body.query, body.location, body.sites, body.remote, body.hours_old
-    )
+    started = search_state.start_search()
     if not started:
         raise HTTPException(status_code=409, detail="A search is already running")
 

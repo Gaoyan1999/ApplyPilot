@@ -42,23 +42,44 @@ export interface SiteStat {
   count: number
 }
 
-export interface SearchForm {
+export interface SearchQuery {
   query: string
+  tier: number
+}
+
+export interface SearchLocationEntry {
   location: string
   remote: boolean
-  sites: string[]
+}
+
+export interface SearchConfigDefaults {
+  results_per_site: number
   hours_old: number
 }
 
+export interface SearchConfig {
+  queries: SearchQuery[]
+  locations: SearchLocationEntry[]
+  exclude_titles: string[]
+  boards: string[]
+  defaults: SearchConfigDefaults
+}
+
+export type SearchRunStage = 'discover' | 'enrich' | 'score' | 'done' | null
+
 export interface SearchStatus {
   running: boolean
+  stage: SearchRunStage
   started_at: string | null
   finished_at: string | null
-  found: number
-  total: number
+  queries: number
+  new: number
+  existing: number
+  discover_errors: number
+  enriched: number
+  scored: number
   error: string | null
-  query: string | null
-  location: string | null
+  error_stage: SearchRunStage
 }
 
 export interface Status {
