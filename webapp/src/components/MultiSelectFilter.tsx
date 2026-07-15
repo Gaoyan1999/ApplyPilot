@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
+export type FilterMode = 'is' | 'is not'
+
 export interface MultiSelectOption<T extends string> {
   value: T
   label: string
@@ -11,9 +13,18 @@ interface Props<T extends string> {
   options: MultiSelectOption<T>[]
   selected: T[]
   onChange: (values: T[]) => void
+  mode: FilterMode
+  onModeChange: (mode: FilterMode) => void
 }
 
-export function MultiSelectFilter<T extends string>({ label, options, selected, onChange }: Props<T>) {
+export function MultiSelectFilter<T extends string>({
+  label,
+  options,
+  selected,
+  onChange,
+  mode,
+  onModeChange,
+}: Props<T>) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
@@ -52,12 +63,13 @@ export function MultiSelectFilter<T extends string>({ label, options, selected, 
     }
   }
 
+  const modePrefix = mode === 'is not' ? 'Not ' : ''
   const summary =
     selected.length === 0
       ? label
       : selected.length === 1
-        ? (options.find((o) => o.value === selected[0])?.label ?? label)
-        : `${label} (${selected.length})`
+        ? `${modePrefix}${options.find((o) => o.value === selected[0])?.label ?? label}`
+        : `${modePrefix}${label} (${selected.length})`
 
   return (
     <div className="multi-select" ref={containerRef}>
@@ -70,6 +82,16 @@ export function MultiSelectFilter<T extends string>({ label, options, selected, 
       </button>
       {open && (
         <div className="multi-select-popover">
+          <div className="multi-select-header">
+            <span className="multi-select-header-label">{label}</span>
+            <button
+              type="button"
+              className="multi-select-mode-toggle"
+              onClick={() => onModeChange(mode === 'is' ? 'is not' : 'is')}
+            >
+              {mode}
+            </button>
+          </div>
           <input
             type="text"
             autoFocus

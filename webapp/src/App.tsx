@@ -3,13 +3,21 @@ import { ApiError, getJobs, getStatus, setJobUserAction } from './api/client'
 import type { Job, JobType, Stage, UserAction } from './api/types'
 import { usePolling } from './hooks/usePolling'
 import { useTheme } from './hooks/useTheme'
+import { useLocalStorageState } from './hooks/useLocalStorageState'
 import { StatPills } from './components/StatPills'
 import { SearchFilterBar } from './components/SearchFilterBar'
+import type { FilterMode } from './components/MultiSelectFilter'
 import { JobsTable, type SortDir, type SortKey } from './components/JobsTable'
 import { ThemeToggle } from './components/ThemeToggle'
 import { JobPreviewModal } from './components/JobPreviewModal'
 import { SearchPanel } from './components/SearchPanel'
 import './styles/index.css'
+
+function matchesMultiSelect<T extends string>(mode: FilterMode, selected: T[], value: T | null): boolean {
+  if (selected.length === 0) return true
+  const included = value !== null && selected.includes(value)
+  return mode === 'is' ? included : !included
+}
 
 function sortJobs(jobs: Job[], key: SortKey, dir: SortDir): Job[] {
   const factor = dir === 'asc' ? 1 : -1
@@ -31,9 +39,24 @@ function App() {
   const { data: jobs, error: jobsError } = usePolling(getJobs)
 
   const [search, setSearch] = useState('')
-  const [stageFilter, setStageFilter] = useState<Stage[]>([])
-  const [jobTypeFilter, setJobTypeFilter] = useState<JobType[]>([])
-  const [userActionFilter, setUserActionFilter] = useState<UserAction[]>([])
+  const [stageFilter, setStageFilter] = useLocalStorageState<Stage[]>('applypilot-filter-stage', [])
+  const [stageFilterMode, setStageFilterMode] = useLocalStorageState<FilterMode>(
+    'applypilot-filter-stage-mode',
+    'is',
+  )
+  const [jobTypeFilter, setJobTypeFilter] = useLocalStorageState<JobType[]>('applypilot-filter-job-type', [])
+  const [jobTypeFilterMode, setJobTypeFilterMode] = useLocalStorageState<FilterMode>(
+    'applypilot-filter-job-type-mode',
+    'is',
+  )
+  const [userActionFilter, setUserActionFilter] = useLocalStorageState<UserAction[]>(
+    'applypilot-filter-user-action',
+    [],
+  )
+  const [userActionFilterMode, setUserActionFilterMode] = useLocalStorageState<FilterMode>(
+    'applypilot-filter-user-action-mode',
+    'is',
+  )
   const [sortKey, setSortKey] = useState<SortKey>('discovered_at')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -44,11 +67,9 @@ function App() {
     if (!jobs) return []
     const q = search.trim().toLowerCase()
     const filtered = jobs.filter((job) => {
-      if (stageFilter.length > 0 && !stageFilter.includes(job.stage)) return false
-      if (jobTypeFilter.length > 0 && !jobTypeFilter.includes(job.job_type ?? 'unknown')) return false
-      if (userActionFilter.length > 0 && (!job.user_action || !userActionFilter.includes(job.user_action))) {
-        return false
-      }
+      if (!matchesMultiSelect(stageFilterMode, stageFilter, job.stage)) return false
+      if (!matchesMultiSelect(jobTypeFilterMode, jobTypeFilter, job.job_type ?? 'unknown')) return false
+      if (!matchesMultiSelect(userActionFilterMode, userActionFilter, job.user_action)) return false
       if (!q) return true
       return (
         (job.title || '').toLowerCase().includes(q) ||
@@ -57,7 +78,18 @@ function App() {
       )
     })
     return sortJobs(filtered, sortKey, sortDir)
-  }, [jobs, search, stageFilter, jobTypeFilter, userActionFilter, sortKey, sortDir])
+  }, [
+    jobs,
+    search,
+    stageFilter,
+    stageFilterMode,
+    jobTypeFilter,
+    jobTypeFilterMode,
+    userActionFilter,
+    userActionFilterMode,
+    sortKey,
+    sortDir,
+  ])
 
   async function handleUserActionChange(job: Job, value: UserAction | null) {
     try {
@@ -105,10 +137,16 @@ function App() {
         onSearchChange={setSearch}
         stageFilter={stageFilter}
         onStageFilterChange={setStageFilter}
+        stageFilterMode={stageFilterMode}
+        onStageFilterModeChange={setStageFilterMode}
         jobTypeFilter={jobTypeFilter}
         onJobTypeFilterChange={setJobTypeFilter}
+        jobTypeFilterMode={jobTypeFilterMode}
+        onJobTypeFilterModeChange={setJobTypeFilterMode}
         userActionFilter={userActionFilter}
         onUserActionFilterChange={setUserActionFilter}
+        userActionFilterMode={userActionFilterMode}
+        onUserActionFilterModeChange={setUserActionFilterMode}
       />
 
       <JobsTable
