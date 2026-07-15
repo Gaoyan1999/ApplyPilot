@@ -716,12 +716,19 @@ table.jobs-table {
   color: var(--text-muted);
 }
 
-/* User action select (editable badge in the jobs table) */
+/* User action selector (editable badge in the jobs table / detail modal) */
+.user-action-selector {
+  position: relative;
+  display: inline-flex;
+}
+
 .user-action-select {
   display: inline-flex;
   align-items: center;
+  border: none;
   border-radius: 4px;
   padding: 2px 8px;
+  font: inherit;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -732,17 +739,43 @@ table.jobs-table {
   color: var(--text-muted);
 }
 
-.user-action-select select {
-  appearance: none;
-  -webkit-appearance: none;
+.user-action-select:focus-visible {
+  outline: 2px solid var(--stage-enriched-fg);
+  outline-offset: 1px;
+}
+
+.user-action-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  padding: 6px;
+}
+
+.user-action-option {
+  display: flex;
+  align-items: center;
   border: none;
   background: transparent;
-  color: inherit;
+  border-radius: 6px;
+  padding: 6px;
   font: inherit;
+  text-align: left;
   cursor: pointer;
 }
 
-.user-action-select select:focus-visible {
-  outline: 2px solid var(--stage-enriched-fg);
-  outline-offset: 1px;
+.user-action-option:hover {
+  background: var(--bg-subtle);
+}
+
+.user-action-option-selected {
+  background: var(--bg-subtle);
 }
