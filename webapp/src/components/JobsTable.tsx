@@ -1,9 +1,10 @@
-import type { Job } from '../api/types'
+import type { Job, UserAction } from '../api/types'
 import { formatDate } from '../lib/format'
 import { JobTypeBadge } from './JobTypeBadge'
 import { ScorePill } from './ScorePill'
 import { StageBadge } from './StageBadge'
 import { SiteIcon } from './SiteIcon'
+import { UserActionSelect } from './UserActionSelect'
 
 export type SortKey = 'title' | 'company' | 'site' | 'job_type' | 'fit_score' | 'stage' | 'discovered_at'
 export type SortDir = 'asc' | 'desc'
@@ -14,6 +15,7 @@ interface Props {
   sortDir: SortDir
   onSort: (key: SortKey) => void
   onPreview: (job: Job) => void
+  onUserActionChange: (job: Job, value: UserAction | null) => void
 }
 
 const COLUMNS: { key: SortKey; label: string }[] = [
@@ -26,7 +28,7 @@ const COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'discovered_at', label: 'Discovered' },
 ]
 
-export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview }: Props) {
+export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview, onUserActionChange }: Props) {
   if (jobs.length === 0) {
     return <div className="empty-state">No jobs match the current filters.</div>
   }
@@ -42,6 +44,7 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview }: Props) 
                 {sortKey === col.key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
               </th>
             ))}
+            <th>Action</th>
           </tr>
         </thead>
         <tbody>
@@ -68,6 +71,12 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview }: Props) 
                 <StageBadge stage={job.stage} />
               </td>
               <td>{formatDate(job.discovered_at)}</td>
+              <td>
+                <UserActionSelect
+                  value={job.user_action}
+                  onChange={(value) => onUserActionChange(job, value)}
+                />
+              </td>
             </tr>
           ))}
         </tbody>

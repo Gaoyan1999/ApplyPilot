@@ -344,6 +344,35 @@
   padding: 10px;
 }
 
+.multi-select-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.multi-select-header-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.multi-select-mode-toggle {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+.multi-select-mode-toggle:hover {
+  background: var(--border);
+}
+
 .multi-select-search {
   width: 100%;
   border: 1px solid var(--border);
@@ -697,3 +726,85 @@ table.jobs-table {
 .job-type-intern { background: var(--jobtype-intern-bg); color: var(--jobtype-intern-fg); }
 .job-type-contract { background: var(--jobtype-contract-bg); color: var(--jobtype-contract-fg); }
 .job-type-unknown { background: var(--jobtype-unknown-bg); color: var(--jobtype-unknown-fg); }
+
+/* User action badge */
+.user-action-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.user-action-not_for_me { background: var(--useraction-notforme-bg); color: var(--useraction-notforme-fg); }
+.user-action-need_tailor { background: var(--useraction-needtailor-bg); color: var(--useraction-needtailor-fg); }
+.user-action-need_auto_apply { background: var(--useraction-needautoapply-bg); color: var(--useraction-needautoapply-fg); }
+
+.user-action-empty {
+  color: var(--text-muted);
+}
+
+/* User action selector (editable badge in the jobs table / detail modal) */
+.user-action-selector {
+  position: relative;
+  display: inline-flex;
+}
+
+.user-action-select {
+  display: inline-flex;
+  align-items: center;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.user-action-select-empty {
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+}
+
+.user-action-select:focus-visible {
+  outline: 2px solid var(--stage-enriched-fg);
+  outline-offset: 1px;
+}
+
+.user-action-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  padding: 6px;
+}
+
+.user-action-option {
+  display: flex;
+  align-items: center;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  padding: 6px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.user-action-option:hover {
+  background: var(--bg-subtle);
+}
+
+.user-action-option-selected {
+  background: var(--bg-subtle);
+}

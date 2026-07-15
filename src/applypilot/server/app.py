@@ -18,13 +18,20 @@ from pydantic import BaseModel
 from rich.console import Console
 
 from applypilot.config import get_tier, load_search_config, save_search_config
-from applypilot.database import get_connection, get_stats
+from applypilot.database import get_connection, get_stats, init_db
 from applypilot.server import search_state
-from applypilot.server.stages import STAGE_ORDER, compute_stage
+from applypilot.server.stages import STAGE_ORDER, USER_ACTIONS, compute_stage
 
 console = Console()
 
 app = FastAPI(title="ApplyPilot Dashboard")
+
+# The dashboard is otherwise read-only and assumes some other command (a
+# discovery/enrichment run, `applypilot init`) already created the schema --
+# but the dashboard can also be the very first thing run against a DB, or
+# against one created before a column was added. Run the migration here too
+# so /api/jobs and friends never hit "no such column".
+init_db()
 
 # Curated job fields returned to the frontend — excludes internal/unused
 # columns (strategy, agent_id, last_attempted_at, apply_duration_ms,
@@ -37,7 +44,7 @@ _JOB_FIELDS = [
     "tailored_at", "tailor_attempts",
     "cover_letter_at", "cover_attempts",
     "applied_at", "apply_status", "apply_error", "apply_attempts",
-    "detail_error",
+    "detail_error", "user_action",
 ]
 
 
@@ -98,6 +105,29 @@ def get_jobs() -> list[dict]:
         out["stage"] = compute_stage(job)
         result.append(out)
     return result
+
+
+class UserActionBody(BaseModel):
+    user_action: str | None = None
+
+
+@app.patch("/api/jobs/{url:path}")
+def update_job_user_action(url: str, body: UserActionBody) -> dict:
+    if body.user_action is not None and body.user_action not in USER_ACTIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"user_action must be one of {USER_ACTIONS} or null",
+        )
+
+    conn = get_connection()
+    cursor = conn.execute(
+        "UPDATE jobs SET user_action = ? WHERE url = ?", (body.user_action, url)
+    )
+    conn.commit()
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    return {"url": url, "user_action": body.user_action}
 
 
 class SearchQuery(BaseModel):
