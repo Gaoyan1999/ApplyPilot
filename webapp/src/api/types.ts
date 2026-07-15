@@ -13,6 +13,7 @@ export type JobType = 'full_time' | 'intern' | 'contract' | 'unknown'
 export interface Job {
   url: string
   title: string | null
+  company: string | null
   site: string | null
   job_type: JobType | null
   location: string | null
