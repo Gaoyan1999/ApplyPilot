@@ -106,6 +106,7 @@ def run_scoring(
     limit: int = 0,
     rescore: bool = False,
     on_progress: Callable[[dict], None] | None = None,
+    on_warning: Callable[[str], None] | None = None,
 ) -> dict:
     """Score unscored jobs that have full descriptions.
 
@@ -114,6 +115,9 @@ def run_scoring(
         rescore: If True, re-score all jobs (not just unscored ones).
         on_progress: Optional callback invoked after every job with
             {"done": int, "total": int}.
+        on_warning: Optional callback invoked when the LLM call for a job
+            fails (after its own internal retries -- see `llm.py`). The job
+            is still scored 0 and the run continues; this just reports it.
 
     Returns:
         {"scored": int, "errors": int, "elapsed": float, "distribution": list}
@@ -151,6 +155,8 @@ def run_scoring(
 
         if result["score"] == 0:
             errors += 1
+            if on_warning and result.get("reasoning", "").startswith("LLM error:"):
+                on_warning(f"Scoring failed for '{job.get('title', '?')[:60]}': {result['reasoning']}")
 
         results.append(result)
 

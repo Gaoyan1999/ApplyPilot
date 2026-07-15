@@ -94,6 +94,7 @@ export interface SearchStatus {
   enrich_total: number
   scored: number
   score_total: number
+  warnings: string[]
   error: string | null
   error_stage: SearchRunStage
 }

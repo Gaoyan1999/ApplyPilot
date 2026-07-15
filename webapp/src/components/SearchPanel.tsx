@@ -65,6 +65,30 @@ function renderStageDetail(status: SearchStatus | null, compact: boolean): React
   return null
 }
 
+/** Non-blocking summary of third-party calls that permanently failed after
+ * retries (a LinkedIn/Glassdoor scrape, an LLM call, a detail-page fetch).
+ * These never stop the run -- this is just visibility into what got skipped. */
+function WarningsSummary({ warnings }: { warnings: string[] }) {
+  const [open, setOpen] = useState(false)
+  if (warnings.length === 0) return null
+
+  return (
+    <div className="search-warnings">
+      <button type="button" className="search-warnings-toggle" onClick={() => setOpen((o) => !o)}>
+        ⚠ {warnings.length} issue{warnings.length === 1 ? '' : 's'} (didn't block progress)
+        <span className="chevron">{open ? '▾' : '▸'}</span>
+      </button>
+      {open && (
+        <ul className="search-warnings-list">
+          {warnings.map((w, i) => (
+            <li key={i}>{w}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 const EMPTY_CONFIG: SearchConfig = {
   queries: [],
   locations: [],
@@ -254,6 +278,9 @@ export function SearchPanel() {
             </span>
             {running && status && (
               <span className="search-minimized-detail">{renderStageDetail(status, true)}</span>
+            )}
+            {!running && status && status.warnings.length > 0 && (
+              <span className="search-minimized-detail">⚠ {status.warnings.length}</span>
             )}
           </button>
           {!running && (
@@ -452,6 +479,7 @@ export function SearchPanel() {
               {running && renderStageDetail(status, false)}
               {result && <span className="search-result">{result}</span>}
               {error && <span className="search-result search-error">{error}</span>}
+              <WarningsSummary warnings={status?.warnings ?? []} />
             </div>
           </div>
         </div>
