@@ -147,6 +147,27 @@
   margin: 0 0 8px;
 }
 
+.search-panel .config-section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  font-weight: normal;
+}
+
+.config-section-toggle h3 {
+  margin: 0;
+}
+
+.config-section-toggle .chevron {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
 .config-row {
   display: flex;
   align-items: center;

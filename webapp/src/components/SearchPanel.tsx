@@ -33,6 +33,7 @@ export function SearchPanel() {
   const [config, setConfig] = useState<SearchConfig>(EMPTY_CONFIG)
   const [configLoaded, setConfigLoaded] = useState(false)
   const [excludeTitlesText, setExcludeTitlesText] = useState('')
+  const [queriesOpen, setQueriesOpen] = useState(false)
   const [running, setRunning] = useState(false)
   const [saving, setSaving] = useState(false)
   const [stage, setStage] = useState<SearchRunStage>(null)
@@ -187,31 +188,43 @@ export function SearchPanel() {
             </div>
             <div className="search-panel">
               <div className="config-section">
-                <h3>Search queries</h3>
-                {config.queries.map((q, i) => (
-                  <div className="config-row" key={i}>
-                    <input
-                      type="text"
-                      placeholder="Job title or keywords"
-                      value={q.query}
-                      onChange={(e) => updateQuery(i, { query: e.target.value })}
-                    />
-                    <select
-                      value={q.tier}
-                      onChange={(e) => updateQuery(i, { tier: Number(e.target.value) })}
-                    >
-                      <option value={1}>Tier 1</option>
-                      <option value={2}>Tier 2</option>
-                      <option value={3}>Tier 3</option>
-                    </select>
-                    <button type="button" className="remove-btn" onClick={() => removeQuery(i)} aria-label="Remove query">
-                      ✕
-                    </button>
-                  </div>
-                ))}
-                <button type="button" className="add-btn" onClick={addQuery}>
-                  + Add query
+                <button
+                  type="button"
+                  className="config-section-toggle"
+                  onClick={() => setQueriesOpen((o) => !o)}
+                  aria-expanded={queriesOpen}
+                >
+                  <h3>Search queries ({config.queries.length})</h3>
+                  <span className="chevron">{queriesOpen ? '▾' : '▸'}</span>
                 </button>
+                {queriesOpen && (
+                  <>
+                    {config.queries.map((q, i) => (
+                      <div className="config-row" key={i}>
+                        <input
+                          type="text"
+                          placeholder="Job title or keywords"
+                          value={q.query}
+                          onChange={(e) => updateQuery(i, { query: e.target.value })}
+                        />
+                        <select
+                          value={q.tier}
+                          onChange={(e) => updateQuery(i, { tier: Number(e.target.value) })}
+                        >
+                          <option value={1}>Tier 1</option>
+                          <option value={2}>Tier 2</option>
+                          <option value={3}>Tier 3</option>
+                        </select>
+                        <button type="button" className="remove-btn" onClick={() => removeQuery(i)} aria-label="Remove query">
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                    <button type="button" className="add-btn" onClick={addQuery}>
+                      + Add query
+                    </button>
+                  </>
+                )}
               </div>
 
               <div className="config-section">
