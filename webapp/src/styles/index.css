@@ -249,6 +249,142 @@
   color: var(--error-fg);
 }
 
+/* Progress bar */
+.progress-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.progress-bar-label {
+  flex-shrink: 0;
+  min-width: 90px;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--stage-enriched-fg);
+  transition: width 0.3s ease;
+}
+
+.progress-bar-count {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.search-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+}
+
+.site-progress-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.site-progress-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* Minimized search widget */
+.search-minimized {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 90; /* below .modal-backdrop's z-index:100 */
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+}
+
+.search-minimized-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.search-minimized-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.search-minimized-dot[data-state='running'] {
+  background: var(--stage-enriched-fg);
+  animation: search-pulse 1.5s ease-in-out infinite;
+}
+
+.search-minimized-dot[data-state='error'] {
+  background: var(--error-fg);
+}
+
+.search-minimized-dot[data-state='done'] {
+  background: var(--score-high-fg);
+}
+
+.search-minimized-label {
+  font-weight: 600;
+}
+
+.search-minimized-detail {
+  color: var(--text-muted);
+}
+
+.search-minimized-dismiss {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 10px 4px 0;
+  font-size: 12px;
+}
+
+.search-minimized-dismiss:hover {
+  color: var(--text);
+}
+
+@keyframes search-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 /* Filter bar */
 .filter-bar {
   display: flex;
@@ -547,18 +683,27 @@ table.jobs-table {
   margin-top: 4px;
 }
 
-.modal-close {
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.modal-close,
+.modal-minimize {
   border: none;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   font-size: 16px;
   line-height: 1;
-  padding: 4px;
+  padding: 4px 8px;
   flex-shrink: 0;
 }
 
-.modal-close:hover {
+.modal-close:hover,
+.modal-minimize:hover {
   color: var(--text);
 }
 

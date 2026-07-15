@@ -14,7 +14,9 @@ import json
 import logging
 import re
 import sqlite3
+import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from urllib.parse import urljoin
@@ -619,10 +621,14 @@ def scrape_site_batch(
     jobs: list[tuple],
     delay: float = 2.0,
     max_jobs: int | None = None,
+    on_progress: Callable[[dict], None] | None = None,
 ) -> dict:
     """Process all jobs for one site using shared browser context.
 
     If conn is None, creates its own DB connection.
+
+    If `on_progress` is passed, it's called after every job with
+    {"site": site, "site_done": i, "site_total": len(jobs)}.
     """
     stats: dict = {"processed": 0, "ok": 0, "partial": 0, "error": 0, "tiers": {1: 0, 2: 0, 3: 0}}
 
@@ -652,6 +658,8 @@ def scrape_site_batch(
 
                 result = scrape_detail_page(page, url)
                 stats["processed"] += 1
+                if on_progress:
+                    on_progress({"site": site, "site_done": i + 1, "site_total": len(jobs)})
 
                 tier = result.get("tier_used")
                 status = result["status"]
@@ -706,12 +714,16 @@ def _run_detail_scraper(
     sites: list[str] | None = None,
     max_per_site: int | None = None,
     workers: int = 1,
+    on_progress: Callable[[dict], None] | None = None,
 ) -> dict:
     """Groups pending jobs by site and processes each batch.
 
     Sequential by default. When workers > 1, processes multiple site batches
     in parallel using ThreadPoolExecutor (each thread gets its own browser
     and DB connection).
+
+    If `on_progress` is passed, it's called after every job (across all
+    sites) with {"done": <jobs processed so far>, "total": <grand total>}.
 
     Returns aggregate stats dict.
     """
@@ -751,6 +763,23 @@ def _run_detail_scraper(
         for t, count in stats["tiers"].items():
             total_stats["tiers"][t] = total_stats["tiers"].get(t, 0) + count
 
+    # Grand total across all sites, matching the same per-site truncation
+    # scrape_site_batch applies internally (jobs[:max_jobs]).
+    total_jobs = sum(
+        min(len(jobs), max_per_site) if max_per_site else len(jobs)
+        for jobs in site_jobs.values()
+    )
+    done_count = 0
+    progress_lock = threading.Lock()
+
+    def _on_site_progress(evt: dict) -> None:
+        nonlocal done_count
+        with progress_lock:
+            done_count += 1
+            d = done_count
+        if on_progress:
+            on_progress({"done": d, "total": total_jobs, "site": evt["site"]})
+
     if workers > 1 and len(order) > 1:
         # Parallel mode: each site batch runs in its own thread with its own
         # DB connection (conn=None tells scrape_site_batch to create one)
@@ -758,7 +787,10 @@ def _run_detail_scraper(
             jobs = site_jobs[site]
             delay = SITE_DELAYS.get(site, 2.0)
             log.info("%s -- %d jobs (delay=%.1fs)", site, len(jobs), delay)
-            stats = scrape_site_batch(None, site, jobs, delay=delay, max_jobs=max_per_site)
+            stats = scrape_site_batch(
+                None, site, jobs, delay=delay, max_jobs=max_per_site,
+                on_progress=_on_site_progress,
+            )
             log.info("%s summary: %d ok, %d partial, %d error | T1=%d T2=%d T3=%d",
                      site, stats["ok"], stats["partial"], stats["error"],
                      stats["tiers"].get(1, 0), stats["tiers"].get(2, 0), stats["tiers"].get(3, 0))
@@ -775,7 +807,10 @@ def _run_detail_scraper(
             delay = SITE_DELAYS.get(site, 2.0)
             log.info("%s -- %d jobs (delay=%.1fs)", site, len(jobs), delay)
 
-            stats = scrape_site_batch(conn, site, jobs, delay=delay, max_jobs=max_per_site)
+            stats = scrape_site_batch(
+                conn, site, jobs, delay=delay, max_jobs=max_per_site,
+                on_progress=_on_site_progress,
+            )
             _merge_stats(stats)
 
             log.info("Site summary: %d ok, %d partial, %d error | T1=%d T2=%d T3=%d",
@@ -868,7 +903,11 @@ def stream_detail(
 
 # -- Public entry point ------------------------------------------------------
 
-def run_enrichment(limit: int = 100, workers: int = 1) -> dict:
+def run_enrichment(
+    limit: int = 100,
+    workers: int = 1,
+    on_progress: Callable[[dict], None] | None = None,
+) -> dict:
     """Main entry point for detail page enrichment.
 
     Fetches pending jobs from the database (those without full_description),
@@ -878,6 +917,8 @@ def run_enrichment(limit: int = 100, workers: int = 1) -> dict:
     Args:
         limit: Maximum number of jobs per site to process.
         workers: Number of parallel threads for site batch processing. Default 1 (sequential).
+        on_progress: Optional callback invoked after every job (across all
+            sites) with {"done": int, "total": int, "site": str}.
 
     Returns:
         Dict with stats: processed, ok, partial, error, tiers.
@@ -902,6 +943,6 @@ def run_enrichment(limit: int = 100, workers: int = 1) -> dict:
             log.info("WTTJ: %d URLs updated", updated)
 
     # Run the detail scraper
-    stats = _run_detail_scraper(conn, max_per_site=limit, workers=workers)
+    stats = _run_detail_scraper(conn, max_per_site=limit, workers=workers, on_progress=on_progress)
 
     return stats

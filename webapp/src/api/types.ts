@@ -85,11 +85,15 @@ export interface SearchStatus {
   started_at: string | null
   finished_at: string | null
   queries: number
+  queries_total: number
   new: number
   existing: number
   discover_errors: number
+  discover_by_site: Record<string, number>
   enriched: number
+  enrich_total: number
   scored: number
+  score_total: number
   error: string | null
   error_stage: SearchRunStage
 }

@@ -32,11 +32,15 @@ _state: dict = {
     "started_at": None,
     "finished_at": None,
     "queries": 0,
+    "queries_total": 0,
     "new": 0,
     "existing": 0,
     "discover_errors": 0,
+    "discover_by_site": {},
     "enriched": 0,
+    "enrich_total": 0,
     "scored": 0,
+    "score_total": 0,
     "error": None,
     "error_stage": None,
 }
@@ -59,11 +63,15 @@ def start_search() -> bool:
             started_at=datetime.now(timezone.utc).isoformat(),
             finished_at=None,
             queries=0,
+            queries_total=0,
             new=0,
             existing=0,
             discover_errors=0,
+            discover_by_site={},
             enriched=0,
+            enrich_total=0,
             scored=0,
+            score_total=0,
             error=None,
             error_stage=None,
         )
@@ -73,28 +81,51 @@ def start_search() -> bool:
     return True
 
 
+def _on_discover_progress(evt: dict) -> None:
+    with _lock:
+        _state["queries"] = evt["queries_done"]
+        _state["queries_total"] = evt["queries_total"]
+        _state["new"] = evt["new"]
+        _state["existing"] = evt["existing"]
+        _state["discover_errors"] = evt["errors"]
+        _state["discover_by_site"] = evt["by_site"]
+
+
+def _on_enrich_progress(evt: dict) -> None:
+    with _lock:
+        _state["enriched"] = evt["done"]
+        _state["enrich_total"] = evt["total"]
+
+
+def _on_score_progress(evt: dict) -> None:
+    with _lock:
+        _state["scored"] = evt["done"]
+        _state["score_total"] = evt["total"]
+
+
 def _run() -> None:
     from applypilot.discovery.jobspy import run_discovery
     from applypilot.enrichment.detail import run_enrichment
     from applypilot.scoring.scorer import run_scoring
 
     try:
-        discover_stats = run_discovery()
+        discover_stats = run_discovery(on_progress=_on_discover_progress)
         with _lock:
             _state["queries"] = discover_stats.get("queries", 0)
             _state["new"] = discover_stats.get("new", 0)
             _state["existing"] = discover_stats.get("existing", 0)
             _state["discover_errors"] = discover_stats.get("errors", 0)
+            _state["discover_by_site"] = discover_stats.get("by_site", {})
 
         with _lock:
             _state["stage"] = "enrich"
-        enrich_stats = run_enrichment()
+        enrich_stats = run_enrichment(on_progress=_on_enrich_progress)
         with _lock:
             _state["enriched"] = enrich_stats.get("ok", 0) + enrich_stats.get("partial", 0)
 
         with _lock:
             _state["stage"] = "score"
-        score_stats = run_scoring()
+        score_stats = run_scoring(on_progress=_on_score_progress)
         with _lock:
             _state["scored"] = score_stats.get("scored", 0)
 

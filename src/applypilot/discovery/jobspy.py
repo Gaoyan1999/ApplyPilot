@@ -300,14 +300,18 @@ def _run_one_search(
     filtered = before - len(df)
 
     conn = get_connection()
-    new, existing = store_jobspy_results(conn, df, s["query"])
+    by_site: dict[str, int] = {}
+    new, existing = store_jobspy_results(conn, df, s["query"], by_site=by_site)
 
     msg = f"[{label}] {before} results -> {new} new, {existing} dupes"
     if filtered:
         msg += f", {filtered} filtered (location)"
     log.info(msg)
 
-    return {"new": new, "existing": existing, "errors": 0, "filtered": filtered, "total": before, "label": label}
+    return {
+        "new": new, "existing": existing, "errors": 0, "filtered": filtered,
+        "total": before, "label": label, "by_site": by_site,
+    }
 
 
 # -- Single query search -----------------------------------------------------
@@ -389,8 +393,14 @@ def _full_crawl(
     hours_old: int = 72,
     proxy: str | None = None,
     max_retries: int = 2,
+    on_progress: Callable[[dict], None] | None = None,
 ) -> dict:
-    """Run all search queries from search config across all locations."""
+    """Run all search queries from search config across all locations.
+
+    If `on_progress` is passed, it's called after every query with a dict of
+    the running totals so far: queries_done, queries_total, new, existing,
+    errors, by_site (cumulative new-job counts per job board).
+    """
     if sites is None:
         sites = ["indeed", "linkedin", "zip_recruiter"]
 
@@ -428,6 +438,7 @@ def _full_crawl(
     total_new = 0
     total_existing = 0
     total_errors = 0
+    total_by_site: dict[str, int] = {}
     completed = 0
 
     for s in searches:
@@ -440,10 +451,22 @@ def _full_crawl(
         total_new += result["new"]
         total_existing += result["existing"]
         total_errors += result["errors"]
+        for site, count in result.get("by_site", {}).items():
+            total_by_site[site] = total_by_site.get(site, 0) + count
 
         if completed % 5 == 0 or completed == len(searches):
             log.info("Progress: %d/%d queries done (%d new, %d dupes, %d errors)",
                      completed, len(searches), total_new, total_existing, total_errors)
+
+        if on_progress:
+            on_progress({
+                "queries_done": completed,
+                "queries_total": len(searches),
+                "new": total_new,
+                "existing": total_existing,
+                "errors": total_errors,
+                "by_site": dict(total_by_site),
+            })
 
     # Final stats
     conn = get_connection()
@@ -458,12 +481,13 @@ def _full_crawl(
         "errors": total_errors,
         "db_total": db_total,
         "queries": len(searches),
+        "by_site": total_by_site,
     }
 
 
 # -- Public entry point ------------------------------------------------------
 
-def run_discovery(cfg: dict | None = None) -> dict:
+def run_discovery(cfg: dict | None = None, on_progress: Callable[[dict], None] | None = None) -> dict:
     """Main entry point for JobSpy-based job discovery.
 
     Loads search queries and locations from the user's search config YAML,
@@ -472,16 +496,18 @@ def run_discovery(cfg: dict | None = None) -> dict:
     Args:
         cfg: Override the search configuration dict. If None, loads from
              the user's searches.yaml file.
+        on_progress: Optional callback invoked after every query with a dict
+             of running totals -- see `_full_crawl`.
 
     Returns:
-        Dict with stats: new, existing, errors, db_total, queries.
+        Dict with stats: new, existing, errors, db_total, queries, by_site.
     """
     if cfg is None:
         cfg = config.load_search_config()
 
     if not cfg:
         log.warning("No search configuration found. Run `applypilot init` to create one.")
-        return {"new": 0, "existing": 0, "errors": 0, "db_total": 0, "queries": 0}
+        return {"new": 0, "existing": 0, "errors": 0, "db_total": 0, "queries": 0, "by_site": {}}
 
     proxy = cfg.get("proxy")
     sites = cfg.get("boards")
@@ -498,4 +524,5 @@ def run_discovery(cfg: dict | None = None) -> dict:
         results_per_site=results_per_site,
         hours_old=hours_old,
         proxy=proxy,
+        on_progress=on_progress,
     )
