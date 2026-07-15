@@ -1,4 +1,4 @@
-import type { Job, SearchForm, SearchStatus, Status } from './types'
+import type { Job, SearchConfig, SearchStatus, Status } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -16,11 +16,11 @@ async function getJson<T>(path: string): Promise<T> {
   return res.json() as Promise<T>
 }
 
-async function postJson<T>(path: string, body: unknown): Promise<T> {
+async function sendJson<T>(path: string, method: 'POST' | 'PUT', body?: unknown): Promise<T> {
   const res = await fetch(path, {
-    method: 'POST',
+    method,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   })
   if (!res.ok) {
     const detail = await res.json().catch(() => null)
@@ -37,12 +37,16 @@ export function getJobs(): Promise<Job[]> {
   return getJson<Job[]>('/api/jobs')
 }
 
-export function getSearchForm(): Promise<SearchForm> {
-  return getJson<SearchForm>('/api/search/form')
+export function getSearchConfig(): Promise<SearchConfig> {
+  return getJson<SearchConfig>('/api/search/config')
 }
 
-export function runSearch(form: SearchForm): Promise<SearchStatus> {
-  return postJson<SearchStatus>('/api/search/run', form)
+export function saveSearchConfig(config: SearchConfig): Promise<SearchConfig> {
+  return sendJson<SearchConfig>('/api/search/config', 'PUT', config)
+}
+
+export function runSearch(): Promise<SearchStatus> {
+  return sendJson<SearchStatus>('/api/search/run', 'POST')
 }
 
 export function getSearchStatus(): Promise<SearchStatus> {

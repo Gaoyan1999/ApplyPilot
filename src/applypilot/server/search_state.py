@@ -1,18 +1,19 @@
-"""In-memory state for the web dashboard's on-demand quick search.
+"""In-memory state for the web dashboard's on-demand pipeline run.
 
 A "search" from the browser is really the whole discover -> enrich -> score
-pipeline run end to end: find new postings, fill in full descriptions and
-apply URLs, then assign fit scores -- so the jobs table can show a fully
-rated list without a trip to the CLI. Each stage runs in turn on a single
-background thread; `stage` in the state dict tracks which one is active so
-the frontend can show progress instead of one long spinner.
+pipeline run end to end, driven by the same ~/.applypilot/searches.yaml the
+CLI uses (tiered queries x locations, board list, exclude_titles, ...):
+find new postings, fill in full descriptions and apply URLs, then assign
+fit scores -- so the jobs table can show a fully rated list without a trip
+to the CLI. Each stage runs in turn on a single background thread; `stage`
+in the state dict tracks which one is active so the frontend can show
+progress instead of one long spinner.
 
-Single-process guard only — it prevents overlapping quick-searches
-triggered from the browser, but can't see a CLI-triggered
-`applypilot run discover` happening in a separate OS process. SQLite's
-WAL mode + busy_timeout (database.py) already makes concurrent writes
-safe either way, so an overlap just means slower scraping, not
-corruption.
+Single-process guard only — it prevents overlapping runs triggered from the
+browser, but can't see a CLI-triggered `applypilot run discover` happening
+in a separate OS process. SQLite's WAL mode + busy_timeout (database.py)
+already makes concurrent writes safe either way, so an overlap just means
+slower scraping, not corruption.
 """
 
 import logging
@@ -30,14 +31,14 @@ _state: dict = {
     "stage": None,
     "started_at": None,
     "finished_at": None,
-    "found": 0,
-    "total": 0,
+    "queries": 0,
+    "new": 0,
+    "existing": 0,
+    "discover_errors": 0,
     "enriched": 0,
     "scored": 0,
     "error": None,
     "error_stage": None,
-    "query": None,
-    "location": None,
 }
 
 
@@ -46,8 +47,9 @@ def get_status() -> dict:
         return dict(_state)
 
 
-def start_search(query: str, location: str, sites: list[str], remote: bool, hours_old: int = 168) -> bool:
-    """Start a background discover -> enrich -> score run. Returns False if one is already running."""
+def start_search() -> bool:
+    """Start a background discover -> enrich -> score run, driven entirely by
+    the user's searches.yaml. Returns False if one is already running."""
     with _lock:
         if _state["running"]:
             return False
@@ -56,34 +58,33 @@ def start_search(query: str, location: str, sites: list[str], remote: bool, hour
             stage="discover",
             started_at=datetime.now(timezone.utc).isoformat(),
             finished_at=None,
-            found=0,
-            total=0,
+            queries=0,
+            new=0,
+            existing=0,
+            discover_errors=0,
             enriched=0,
             scored=0,
             error=None,
             error_stage=None,
-            query=query,
-            location=location,
         )
 
-    thread = threading.Thread(target=_run, args=(query, location, sites, remote, hours_old), daemon=True)
+    thread = threading.Thread(target=_run, daemon=True)
     thread.start()
     return True
 
 
-def _run(query: str, location: str, sites: list[str], remote: bool, hours_old: int) -> None:
-    from applypilot.discovery.jobspy import search_jobs
+def _run() -> None:
+    from applypilot.discovery.jobspy import run_discovery
     from applypilot.enrichment.detail import run_enrichment
     from applypilot.scoring.scorer import run_scoring
 
     try:
-        result = search_jobs(query, location, sites=sites, remote_only=remote, hours_old=hours_old)
-        if "error" in result:
-            _fail("discover", result["error"])
-            return
+        discover_stats = run_discovery()
         with _lock:
-            _state["found"] = result.get("new", 0)
-            _state["total"] = result.get("total", 0)
+            _state["queries"] = discover_stats.get("queries", 0)
+            _state["new"] = discover_stats.get("new", 0)
+            _state["existing"] = discover_stats.get("existing", 0)
+            _state["discover_errors"] = discover_stats.get("errors", 0)
 
         with _lock:
             _state["stage"] = "enrich"

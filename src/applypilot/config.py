@@ -15,7 +15,6 @@ RESUME_PATH = APP_DIR / "resume.txt"
 RESUME_PDF_PATH = APP_DIR / "resume.pdf"
 SEARCH_CONFIG_PATH = APP_DIR / "searches.yaml"
 ENV_PATH = APP_DIR / ".env"
-WEB_SEARCH_PATH = APP_DIR / "web_search.json"
 
 # Generated output
 TAILORED_DIR = APP_DIR / "tailored_resumes"
@@ -114,27 +113,59 @@ def load_search_config() -> dict:
     return yaml.safe_load(SEARCH_CONFIG_PATH.read_text(encoding="utf-8"))
 
 
-def load_web_search_defaults() -> dict:
-    """Load the last-used web dashboard quick-search form values.
+# Top-level searches.yaml keys the web dashboard's config editor manages.
+# Everything else in the file (country, glassdoor_location_map, location
+# accept/reject patterns, ...) passes through save_search_config() untouched.
+_WEB_MANAGED_KEYS = ("queries", "locations", "exclude_titles", "boards")
+_WEB_MANAGED_DEFAULTS = ("results_per_site", "hours_old")
 
-    Separate from searches.yaml on purpose — never touches the user's
-    hand-tuned tiered search config (a YAML round-trip write would also
-    strip their comments).
+
+def save_search_config(data: dict) -> dict:
+    """Merge web-editable fields into searches.yaml and persist it.
+
+    Only `queries`, `locations`, `exclude_titles`, `boards`, and
+    `defaults.results_per_site` / `defaults.hours_old` are overwritten --
+    any other top-level key already in the file is preserved as-is.
+
+    A one-time `searches.yaml.bak` snapshot of the pre-web-edit file is kept
+    so a hand-tuned file (with comments, which this rewrite cannot preserve)
+    isn't lost the first time someone saves from the dashboard.
+
+    Returns the full merged config that was written.
     """
-    import json
-    if not WEB_SEARCH_PATH.exists():
-        return {
-            "query": "", "location": "", "remote": False,
-            "sites": ["indeed", "linkedin"], "hours_old": 168,
-        }
-    return json.loads(WEB_SEARCH_PATH.read_text(encoding="utf-8"))
+    import yaml
 
+    current: dict = {}
+    if SEARCH_CONFIG_PATH.exists():
+        current = yaml.safe_load(SEARCH_CONFIG_PATH.read_text(encoding="utf-8")) or {}
+        backup_path = SEARCH_CONFIG_PATH.with_name(SEARCH_CONFIG_PATH.name + ".bak")
+        if not backup_path.exists():
+            backup_path.write_text(SEARCH_CONFIG_PATH.read_text(encoding="utf-8"), encoding="utf-8")
 
-def save_web_search_defaults(data: dict) -> None:
-    """Persist the web dashboard quick-search form values for next time."""
-    import json
+    for key in _WEB_MANAGED_KEYS:
+        if key in data:
+            current[key] = data[key]
+
+    defaults = dict(current.get("defaults", {}))
+    for key in _WEB_MANAGED_DEFAULTS:
+        if key in data.get("defaults", {}):
+            defaults[key] = data["defaults"][key]
+    current["defaults"] = defaults
+
     APP_DIR.mkdir(parents=True, exist_ok=True)
-    WEB_SEARCH_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    header = (
+        "# ApplyPilot search configuration\n"
+        "# Edited via the web dashboard — comments beyond this file's original\n"
+        "# backup (searches.yaml.bak) are not preserved on save.\n\n"
+    )
+    tmp_path = SEARCH_CONFIG_PATH.with_name(SEARCH_CONFIG_PATH.name + ".tmp")
+    tmp_path.write_text(
+        header + yaml.safe_dump(current, sort_keys=False, default_flow_style=False),
+        encoding="utf-8",
+    )
+    tmp_path.replace(SEARCH_CONFIG_PATH)
+
+    return current
 
 
 def get_excluded_titles() -> list[str]:
