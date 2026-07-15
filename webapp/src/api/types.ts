@@ -8,10 +8,13 @@ export type Stage =
   | 'Applied'
   | 'Failed'
 
+export type JobType = 'full_time' | 'intern' | 'contract' | 'unknown'
+
 export interface Job {
   url: string
   title: string | null
   site: string | null
+  job_type: JobType | null
   location: string | null
   salary: string | null
   fit_score: number | null
@@ -39,6 +42,11 @@ export interface ScoreDistItem {
 
 export interface SiteStat {
   site: string
+  count: number
+}
+
+export interface JobTypeStat {
+  job_type: JobType | null
   count: number
 }
 
@@ -100,5 +108,6 @@ export interface Status {
   ready_to_apply: number
   score_distribution: ScoreDistItem[]
   by_site: SiteStat[]
+  by_job_type: JobTypeStat[]
   stage_counts: Record<Stage, number>
 }

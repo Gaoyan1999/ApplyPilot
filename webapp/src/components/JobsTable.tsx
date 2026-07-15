@@ -1,10 +1,11 @@
 import type { Job } from '../api/types'
 import { formatDate } from '../lib/format'
+import { JobTypeBadge } from './JobTypeBadge'
 import { ScorePill } from './ScorePill'
 import { StageBadge } from './StageBadge'
 import { SiteIcon } from './SiteIcon'
 
-export type SortKey = 'title' | 'site' | 'location' | 'fit_score' | 'stage' | 'discovered_at'
+export type SortKey = 'title' | 'site' | 'job_type' | 'location' | 'fit_score' | 'stage' | 'discovered_at'
 export type SortDir = 'asc' | 'desc'
 
 interface Props {
@@ -18,6 +19,7 @@ interface Props {
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'title', label: 'Title' },
   { key: 'site', label: 'Link' },
+  { key: 'job_type', label: 'Type' },
   { key: 'location', label: 'Location' },
   { key: 'fit_score', label: 'Score' },
   { key: 'stage', label: 'Stage' },
@@ -54,6 +56,9 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview }: Props) 
                 <a href={job.url} target="_blank" rel="noreferrer" aria-label={`Open ${job.title || 'job'} listing`}>
                   <SiteIcon site={job.site} />
                 </a>
+              </td>
+              <td>
+                <JobTypeBadge jobType={job.job_type} />
               </td>
               <td>{job.location || '—'}</td>
               <td>

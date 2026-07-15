@@ -549,3 +549,18 @@ table.jobs-table {
 .stage-applying { background: var(--stage-applying-bg); color: var(--stage-applying-fg); }
 .stage-applied { background: var(--stage-applied-bg); color: var(--stage-applied-fg); }
 .stage-failed { background: var(--stage-failed-bg); color: var(--stage-failed-fg); }
+
+/* Job type badge */
+.job-type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.job-type-full-time { background: var(--jobtype-fulltime-bg); color: var(--jobtype-fulltime-fg); }
+.job-type-intern { background: var(--jobtype-intern-bg); color: var(--jobtype-intern-fg); }
+.job-type-contract { background: var(--jobtype-contract-bg); color: var(--jobtype-contract-fg); }
+.job-type-unknown { background: var(--jobtype-unknown-bg); color: var(--jobtype-unknown-fg); }

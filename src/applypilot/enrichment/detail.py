@@ -25,6 +25,7 @@ from playwright.sync_api import sync_playwright
 from applypilot import config
 from applypilot.config import DB_PATH
 from applypilot.database import get_connection, init_db, ensure_columns
+from applypilot.employment_type import classify_native_job_type
 from applypilot.llm import get_client
 
 log = logging.getLogger(__name__)
@@ -225,8 +226,9 @@ def collect_detail_intelligence(page) -> dict:
 # -- Tier 1: JSON-LD extraction -----------------------------------------------
 
 def extract_from_json_ld(intel: dict) -> dict | None:
-    """Extract description and apply URL from JSON-LD JobPosting.
-    Returns {"full_description": str, "application_url": str|None} or None."""
+    """Extract description, apply URL, and employment type from JSON-LD JobPosting.
+    Returns {"full_description": str, "application_url": str|None,
+    "employment_type_raw": str|None} or None."""
 
     def find_job_posting(data):
         if isinstance(data, dict):
@@ -267,9 +269,14 @@ def extract_from_json_ld(intel: dict) -> dict | None:
         if not apply_url:
             apply_url = posting.get("url")
 
+        employment_type_raw = posting.get("employmentType")
+        if isinstance(employment_type_raw, list):
+            employment_type_raw = ", ".join(str(v) for v in employment_type_raw)
+
         return {
             "full_description": desc_clean,
             "application_url": apply_url,
+            "employment_type_raw": employment_type_raw,
         }
 
     return None
@@ -668,6 +675,12 @@ def scrape_site_batch(
                         "detail_scraped_at = ?, detail_error = NULL WHERE url = ?",
                         (result.get("full_description"), result.get("application_url"), now, url),
                     )
+                    jsonld_job_type = classify_native_job_type(result.get("employment_type_raw"))
+                    if jsonld_job_type and jsonld_job_type != "unknown":
+                        conn.execute(
+                            "UPDATE jobs SET job_type = ? WHERE url = ? AND job_type = 'unknown'",
+                            (jsonld_job_type, url),
+                        )
                 else:
                     stats["error"] += 1
                     conn.execute(

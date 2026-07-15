@@ -22,6 +22,7 @@ import yaml
 from applypilot import config
 from applypilot.config import CONFIG_DIR
 from applypilot.database import get_connection, init_db
+from applypilot.employment_type import classify_job_type
 
 log = logging.getLogger(__name__)
 
@@ -314,6 +315,7 @@ def store_results(conn: sqlite3.Connection, jobs: list[dict], employers: dict) -
         title = job.get("title") or ""
         if any(term in title.lower() for term in exclude_titles):
             continue
+        job_type = classify_job_type(job.get("time_type"), title)
 
         url = job.get("apply_url", "")
         if not url:
@@ -335,10 +337,10 @@ def store_results(conn: sqlite3.Connection, jobs: list[dict], employers: dict) -
         try:
             conn.execute(
                 "INSERT INTO jobs (url, title, salary, description, location, site, strategy, "
-                "discovered_at, full_description, application_url, detail_scraped_at, detail_error) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "discovered_at, full_description, application_url, detail_scraped_at, detail_error, job_type) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (url, job.get("title"), None, short_desc, job.get("location"),
-                 site, strategy, now, full_description, url, detail_scraped_at, detail_error),
+                 site, strategy, now, full_description, url, detail_scraped_at, detail_error, job_type),
             )
             new += 1
         except sqlite3.IntegrityError:

@@ -30,7 +30,7 @@ app = FastAPI(title="ApplyPilot Dashboard")
 # columns (strategy, agent_id, last_attempted_at, apply_duration_ms,
 # apply_task_id, verification_confidence).
 _JOB_FIELDS = [
-    "url", "title", "site", "location", "salary",
+    "url", "title", "site", "job_type", "location", "salary",
     "fit_score", "score_reasoning",
     "application_url", "full_description",
     "discovered_at", "scored_at",
@@ -77,6 +77,7 @@ def get_status() -> dict:
             {"score": s, "count": c} for s, c in stats["score_distribution"]
         ],
         "by_site": [{"site": s, "count": c} for s, c in stats["by_site"]],
+        "by_job_type": [{"job_type": t, "count": c} for t, c in stats["by_job_type"]],
         "stage_counts": stage_counts,
     }
 

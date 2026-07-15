@@ -16,6 +16,7 @@ from jobspy import scrape_jobs
 
 from applypilot import config
 from applypilot.database import get_connection, init_db, store_jobs
+from applypilot.employment_type import classify_job_type
 
 log = logging.getLogger(__name__)
 
@@ -135,6 +136,8 @@ def store_jobspy_results(conn: sqlite3.Connection, df, source_label: str) -> tup
         title = str(row.get("title", "")) if str(row.get("title", "")) != "nan" else None
         if title and any(term in title.lower() for term in exclude_titles):
             continue
+        job_type_raw = str(row.get("job_type", "")) if str(row.get("job_type", "")) != "nan" else None
+        job_type = classify_job_type(job_type_raw, title)
         company = str(row.get("company", "")) if str(row.get("company", "")) != "nan" else None
         location_str = str(row.get("location", "")) if str(row.get("location", "")) != "nan" else None
 
@@ -175,10 +178,10 @@ def store_jobspy_results(conn: sqlite3.Connection, df, source_label: str) -> tup
         try:
             conn.execute(
                 "INSERT INTO jobs (url, title, salary, description, location, site, strategy, discovered_at, "
-                "full_description, application_url, detail_scraped_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "full_description, application_url, detail_scraped_at, job_type) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (url, title, salary, description, location_str, site_label, strategy, now,
-                 full_description, apply_url, detail_scraped_at),
+                 full_description, apply_url, detail_scraped_at, job_type),
             )
             new += 1
         except sqlite3.IntegrityError:

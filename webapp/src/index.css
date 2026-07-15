@@ -33,6 +33,15 @@
   --stage-failed-bg: #fbe1df;
   --stage-failed-fg: #a83c33;
 
+  --jobtype-fulltime-bg: var(--stage-applied-bg);
+  --jobtype-fulltime-fg: var(--stage-applied-fg);
+  --jobtype-intern-bg: var(--stage-enriched-bg);
+  --jobtype-intern-fg: var(--stage-enriched-fg);
+  --jobtype-contract-bg: var(--stage-scored-bg);
+  --jobtype-contract-fg: var(--stage-scored-fg);
+  --jobtype-unknown-bg: var(--stage-discovered-bg);
+  --jobtype-unknown-fg: var(--stage-discovered-fg);
+
   color-scheme: light;
 }
 
@@ -71,6 +80,15 @@
     --stage-applied-fg: #6fd996;
     --stage-failed-bg: #3a1f1f;
     --stage-failed-fg: #ff9b93;
+
+    --jobtype-fulltime-bg: var(--stage-applied-bg);
+    --jobtype-fulltime-fg: var(--stage-applied-fg);
+    --jobtype-intern-bg: var(--stage-enriched-bg);
+    --jobtype-intern-fg: var(--stage-enriched-fg);
+    --jobtype-contract-bg: var(--stage-scored-bg);
+    --jobtype-contract-fg: var(--stage-scored-fg);
+    --jobtype-unknown-bg: var(--stage-discovered-bg);
+    --jobtype-unknown-fg: var(--stage-discovered-fg);
 
     color-scheme: dark;
   }
@@ -113,6 +131,15 @@
   --stage-failed-bg: #fbe1df;
   --stage-failed-fg: #a83c33;
 
+  --jobtype-fulltime-bg: var(--stage-applied-bg);
+  --jobtype-fulltime-fg: var(--stage-applied-fg);
+  --jobtype-intern-bg: var(--stage-enriched-bg);
+  --jobtype-intern-fg: var(--stage-enriched-fg);
+  --jobtype-contract-bg: var(--stage-scored-bg);
+  --jobtype-contract-fg: var(--stage-scored-fg);
+  --jobtype-unknown-bg: var(--stage-discovered-bg);
+  --jobtype-unknown-fg: var(--stage-discovered-fg);
+
   color-scheme: light;
 }
 
@@ -150,6 +177,15 @@
   --stage-applied-fg: #6fd996;
   --stage-failed-bg: #3a1f1f;
   --stage-failed-fg: #ff9b93;
+
+  --jobtype-fulltime-bg: var(--stage-applied-bg);
+  --jobtype-fulltime-fg: var(--stage-applied-fg);
+  --jobtype-intern-bg: var(--stage-enriched-bg);
+  --jobtype-intern-fg: var(--stage-enriched-fg);
+  --jobtype-contract-bg: var(--stage-scored-bg);
+  --jobtype-contract-fg: var(--stage-scored-fg);
+  --jobtype-unknown-bg: var(--stage-discovered-bg);
+  --jobtype-unknown-fg: var(--stage-discovered-fg);
 
   color-scheme: dark;
 }
