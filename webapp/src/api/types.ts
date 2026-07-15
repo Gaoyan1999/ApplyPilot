@@ -11,6 +11,7 @@ export type Stage =
 export interface Job {
   url: string
   title: string | null
+  company: string | null
   site: string | null
   location: string | null
   salary: string | null
