@@ -66,7 +66,7 @@ def init_db(db_path: Path | str | None = None) -> sqlite3.Connection:
     so it won't destroy existing data.
 
     Schema columns by stage:
-      - Discovery:  url, title, company, salary, description, location, site, strategy, discovered_at
+      - Discovery:  url, title, company, salary, description, location, site, strategy, job_type, discovered_at
       - Enrichment: full_description, application_url, detail_scraped_at, detail_error
       - Scoring:    fit_score, score_reasoning, scored_at
       - Tailoring:  tailored_resume_path, tailored_at, tailor_attempts
@@ -98,6 +98,7 @@ def init_db(db_path: Path | str | None = None) -> sqlite3.Connection:
             location              TEXT,
             site                  TEXT,
             strategy              TEXT,
+            job_type              TEXT,
             discovered_at         TEXT,
 
             -- Enrichment stage (detail_scraper)
@@ -154,6 +155,7 @@ _ALL_COLUMNS: dict[str, str] = {
     "location": "TEXT",
     "site": "TEXT",
     "strategy": "TEXT",
+    "job_type": "TEXT",
     "discovered_at": "TEXT",
     # Enrichment
     "full_description": "TEXT",
@@ -249,6 +251,12 @@ def get_stats(conn: sqlite3.Connection | None = None) -> dict:
         "SELECT site, COUNT(*) as cnt FROM jobs GROUP BY site ORDER BY cnt DESC"
     ).fetchall()
     stats["by_site"] = [(row[0], row[1]) for row in rows]
+
+    # By job-type breakdown
+    rows = conn.execute(
+        "SELECT job_type, COUNT(*) as cnt FROM jobs GROUP BY job_type ORDER BY cnt DESC"
+    ).fetchall()
+    stats["by_job_type"] = [(row[0], row[1]) for row in rows]
 
     # Enrichment stage
     stats["pending_detail"] = conn.execute(

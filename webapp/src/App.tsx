@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { getJobs, getStatus } from './api/client'
-import type { Job, Stage } from './api/types'
+import type { Job, JobType, Stage } from './api/types'
 import { usePolling } from './hooks/usePolling'
 import { useTheme } from './hooks/useTheme'
 import { StatPills } from './components/StatPills'
@@ -32,6 +32,7 @@ function App() {
 
   const [search, setSearch] = useState('')
   const [stageFilter, setStageFilter] = useState<Stage | 'All'>('All')
+  const [jobTypeFilter, setJobTypeFilter] = useState<JobType | 'All'>('All')
   const [sortKey, setSortKey] = useState<SortKey>('discovered_at')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -42,6 +43,7 @@ function App() {
     const q = search.trim().toLowerCase()
     const filtered = jobs.filter((job) => {
       if (stageFilter !== 'All' && job.stage !== stageFilter) return false
+      if (jobTypeFilter !== 'All' && (job.job_type ?? 'unknown') !== jobTypeFilter) return false
       if (!q) return true
       return (
         (job.title || '').toLowerCase().includes(q) ||
@@ -50,7 +52,7 @@ function App() {
       )
     })
     return sortJobs(filtered, sortKey, sortDir)
-  }, [jobs, search, stageFilter, sortKey, sortDir])
+  }, [jobs, search, stageFilter, jobTypeFilter, sortKey, sortDir])
 
   function handleSort(key: SortKey) {
     if (key === sortKey) {
@@ -87,6 +89,8 @@ function App() {
         onSearchChange={setSearch}
         stageFilter={stageFilter}
         onStageFilterChange={setStageFilter}
+        jobTypeFilter={jobTypeFilter}
+        onJobTypeFilterChange={setJobTypeFilter}
       />
 
       <JobsTable
