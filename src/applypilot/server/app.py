@@ -18,13 +18,20 @@ from pydantic import BaseModel
 from rich.console import Console
 
 from applypilot.config import get_tier, load_search_config, save_search_config
-from applypilot.database import get_connection, get_stats
+from applypilot.database import get_connection, get_stats, init_db
 from applypilot.server import search_state
 from applypilot.server.stages import STAGE_ORDER, USER_ACTIONS, compute_stage
 
 console = Console()
 
 app = FastAPI(title="ApplyPilot Dashboard")
+
+# The dashboard is otherwise read-only and assumes some other command (a
+# discovery/enrichment run, `applypilot init`) already created the schema --
+# but the dashboard can also be the very first thing run against a DB, or
+# against one created before a column was added. Run the migration here too
+# so /api/jobs and friends never hit "no such column".
+init_db()
 
 # Curated job fields returned to the frontend — excludes internal/unused
 # columns (strategy, agent_id, last_attempted_at, apply_duration_ms,
