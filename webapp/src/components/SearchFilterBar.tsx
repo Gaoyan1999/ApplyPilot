@@ -22,34 +22,39 @@ export function SearchFilterBar({
 }: Props) {
   return (
     <div className="filter-bar">
-      <input
-        type="text"
-        placeholder="Search title, site, location..."
-        value={search}
-        onChange={(e) => onSearchChange(e.target.value)}
-      />
-      <select
-        value={stageFilter}
-        onChange={(e) => onStageFilterChange(e.target.value as Stage | 'All')}
-      >
-        <option value="All">All stages</option>
-        {STAGE_ORDER.map((stage) => (
-          <option key={stage} value={stage}>
-            {stage}
-          </option>
-        ))}
-      </select>
-      <select
-        value={jobTypeFilter}
-        onChange={(e) => onJobTypeFilterChange(e.target.value as JobType | 'All')}
-      >
-        <option value="All">All types</option>
-        {JOB_TYPE_ORDER.map((jobType) => (
-          <option key={jobType} value={jobType}>
-            {LABEL_BY_JOB_TYPE[jobType]}
-          </option>
-        ))}
-      </select>
+      <div className="filter-search-row">
+        <input
+          type="text"
+          className="filter-search-input"
+          placeholder="Search title, site, location..."
+          value={search}
+          onChange={(e) => onSearchChange(e.target.value)}
+        />
+      </div>
+      <div className="filter-pills-row">
+        <label className={`filter-pill${stageFilter !== 'All' ? ' filter-pill-active' : ''}`}>
+          <select
+            value={stageFilter}
+            onChange={(e) => onStageFilterChange(e.target.value as Stage | 'All')}
+          >
+            <option value="All">Stage</option>
+            {STAGE_ORDER.map((stage) => (
+              <option key={stage} value={stage}>{`Stage: ${stage}`}</option>
+            ))}
+          </select>
+        </label>
+        <label className={`filter-pill${jobTypeFilter !== 'All' ? ' filter-pill-active' : ''}`}>
+          <select
+            value={jobTypeFilter}
+            onChange={(e) => onJobTypeFilterChange(e.target.value as JobType | 'All')}
+          >
+            <option value="All">Type</option>
+            {JOB_TYPE_ORDER.map((jobType) => (
+              <option key={jobType} value={jobType}>{`Type: ${LABEL_BY_JOB_TYPE[jobType]}`}</option>
+            ))}
+          </select>
+        </label>
+      </div>
     </div>
   )
 }

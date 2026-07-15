@@ -252,12 +252,17 @@
 /* Filter bar */
 .filter-bar {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 10px;
   margin-bottom: 16px;
 }
 
-.filter-bar input,
-.filter-bar select {
+.filter-search-row {
+  display: flex;
+}
+
+.filter-search-input {
+  flex: 1;
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px 10px;
@@ -266,8 +271,67 @@
   color: var(--text);
 }
 
-.filter-bar input {
-  flex: 1;
+.filter-pills-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.filter-pill:hover {
+  background: var(--border);
+}
+
+.filter-pill::after {
+  content: '';
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.filter-pill select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 26px 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.filter-pill select:focus-visible {
+  outline: 2px solid var(--stage-enriched-fg);
+  outline-offset: -2px;
+}
+
+.filter-pill-active {
+  background: var(--stage-enriched-bg);
+  color: var(--stage-enriched-fg);
+}
+
+.filter-pill-active:hover {
+  filter: brightness(0.97);
 }
 
 /* Jobs table */
