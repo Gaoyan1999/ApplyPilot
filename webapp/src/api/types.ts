@@ -10,6 +10,8 @@ export type Stage =
 
 export type JobType = 'full_time' | 'intern' | 'contract' | 'unknown'
 
+export type UserAction = 'not_for_me' | 'need_tailor' | 'need_auto_apply'
+
 export interface Job {
   url: string
   title: string | null
@@ -34,6 +36,7 @@ export interface Job {
   apply_attempts: number
   detail_error: string | null
   stage: Stage
+  user_action: UserAction | null
 }
 
 export interface ScoreDistItem {

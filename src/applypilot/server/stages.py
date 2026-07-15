@@ -18,6 +18,10 @@ STAGE_ORDER = [
 
 MAX_ATTEMPTS = 5
 
+# Manual, user-assigned label on a job -- independent of the auto-computed
+# pipeline `stage` above. Stored in the `user_action` column.
+USER_ACTIONS = ["not_for_me", "need_tailor", "need_auto_apply"]
+
 
 def compute_stage(job: dict) -> str:
     """Return the current pipeline stage label for a job row."""

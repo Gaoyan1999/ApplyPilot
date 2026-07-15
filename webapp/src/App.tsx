@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { getJobs, getStatus } from './api/client'
-import type { Job, JobType, Stage } from './api/types'
+import { ApiError, getJobs, getStatus, setJobUserAction } from './api/client'
+import type { Job, JobType, Stage, UserAction } from './api/types'
 import { usePolling } from './hooks/usePolling'
 import { useTheme } from './hooks/useTheme'
 import { StatPills } from './components/StatPills'
@@ -33,9 +33,11 @@ function App() {
   const [search, setSearch] = useState('')
   const [stageFilter, setStageFilter] = useState<Stage[]>([])
   const [jobTypeFilter, setJobTypeFilter] = useState<JobType[]>([])
+  const [userActionFilter, setUserActionFilter] = useState<UserAction[]>([])
   const [sortKey, setSortKey] = useState<SortKey>('discovered_at')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const previewJob = jobs?.find((j) => j.url === previewUrl) ?? null
 
   const visibleJobs = useMemo(() => {
@@ -44,6 +46,9 @@ function App() {
     const filtered = jobs.filter((job) => {
       if (stageFilter.length > 0 && !stageFilter.includes(job.stage)) return false
       if (jobTypeFilter.length > 0 && !jobTypeFilter.includes(job.job_type ?? 'unknown')) return false
+      if (userActionFilter.length > 0 && (!job.user_action || !userActionFilter.includes(job.user_action))) {
+        return false
+      }
       if (!q) return true
       return (
         (job.title || '').toLowerCase().includes(q) ||
@@ -52,7 +57,16 @@ function App() {
       )
     })
     return sortJobs(filtered, sortKey, sortDir)
-  }, [jobs, search, stageFilter, jobTypeFilter, sortKey, sortDir])
+  }, [jobs, search, stageFilter, jobTypeFilter, userActionFilter, sortKey, sortDir])
+
+  async function handleUserActionChange(job: Job, value: UserAction | null) {
+    try {
+      await setJobUserAction(job.url, value)
+      setActionError(null)
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : 'Failed to update action')
+    }
+  }
 
   function handleSort(key: SortKey) {
     if (key === sortKey) {
@@ -82,6 +96,8 @@ function App() {
         </div>
       )}
 
+      {actionError && <div className="error-banner">{actionError}</div>}
+
       {status && <StatPills status={status} />}
 
       <SearchFilterBar
@@ -91,6 +107,8 @@ function App() {
         onStageFilterChange={setStageFilter}
         jobTypeFilter={jobTypeFilter}
         onJobTypeFilterChange={setJobTypeFilter}
+        userActionFilter={userActionFilter}
+        onUserActionFilterChange={setUserActionFilter}
       />
 
       <JobsTable
@@ -99,6 +117,7 @@ function App() {
         sortDir={sortDir}
         onSort={handleSort}
         onPreview={(job) => setPreviewUrl(job.url)}
+        onUserActionChange={handleUserActionChange}
       />
 
       {previewJob && <JobPreviewModal job={previewJob} onClose={() => setPreviewUrl(null)} />}

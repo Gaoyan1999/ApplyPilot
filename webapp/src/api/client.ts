@@ -1,4 +1,4 @@
-import type { Job, SearchConfig, SearchStatus, Status } from './types'
+import type { Job, SearchConfig, SearchStatus, Status, UserAction } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -16,7 +16,7 @@ async function getJson<T>(path: string): Promise<T> {
   return res.json() as Promise<T>
 }
 
-async function sendJson<T>(path: string, method: 'POST' | 'PUT', body?: unknown): Promise<T> {
+async function sendJson<T>(path: string, method: 'POST' | 'PUT' | 'PATCH', body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method,
     headers: { 'Content-Type': 'application/json' },
@@ -51,4 +51,8 @@ export function runSearch(): Promise<SearchStatus> {
 
 export function getSearchStatus(): Promise<SearchStatus> {
   return getJson<SearchStatus>('/api/search/status')
+}
+
+export function setJobUserAction(url: string, userAction: UserAction | null): Promise<Job> {
+  return sendJson<Job>(`/api/jobs/${encodeURIComponent(url)}`, 'PATCH', { user_action: userAction })
 }

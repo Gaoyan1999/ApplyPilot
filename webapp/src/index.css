@@ -42,6 +42,13 @@
   --jobtype-unknown-bg: var(--stage-discovered-bg);
   --jobtype-unknown-fg: var(--stage-discovered-fg);
 
+  --useraction-notforme-bg: var(--stage-failed-bg);
+  --useraction-notforme-fg: var(--stage-failed-fg);
+  --useraction-needtailor-bg: var(--stage-scored-bg);
+  --useraction-needtailor-fg: var(--stage-scored-fg);
+  --useraction-needautoapply-bg: var(--stage-applying-bg);
+  --useraction-needautoapply-fg: var(--stage-applying-fg);
+
   color-scheme: light;
 }
 
@@ -140,6 +147,13 @@
   --jobtype-unknown-bg: var(--stage-discovered-bg);
   --jobtype-unknown-fg: var(--stage-discovered-fg);
 
+  --useraction-notforme-bg: var(--stage-failed-bg);
+  --useraction-notforme-fg: var(--stage-failed-fg);
+  --useraction-needtailor-bg: var(--stage-scored-bg);
+  --useraction-needtailor-fg: var(--stage-scored-fg);
+  --useraction-needautoapply-bg: var(--stage-applying-bg);
+  --useraction-needautoapply-fg: var(--stage-applying-fg);
+
   color-scheme: light;
 }
 
@@ -186,6 +200,13 @@
   --jobtype-contract-fg: var(--stage-scored-fg);
   --jobtype-unknown-bg: var(--stage-discovered-bg);
   --jobtype-unknown-fg: var(--stage-discovered-fg);
+
+  --useraction-notforme-bg: var(--stage-failed-bg);
+  --useraction-notforme-fg: var(--stage-failed-fg);
+  --useraction-needtailor-bg: var(--stage-scored-bg);
+  --useraction-needtailor-fg: var(--stage-scored-fg);
+  --useraction-needautoapply-bg: var(--stage-applying-bg);
+  --useraction-needautoapply-fg: var(--stage-applying-fg);
 
   color-scheme: dark;
 }

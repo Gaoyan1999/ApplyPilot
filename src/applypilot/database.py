@@ -74,6 +74,7 @@ def init_db(db_path: Path | str | None = None) -> sqlite3.Connection:
       - Apply:      applied_at, apply_status, apply_error, apply_attempts,
                    agent_id, last_attempted_at, apply_duration_ms, apply_task_id,
                    verification_confidence
+      - User:       user_action (manual label, see applypilot.server.stages.USER_ACTIONS)
 
     Args:
         db_path: Override the default DB_PATH.
@@ -131,7 +132,10 @@ def init_db(db_path: Path | str | None = None) -> sqlite3.Connection:
             last_attempted_at     TEXT,
             apply_duration_ms     INTEGER,
             apply_task_id         TEXT,
-            verification_confidence TEXT
+            verification_confidence TEXT,
+
+            -- Manual user annotation
+            user_action           TEXT
         )
     """)
     conn.commit()
@@ -184,6 +188,8 @@ _ALL_COLUMNS: dict[str, str] = {
     "apply_duration_ms": "INTEGER",
     "apply_task_id": "TEXT",
     "verification_confidence": "TEXT",
+    # Manual user annotation
+    "user_action": "TEXT",
 }
 
 
