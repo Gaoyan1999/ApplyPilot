@@ -139,7 +139,11 @@ def _public_search_config(cfg: dict) -> dict:
 
 @app.get("/api/search/config")
 def get_search_config() -> dict:
-    return _public_search_config(load_search_config())
+    try:
+        cfg = load_search_config()
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    return _public_search_config(cfg)
 
 
 @app.put("/api/search/config")

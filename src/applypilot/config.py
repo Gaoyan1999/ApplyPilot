@@ -105,11 +105,9 @@ def load_search_config() -> dict:
     """Load search configuration from ~/.applypilot/searches.yaml."""
     import yaml
     if not SEARCH_CONFIG_PATH.exists():
-        # Fall back to package-shipped example
-        example = CONFIG_DIR / "searches.example.yaml"
-        if example.exists():
-            return yaml.safe_load(example.read_text(encoding="utf-8"))
-        return {}
+        raise FileNotFoundError(
+            f"Search config not found at {SEARCH_CONFIG_PATH}. Run `applypilot init` first."
+        )
     return yaml.safe_load(SEARCH_CONFIG_PATH.read_text(encoding="utf-8"))
 
 
