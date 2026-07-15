@@ -20,7 +20,7 @@ const COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'title', label: 'Title' },
   { key: 'company', label: 'Company' },
   { key: 'site', label: 'Link' },
-  { key: 'job_type', label: 'Type' },
+  { key: 'job_type', label: 'Job Type' },
   { key: 'fit_score', label: 'Score' },
   { key: 'stage', label: 'Stage' },
   { key: 'discovered_at', label: 'Discovered' },

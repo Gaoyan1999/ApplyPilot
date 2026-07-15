@@ -7,7 +7,7 @@ export const LABEL_BY_JOB_TYPE: Record<JobType, string> = {
   unknown: 'Unknown',
 }
 
-const CLASS_BY_JOB_TYPE: Record<JobType, string> = {
+export const CLASS_BY_JOB_TYPE: Record<JobType, string> = {
   full_time: 'job-type-full-time',
   intern: 'job-type-intern',
   contract: 'job-type-contract',
