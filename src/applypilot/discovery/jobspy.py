@@ -10,6 +10,7 @@ search configuration YAML (searches.yaml) rather than being hardcoded.
 import logging
 import sqlite3
 import time
+from collections.abc import Callable
 from datetime import datetime, timezone
 
 from jobspy import scrape_jobs
@@ -118,8 +119,19 @@ def _location_ok(location: str | None, accept: list[str], reject: list[str]) -> 
 
 # -- DB storage (JobSpy DataFrame -> SQLite) ---------------------------------
 
-def store_jobspy_results(conn: sqlite3.Connection, df, source_label: str) -> tuple[int, int]:
-    """Store JobSpy DataFrame results into the DB. Returns (new, existing)."""
+def store_jobspy_results(
+    conn: sqlite3.Connection,
+    df,
+    source_label: str,
+    by_site: dict[str, int] | None = None,
+) -> tuple[int, int]:
+    """Store JobSpy DataFrame results into the DB. Returns (new, existing).
+
+    If `by_site` is passed, it's updated in place with a per-site count of
+    newly-inserted rows (site label as stored, i.e. `row["site"]` or
+    `source_label` as a fallback) -- lets callers report live discovery
+    progress broken down by job board.
+    """
     from applypilot.config import get_excluded_titles
 
     exclude_titles = get_excluded_titles()
@@ -184,6 +196,8 @@ def store_jobspy_results(conn: sqlite3.Connection, df, source_label: str) -> tup
                  full_description, apply_url, detail_scraped_at, job_type),
             )
             new += 1
+            if by_site is not None:
+                by_site[site_label] = by_site.get(site_label, 0) + 1
         except sqlite3.IntegrityError:
             existing += 1
 
@@ -265,7 +279,7 @@ def _run_one_search(
 
     if not all_dfs:
         log.error("[%s]: all sites failed", label)
-        return {"new": 0, "existing": 0, "errors": 1, "filtered": 0, "total": 0, "label": label}
+        return {"new": 0, "existing": 0, "errors": 1, "filtered": 0, "total": 0, "label": label, "by_site": {}}
 
     import pandas as pd
     import warnings
@@ -275,7 +289,7 @@ def _run_one_search(
 
     if len(df) == 0:
         log.info("[%s] 0 results", label)
-        return {"new": 0, "existing": 0, "errors": 0, "filtered": 0, "total": 0, "label": label}
+        return {"new": 0, "existing": 0, "errors": 0, "filtered": 0, "total": 0, "label": label, "by_site": {}}
 
     # Filter by location before storing
     before = len(df)
