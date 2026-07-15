@@ -19,7 +19,6 @@ const COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'title', label: 'Title' },
   { key: 'company', label: 'Company' },
   { key: 'site', label: 'Link' },
-  { key: 'location', label: 'Location' },
   { key: 'fit_score', label: 'Score' },
   { key: 'stage', label: 'Stage' },
   { key: 'discovered_at', label: 'Discovered' },
@@ -57,7 +56,6 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview }: Props) 
                   <SiteIcon site={job.site} />
                 </a>
               </td>
-              <td>{job.location || '—'}</td>
               <td>
                 <ScorePill score={job.fit_score} />
               </td>
