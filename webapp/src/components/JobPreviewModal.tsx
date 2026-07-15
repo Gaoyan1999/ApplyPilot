@@ -37,7 +37,7 @@ export function JobPreviewModal({ job, onClose }: Props) {
           <div>
             <h2 className="modal-title">{job.title || '(untitled)'}</h2>
             <div className="modal-subtitle">
-              {[job.site, job.location].filter(Boolean).join(' · ')}
+              {[job.company, job.site, job.location].filter(Boolean).join(' · ')}
             </div>
           </div>
           <button type="button" className="modal-close" onClick={onClose} aria-label="Close">

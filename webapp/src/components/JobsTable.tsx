@@ -4,7 +4,7 @@ import { ScorePill } from './ScorePill'
 import { StageBadge } from './StageBadge'
 import { SiteIcon } from './SiteIcon'
 
-export type SortKey = 'title' | 'site' | 'location' | 'fit_score' | 'stage' | 'discovered_at'
+export type SortKey = 'title' | 'company' | 'site' | 'location' | 'fit_score' | 'stage' | 'discovered_at'
 export type SortDir = 'asc' | 'desc'
 
 interface Props {
@@ -17,6 +17,7 @@ interface Props {
 
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'title', label: 'Title' },
+  { key: 'company', label: 'Company' },
   { key: 'site', label: 'Link' },
   { key: 'location', label: 'Location' },
   { key: 'fit_score', label: 'Score' },
@@ -50,6 +51,7 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview }: Props) 
                   {job.title || '(untitled)'}
                 </button>
               </td>
+              <td>{job.company || '—'}</td>
               <td className="site-cell">
                 <a href={job.url} target="_blank" rel="noreferrer" aria-label={`Open ${job.title || 'job'} listing`}>
                   <SiteIcon site={job.site} />
