@@ -9,6 +9,7 @@ import json
 import logging
 import re
 import time
+from collections.abc import Callable
 from datetime import datetime, timezone
 
 from applypilot.config import RESUME_PATH, load_profile
@@ -101,12 +102,22 @@ def score_job(resume_text: str, job: dict) -> dict:
         return {"score": 0, "keywords": "", "reasoning": f"LLM error: {e}"}
 
 
-def run_scoring(limit: int = 0, rescore: bool = False) -> dict:
+def run_scoring(
+    limit: int = 0,
+    rescore: bool = False,
+    on_progress: Callable[[dict], None] | None = None,
+    on_warning: Callable[[str], None] | None = None,
+) -> dict:
     """Score unscored jobs that have full descriptions.
 
     Args:
         limit: Maximum number of jobs to score in this run.
         rescore: If True, re-score all jobs (not just unscored ones).
+        on_progress: Optional callback invoked after every job with
+            {"done": int, "total": int}.
+        on_warning: Optional callback invoked when the LLM call for a job
+            fails (after its own internal retries -- see `llm.py`). The job
+            is still scored 0 and the run continues; this just reports it.
 
     Returns:
         {"scored": int, "errors": int, "elapsed": float, "distribution": list}
@@ -144,6 +155,8 @@ def run_scoring(limit: int = 0, rescore: bool = False) -> dict:
 
         if result["score"] == 0:
             errors += 1
+            if on_warning and result.get("reasoning", "").startswith("LLM error:"):
+                on_warning(f"Scoring failed for '{job.get('title', '?')[:60]}': {result['reasoning']}")
 
         results.append(result)
 
@@ -151,6 +164,8 @@ def run_scoring(limit: int = 0, rescore: bool = False) -> dict:
             "[%d/%d] score=%d  %s",
             completed, len(jobs), result["score"], job.get("title", "?")[:60],
         )
+        if on_progress:
+            on_progress({"done": completed, "total": len(jobs)})
 
     # Write scores to DB
     now = datetime.now(timezone.utc).isoformat()

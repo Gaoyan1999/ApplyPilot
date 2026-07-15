@@ -10,6 +10,7 @@ search configuration YAML (searches.yaml) rather than being hardcoded.
 import logging
 import sqlite3
 import time
+from collections.abc import Callable
 from datetime import datetime, timezone
 
 from jobspy import scrape_jobs
@@ -59,7 +60,7 @@ def parse_proxy(proxy_str: str) -> dict:
 
 # -- Retry wrapper -----------------------------------------------------------
 
-def _scrape_with_retry(kwargs: dict, max_retries: int = 2, backoff: float = 5.0):
+def _scrape_with_retry(kwargs: dict, max_retries: int = 5, backoff: float = 5.0):
     """Call scrape_jobs with retry on transient failures."""
     for attempt in range(max_retries + 1):
         try:
@@ -118,8 +119,19 @@ def _location_ok(location: str | None, accept: list[str], reject: list[str]) -> 
 
 # -- DB storage (JobSpy DataFrame -> SQLite) ---------------------------------
 
-def store_jobspy_results(conn: sqlite3.Connection, df, source_label: str) -> tuple[int, int]:
-    """Store JobSpy DataFrame results into the DB. Returns (new, existing)."""
+def store_jobspy_results(
+    conn: sqlite3.Connection,
+    df,
+    source_label: str,
+    by_site: dict[str, int] | None = None,
+) -> tuple[int, int]:
+    """Store JobSpy DataFrame results into the DB. Returns (new, existing).
+
+    If `by_site` is passed, it's updated in place with a per-site count of
+    newly-inserted rows (site label as stored, i.e. `row["site"]` or
+    `source_label` as a fallback) -- lets callers report live discovery
+    progress broken down by job board.
+    """
     from applypilot.config import get_excluded_titles
 
     exclude_titles = get_excluded_titles()
@@ -184,6 +196,8 @@ def store_jobspy_results(conn: sqlite3.Connection, df, source_label: str) -> tup
                  full_description, apply_url, detail_scraped_at, job_type),
             )
             new += 1
+            if by_site is not None:
+                by_site[site_label] = by_site.get(site_label, 0) + 1
         except sqlite3.IntegrityError:
             existing += 1
 
@@ -204,8 +218,14 @@ def _run_one_search(
     accept_locs: list[str],
     reject_locs: list[str],
     glassdoor_map: dict,
+    on_warning: Callable[[str], None] | None = None,
 ) -> dict:
-    """Run a single search query and store results in DB."""
+    """Run a single search query and store results in DB.
+
+    A site-group failure (after `_scrape_with_retry` exhausts its retries) or
+    a DB storage error doesn't abort the query -- it's recorded via
+    `on_warning` and the query continues with whatever data was gathered.
+    """
     s = search
     label = f"\"{s['query']}\" in {s['location']} {'(remote)' if s.get('remote') else ''}"
     if "tier" in s:
@@ -241,6 +261,8 @@ def _run_one_search(
             all_dfs.append(df)
         except Exception as e:
             log.error("[%s] (non-gd): %s", label, e)
+            if on_warning:
+                on_warning(f"[{label}] {', '.join(other_sites)} failed after {max_retries} retries: {e}")
 
     # Run Glassdoor separately with simplified location
     if has_glassdoor:
@@ -262,10 +284,12 @@ def _run_one_search(
             all_dfs.append(gd_df)
         except Exception as e:
             log.error("[%s] (glassdoor): %s", label, e)
+            if on_warning:
+                on_warning(f"[{label}] glassdoor failed after {max_retries} retries: {e}")
 
     if not all_dfs:
         log.error("[%s]: all sites failed", label)
-        return {"new": 0, "existing": 0, "errors": 1, "filtered": 0, "total": 0, "label": label}
+        return {"new": 0, "existing": 0, "errors": 1, "filtered": 0, "total": 0, "label": label, "by_site": {}}
 
     import pandas as pd
     import warnings
@@ -275,7 +299,7 @@ def _run_one_search(
 
     if len(df) == 0:
         log.info("[%s] 0 results", label)
-        return {"new": 0, "existing": 0, "errors": 0, "filtered": 0, "total": 0, "label": label}
+        return {"new": 0, "existing": 0, "errors": 0, "filtered": 0, "total": 0, "label": label, "by_site": {}}
 
     # Filter by location before storing
     before = len(df)
@@ -286,14 +310,25 @@ def _run_one_search(
     filtered = before - len(df)
 
     conn = get_connection()
-    new, existing = store_jobspy_results(conn, df, s["query"])
+    by_site: dict[str, int] = {}
+    try:
+        new, existing = store_jobspy_results(conn, df, s["query"], by_site=by_site)
+    except Exception as e:
+        # Storage errors shouldn't abort the whole crawl -- log, warn, move on.
+        log.error("[%s] failed to store results: %s", label, e)
+        if on_warning:
+            on_warning(f"[{label}] failed to store results: {e}")
+        return {"new": 0, "existing": 0, "errors": 1, "filtered": filtered, "total": before, "label": label, "by_site": {}}
 
     msg = f"[{label}] {before} results -> {new} new, {existing} dupes"
     if filtered:
         msg += f", {filtered} filtered (location)"
     log.info(msg)
 
-    return {"new": new, "existing": existing, "errors": 0, "filtered": filtered, "total": before, "label": label}
+    return {
+        "new": new, "existing": existing, "errors": 0, "filtered": filtered,
+        "total": before, "label": label, "by_site": by_site,
+    }
 
 
 # -- Single query search -----------------------------------------------------
@@ -374,9 +409,21 @@ def _full_crawl(
     results_per_site: int = 100,
     hours_old: int = 72,
     proxy: str | None = None,
-    max_retries: int = 2,
+    max_retries: int = 5,
+    on_progress: Callable[[dict], None] | None = None,
+    on_warning: Callable[[str], None] | None = None,
 ) -> dict:
-    """Run all search queries from search config across all locations."""
+    """Run all search queries from search config across all locations.
+
+    If `on_progress` is passed, it's called after every query with a dict of
+    the running totals so far: queries_done, queries_total, new, existing,
+    errors, by_site (cumulative new-job counts per job board).
+
+    If `on_warning` is passed, it's called once for every query/site that
+    permanently failed (after `max_retries` retries) or hit a storage error --
+    these don't abort the crawl, just get reported so the caller can surface
+    them without blocking progress.
+    """
     if sites is None:
         sites = ["indeed", "linkedin", "zip_recruiter"]
 
@@ -414,6 +461,7 @@ def _full_crawl(
     total_new = 0
     total_existing = 0
     total_errors = 0
+    total_by_site: dict[str, int] = {}
     completed = 0
 
     for s in searches:
@@ -421,15 +469,28 @@ def _full_crawl(
             s, sites, results_per_site, hours_old,
             proxy_config, defaults, max_retries,
             accept_locs, reject_locs, glassdoor_map,
+            on_warning=on_warning,
         )
         completed += 1
         total_new += result["new"]
         total_existing += result["existing"]
         total_errors += result["errors"]
+        for site, count in result.get("by_site", {}).items():
+            total_by_site[site] = total_by_site.get(site, 0) + count
 
         if completed % 5 == 0 or completed == len(searches):
             log.info("Progress: %d/%d queries done (%d new, %d dupes, %d errors)",
                      completed, len(searches), total_new, total_existing, total_errors)
+
+        if on_progress:
+            on_progress({
+                "queries_done": completed,
+                "queries_total": len(searches),
+                "new": total_new,
+                "existing": total_existing,
+                "errors": total_errors,
+                "by_site": dict(total_by_site),
+            })
 
     # Final stats
     conn = get_connection()
@@ -444,12 +505,17 @@ def _full_crawl(
         "errors": total_errors,
         "db_total": db_total,
         "queries": len(searches),
+        "by_site": total_by_site,
     }
 
 
 # -- Public entry point ------------------------------------------------------
 
-def run_discovery(cfg: dict | None = None) -> dict:
+def run_discovery(
+    cfg: dict | None = None,
+    on_progress: Callable[[dict], None] | None = None,
+    on_warning: Callable[[str], None] | None = None,
+) -> dict:
     """Main entry point for JobSpy-based job discovery.
 
     Loads search queries and locations from the user's search config YAML,
@@ -458,16 +524,20 @@ def run_discovery(cfg: dict | None = None) -> dict:
     Args:
         cfg: Override the search configuration dict. If None, loads from
              the user's searches.yaml file.
+        on_progress: Optional callback invoked after every query with a dict
+             of running totals -- see `_full_crawl`.
+        on_warning: Optional callback invoked for every query/site that
+             permanently failed after retries -- see `_full_crawl`.
 
     Returns:
-        Dict with stats: new, existing, errors, db_total, queries.
+        Dict with stats: new, existing, errors, db_total, queries, by_site.
     """
     if cfg is None:
         cfg = config.load_search_config()
 
     if not cfg:
         log.warning("No search configuration found. Run `applypilot init` to create one.")
-        return {"new": 0, "existing": 0, "errors": 0, "db_total": 0, "queries": 0}
+        return {"new": 0, "existing": 0, "errors": 0, "db_total": 0, "queries": 0, "by_site": {}}
 
     proxy = cfg.get("proxy")
     sites = cfg.get("boards")
@@ -484,4 +554,6 @@ def run_discovery(cfg: dict | None = None) -> dict:
         results_per_site=results_per_site,
         hours_old=hours_old,
         proxy=proxy,
+        on_progress=on_progress,
+        on_warning=on_warning,
     )

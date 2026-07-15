@@ -14,7 +14,9 @@ import json
 import logging
 import re
 import sqlite3
+import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from urllib.parse import urljoin
@@ -534,9 +536,19 @@ SITE_DELAYS = {
 RETRYABLE_STATUSES = {408, 429, 500, 502, 503, 504}
 PERMANENT_FAILURES = {404, 410, 451}
 
+_DETAIL_MAX_RETRIES = 5
+_DETAIL_RETRY_BASE_WAIT = 2.0
+
 
 def scrape_detail_page(page, url: str) -> dict:
-    """Full cascade for one detail page."""
+    """Full cascade for one detail page.
+
+    The initial page fetch (page.goto + domcontentloaded) retries up to
+    `_DETAIL_MAX_RETRIES` times on transient failures (timeouts, connection
+    errors, retryable HTTP statuses) before giving up -- matching the retry
+    policy used for JobSpy site scraping and LLM calls elsewhere in the
+    pipeline. Permanent failures (404/410/451) never retry.
+    """
     result: dict = {
         "full_description": None,
         "application_url": None,
@@ -546,23 +558,49 @@ def scrape_detail_page(page, url: str) -> dict:
     }
     t0 = time.time()
 
-    try:
-        resp = page.goto(url, timeout=45000)
-        if resp and resp.status in PERMANENT_FAILURES:
-            result["error"] = f"HTTP {resp.status}"
-            result["elapsed"] = time.time() - t0
-            return result
-        page.wait_for_load_state("domcontentloaded", timeout=15000)
+    last_err: str | None = None
+    attempts_used = 0
+    fetched = False
+    for attempt in range(_DETAIL_MAX_RETRIES + 1):
+        attempts_used = attempt
         try:
-            page.wait_for_load_state("networkidle", timeout=10000)
-        except Exception:
-            pass
-    except Exception as e:
-        err_str = str(e)
-        if "timeout" in err_str.lower():
-            result["error"] = "timeout"
-        else:
-            result["error"] = err_str[:200]
+            resp = page.goto(url, timeout=45000)
+            if resp and resp.status in PERMANENT_FAILURES:
+                result["error"] = f"HTTP {resp.status}"
+                result["elapsed"] = time.time() - t0
+                return result
+            if resp and resp.status in RETRYABLE_STATUSES and attempt < _DETAIL_MAX_RETRIES:
+                wait = _DETAIL_RETRY_BASE_WAIT * (attempt + 1)
+                log.warning("Detail page retry %d/%d in %.0fs for %s: HTTP %d",
+                            attempt + 1, _DETAIL_MAX_RETRIES, wait, url, resp.status)
+                time.sleep(wait)
+                last_err = f"HTTP {resp.status}"
+                continue
+            page.wait_for_load_state("domcontentloaded", timeout=15000)
+            try:
+                page.wait_for_load_state("networkidle", timeout=10000)
+            except Exception:
+                pass
+            fetched = True
+            break
+        except Exception as e:
+            err_str = str(e)
+            transient = any(k in err_str.lower() for k in ("timeout", "connection", "reset", "refused", "net::"))
+            if transient and attempt < _DETAIL_MAX_RETRIES:
+                wait = _DETAIL_RETRY_BASE_WAIT * (attempt + 1)
+                log.warning("Detail page retry %d/%d in %.0fs for %s: %s",
+                            attempt + 1, _DETAIL_MAX_RETRIES, wait, url, e)
+                time.sleep(wait)
+                last_err = err_str
+                continue
+            last_err = err_str
+            break
+
+    if not fetched:
+        reason = (last_err or "unknown error")[:180]
+        result["error"] = (
+            f"failed after {attempts_used} retries: {reason}" if attempts_used > 0 else reason
+        )
         result["elapsed"] = time.time() - t0
         return result
 
@@ -619,10 +657,19 @@ def scrape_site_batch(
     jobs: list[tuple],
     delay: float = 2.0,
     max_jobs: int | None = None,
+    on_progress: Callable[[dict], None] | None = None,
+    on_warning: Callable[[str], None] | None = None,
 ) -> dict:
     """Process all jobs for one site using shared browser context.
 
     If conn is None, creates its own DB connection.
+
+    If `on_progress` is passed, it's called after every job with
+    {"site": site, "site_done": i, "site_total": len(jobs)}.
+
+    If `on_warning` is passed, it's called for every job that ultimately
+    failed to enrich (after any internal retries) -- these don't stop the
+    batch, the next job is processed regardless.
     """
     stats: dict = {"processed": 0, "ok": 0, "partial": 0, "error": 0, "tiers": {1: 0, 2: 0, 3: 0}}
 
@@ -650,43 +697,70 @@ def scrape_site_batch(
             for i, (url, title) in enumerate(jobs):
                 log.info("[%d/%d] %s", i + 1, len(jobs), title[:50] if title else url[:50])
 
-                result = scrape_detail_page(page, url)
-                stats["processed"] += 1
+                counted = False
+                try:
+                    result = scrape_detail_page(page, url)
+                    stats["processed"] += 1
+                    counted = True
+                    if on_progress:
+                        on_progress({"site": site, "site_done": i + 1, "site_total": len(jobs)})
 
-                tier = result.get("tier_used")
-                status = result["status"]
-                elapsed = result.get("elapsed", 0)
+                    tier = result.get("tier_used")
+                    status = result["status"]
+                    elapsed = result.get("elapsed", 0)
 
-                if tier:
-                    stats["tiers"][tier] = stats["tiers"].get(tier, 0) + 1
+                    if tier:
+                        stats["tiers"][tier] = stats["tiers"].get(tier, 0) + 1
 
-                tier_str = f"T{tier}" if tier else "--"
-                desc_len = len(result.get("full_description") or "")
-                apply_str = "yes" if result.get("application_url") else "no"
-                err_str = f" | err={result.get('error')}" if result.get("error") else ""
+                    tier_str = f"T{tier}" if tier else "--"
+                    desc_len = len(result.get("full_description") or "")
+                    apply_str = "yes" if result.get("application_url") else "no"
+                    err_str = f" | err={result.get('error')}" if result.get("error") else ""
 
-                log.info("  %s | %s | desc=%s chars | apply=%s | %.1fs%s",
-                         status, tier_str, f"{desc_len:,}", apply_str, elapsed, err_str)
+                    log.info("  %s | %s | desc=%s chars | apply=%s | %.1fs%s",
+                             status, tier_str, f"{desc_len:,}", apply_str, elapsed, err_str)
 
-                if status in ("ok", "partial"):
-                    stats[status] += 1
-                    conn.execute(
-                        "UPDATE jobs SET full_description = ?, application_url = ?, "
-                        "detail_scraped_at = ?, detail_error = NULL WHERE url = ?",
-                        (result.get("full_description"), result.get("application_url"), now, url),
-                    )
-                    jsonld_job_type = classify_native_job_type(result.get("employment_type_raw"))
-                    if jsonld_job_type and jsonld_job_type != "unknown":
+                    if status in ("ok", "partial"):
+                        stats[status] += 1
                         conn.execute(
-                            "UPDATE jobs SET job_type = ? WHERE url = ? AND job_type = 'unknown'",
-                            (jsonld_job_type, url),
+                            "UPDATE jobs SET full_description = ?, application_url = ?, "
+                            "detail_scraped_at = ?, detail_error = NULL WHERE url = ?",
+                            (result.get("full_description"), result.get("application_url"), now, url),
                         )
-                else:
+                        jsonld_job_type = classify_native_job_type(result.get("employment_type_raw"))
+                        if jsonld_job_type and jsonld_job_type != "unknown":
+                            conn.execute(
+                                "UPDATE jobs SET job_type = ? WHERE url = ? AND job_type = 'unknown'",
+                                (jsonld_job_type, url),
+                            )
+                    else:
+                        stats["error"] += 1
+                        conn.execute(
+                            "UPDATE jobs SET detail_error = ?, detail_scraped_at = ? WHERE url = ?",
+                            (result.get("error", "unknown"), now, url),
+                        )
+                        if on_warning:
+                            on_warning(f"{site}: {(title or url)[:60]}: {result.get('error', 'failed')}")
+                except Exception as e:
+                    # A single job's unhandled failure shouldn't kill the rest
+                    # of the batch (or, transitively, the whole pipeline run).
+                    if not counted:
+                        stats["processed"] += 1
                     stats["error"] += 1
-                    conn.execute(
-                        "UPDATE jobs SET detail_error = ?, detail_scraped_at = ? WHERE url = ?",
-                        (result.get("error", "unknown"), now, url),
-                    )
+                    log.error("Unexpected error scraping %s: %s", url, e, exc_info=True)
+                    try:
+                        conn.execute(
+                            "UPDATE jobs SET detail_error = ?, detail_scraped_at = ? WHERE url = ?",
+                            (str(e)[:200], now, url),
+                        )
+                        conn.commit()
+                    except Exception:
+                        pass
+                    if on_warning:
+                        on_warning(f"{site}: {(title or url)[:60]}: unexpected error - {e}")
+                    if i < len(jobs) - 1:
+                        time.sleep(delay)
+                    continue
 
                 conn.commit()
 
@@ -706,12 +780,20 @@ def _run_detail_scraper(
     sites: list[str] | None = None,
     max_per_site: int | None = None,
     workers: int = 1,
+    on_progress: Callable[[dict], None] | None = None,
+    on_warning: Callable[[str], None] | None = None,
 ) -> dict:
     """Groups pending jobs by site and processes each batch.
 
     Sequential by default. When workers > 1, processes multiple site batches
     in parallel using ThreadPoolExecutor (each thread gets its own browser
     and DB connection).
+
+    If `on_progress` is passed, it's called after every job (across all
+    sites) with {"done": <jobs processed so far>, "total": <grand total>}.
+
+    If `on_warning` is passed, it's called for every job that ultimately
+    failed to enrich -- these don't stop the run, just get reported.
 
     Returns aggregate stats dict.
     """
@@ -751,6 +833,23 @@ def _run_detail_scraper(
         for t, count in stats["tiers"].items():
             total_stats["tiers"][t] = total_stats["tiers"].get(t, 0) + count
 
+    # Grand total across all sites, matching the same per-site truncation
+    # scrape_site_batch applies internally (jobs[:max_jobs]).
+    total_jobs = sum(
+        min(len(jobs), max_per_site) if max_per_site else len(jobs)
+        for jobs in site_jobs.values()
+    )
+    done_count = 0
+    progress_lock = threading.Lock()
+
+    def _on_site_progress(evt: dict) -> None:
+        nonlocal done_count
+        with progress_lock:
+            done_count += 1
+            d = done_count
+        if on_progress:
+            on_progress({"done": d, "total": total_jobs, "site": evt["site"]})
+
     if workers > 1 and len(order) > 1:
         # Parallel mode: each site batch runs in its own thread with its own
         # DB connection (conn=None tells scrape_site_batch to create one)
@@ -758,7 +857,10 @@ def _run_detail_scraper(
             jobs = site_jobs[site]
             delay = SITE_DELAYS.get(site, 2.0)
             log.info("%s -- %d jobs (delay=%.1fs)", site, len(jobs), delay)
-            stats = scrape_site_batch(None, site, jobs, delay=delay, max_jobs=max_per_site)
+            stats = scrape_site_batch(
+                None, site, jobs, delay=delay, max_jobs=max_per_site,
+                on_progress=_on_site_progress, on_warning=on_warning,
+            )
             log.info("%s summary: %d ok, %d partial, %d error | T1=%d T2=%d T3=%d",
                      site, stats["ok"], stats["partial"], stats["error"],
                      stats["tiers"].get(1, 0), stats["tiers"].get(2, 0), stats["tiers"].get(3, 0))
@@ -775,7 +877,10 @@ def _run_detail_scraper(
             delay = SITE_DELAYS.get(site, 2.0)
             log.info("%s -- %d jobs (delay=%.1fs)", site, len(jobs), delay)
 
-            stats = scrape_site_batch(conn, site, jobs, delay=delay, max_jobs=max_per_site)
+            stats = scrape_site_batch(
+                conn, site, jobs, delay=delay, max_jobs=max_per_site,
+                on_progress=_on_site_progress, on_warning=on_warning,
+            )
             _merge_stats(stats)
 
             log.info("Site summary: %d ok, %d partial, %d error | T1=%d T2=%d T3=%d",
@@ -868,7 +973,12 @@ def stream_detail(
 
 # -- Public entry point ------------------------------------------------------
 
-def run_enrichment(limit: int = 100, workers: int = 1) -> dict:
+def run_enrichment(
+    limit: int = 100,
+    workers: int = 1,
+    on_progress: Callable[[dict], None] | None = None,
+    on_warning: Callable[[str], None] | None = None,
+) -> dict:
     """Main entry point for detail page enrichment.
 
     Fetches pending jobs from the database (those without full_description),
@@ -878,6 +988,10 @@ def run_enrichment(limit: int = 100, workers: int = 1) -> dict:
     Args:
         limit: Maximum number of jobs per site to process.
         workers: Number of parallel threads for site batch processing. Default 1 (sequential).
+        on_progress: Optional callback invoked after every job (across all
+            sites) with {"done": int, "total": int, "site": str}.
+        on_warning: Optional callback invoked for every job that ultimately
+            failed to enrich.
 
     Returns:
         Dict with stats: processed, ok, partial, error, tiers.
@@ -902,6 +1016,8 @@ def run_enrichment(limit: int = 100, workers: int = 1) -> dict:
             log.info("WTTJ: %d URLs updated", updated)
 
     # Run the detail scraper
-    stats = _run_detail_scraper(conn, max_per_site=limit, workers=workers)
+    stats = _run_detail_scraper(
+        conn, max_per_site=limit, workers=workers, on_progress=on_progress, on_warning=on_warning,
+    )
 
     return stats

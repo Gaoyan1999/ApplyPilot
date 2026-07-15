@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ApiError, getSearchConfig, getSearchStatus, runSearch, saveSearchConfig } from '../api/client'
-import type { SearchConfig, SearchRunStage } from '../api/types'
-import { SEARCHABLE_SITES, SITE_META } from './SiteIcon'
+import type { SearchConfig, SearchRunStage, SearchStatus } from '../api/types'
+import { ProgressBar } from './ProgressBar'
+import { SEARCHABLE_SITES, SiteIcon, SITE_META } from './SiteIcon'
 
 const STAGE_LABELS: Record<Exclude<SearchRunStage, null>, string> = {
   discover: 'Searching…',
@@ -12,6 +13,80 @@ const STAGE_LABELS: Record<Exclude<SearchRunStage, null>, string> = {
 
 function stageLabel(stage: SearchRunStage): string {
   return stage ? STAGE_LABELS[stage] : 'Searching…'
+}
+
+/** Renders live in-progress detail for the active stage. `compact` gives a
+ * terse one-line variant for the minimized widget; the full variant (with a
+ * progress bar and per-site chips) is used in the expanded modal. */
+function renderStageDetail(status: SearchStatus | null, compact: boolean): ReactNode {
+  if (!status || !status.stage || status.stage === 'done') return null
+
+  if (status.stage === 'discover') {
+    if (compact) {
+      return `${status.queries}/${status.queries_total} queries, ${status.new} found`
+    }
+    const sites = Object.entries(status.discover_by_site)
+    return (
+      <div className="search-progress">
+        <ProgressBar done={status.queries} total={status.queries_total} label="Queries" />
+        {sites.length > 0 && (
+          <div className="site-progress-row">
+            {sites.map(([site, count]) => (
+              <span className="site-progress-chip" key={site}>
+                <SiteIcon site={site} /> {count}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (status.stage === 'enrich') {
+    return compact ? (
+      `${status.enriched}/${status.enrich_total} enriched`
+    ) : (
+      <div className="search-progress">
+        <ProgressBar done={status.enriched} total={status.enrich_total} label="Enriching" />
+      </div>
+    )
+  }
+
+  if (status.stage === 'score') {
+    return compact ? (
+      `${status.scored}/${status.score_total} scored`
+    ) : (
+      <div className="search-progress">
+        <ProgressBar done={status.scored} total={status.score_total} label="Scoring" />
+      </div>
+    )
+  }
+
+  return null
+}
+
+/** Non-blocking summary of third-party calls that permanently failed after
+ * retries (a LinkedIn/Glassdoor scrape, an LLM call, a detail-page fetch).
+ * These never stop the run -- this is just visibility into what got skipped. */
+function WarningsSummary({ warnings }: { warnings: string[] }) {
+  const [open, setOpen] = useState(false)
+  if (warnings.length === 0) return null
+
+  return (
+    <div className="search-warnings">
+      <button type="button" className="search-warnings-toggle" onClick={() => setOpen((o) => !o)}>
+        ⚠ {warnings.length} issue{warnings.length === 1 ? '' : 's'} (didn't block progress)
+        <span className="chevron">{open ? '▾' : '▸'}</span>
+      </button>
+      {open && (
+        <ul className="search-warnings-list">
+          {warnings.map((w, i) => (
+            <li key={i}>{w}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
 }
 
 const EMPTY_CONFIG: SearchConfig = {
@@ -30,6 +105,7 @@ const TIME_RANGES: { label: string; hours: number }[] = [
 
 export function SearchPanel() {
   const [open, setOpen] = useState(false)
+  const [minimized, setMinimized] = useState(false)
   const [config, setConfig] = useState<SearchConfig>(EMPTY_CONFIG)
   const [configLoaded, setConfigLoaded] = useState(false)
   const [excludeTitlesText, setExcludeTitlesText] = useState('')
@@ -37,14 +113,16 @@ export function SearchPanel() {
   const [running, setRunning] = useState(false)
   const [saving, setSaving] = useState(false)
   const [stage, setStage] = useState<SearchRunStage>(null)
+  const [status, setStatus] = useState<SearchStatus | null>(null)
   const [result, setResult] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    getSearchStatus().then((status) => {
-      if (status.running) {
+    getSearchStatus().then((s) => {
+      setStatus(s)
+      if (s.running) {
         setRunning(true)
-        setStage(status.stage)
+        setStage(s.stage)
       }
     }).catch(() => {})
   }, [])
@@ -73,19 +151,20 @@ export function SearchPanel() {
     if (!running) return
     const timer = setInterval(async () => {
       try {
-        const status = await getSearchStatus()
-        setStage(status.stage)
-        if (!status.running) {
+        const s = await getSearchStatus()
+        setStatus(s)
+        setStage(s.stage)
+        if (!s.running) {
           setRunning(false)
-          if (status.error) {
+          if (s.error) {
             setResult(null)
-            const where = status.error_stage ? ` during ${status.error_stage}` : ''
-            setError(`${status.error}${where}`)
+            const where = s.error_stage ? ` during ${s.error_stage}` : ''
+            setError(`${s.error}${where}`)
           } else {
             setResult(
-              `${status.queries} quer${status.queries === 1 ? 'y' : 'ies'} run, ` +
-                `${status.new} new job${status.new === 1 ? '' : 's'} found, ` +
-                `${status.enriched} enriched, ${status.scored} rated`
+              `${s.queries} quer${s.queries === 1 ? 'y' : 'ies'} run, ` +
+                `${s.new} new job${s.new === 1 ? '' : 's'} found, ` +
+                `${s.enriched} enriched, ${s.scored} rated`
             )
             setError(null)
           }
@@ -147,9 +226,10 @@ export function SearchPanel() {
       setConfig(saved)
 
       if (andSearch) {
-        const status = await runSearch()
+        const s = await runSearch()
+        setStatus(s)
         setRunning(true)
-        setStage(status.stage ?? 'discover')
+        setStage(s.stage ?? 'discover')
       } else {
         setResult('Search config saved')
       }
@@ -168,11 +248,59 @@ export function SearchPanel() {
 
   return (
     <>
-      <button type="button" className="search-trigger" onClick={() => setOpen(true)}>
+      <button
+        type="button"
+        className="search-trigger"
+        onClick={() => {
+          setOpen(true)
+          setMinimized(false)
+        }}
+      >
         {running ? stageLabel(stage) : 'Search'}
       </button>
 
-      {open && (
+      {minimized && (running || result || error) && (
+        <div className="search-minimized">
+          <button
+            type="button"
+            className="search-minimized-body"
+            onClick={() => {
+              setOpen(true)
+              setMinimized(false)
+            }}
+          >
+            <span
+              className="search-minimized-dot"
+              data-state={error ? 'error' : running ? 'running' : 'done'}
+            />
+            <span className="search-minimized-label">
+              {running ? stageLabel(stage) : error ? 'Search failed' : 'Search done'}
+            </span>
+            {running && status && (
+              <span className="search-minimized-detail">{renderStageDetail(status, true)}</span>
+            )}
+            {!running && status && status.warnings.length > 0 && (
+              <span className="search-minimized-detail">⚠ {status.warnings.length}</span>
+            )}
+          </button>
+          {!running && (
+            <button
+              type="button"
+              className="search-minimized-dismiss"
+              aria-label="Dismiss"
+              onClick={() => {
+                setMinimized(false)
+                setResult(null)
+                setError(null)
+              }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      )}
+
+      {open && !minimized && (
         <div className="modal-backdrop" onClick={() => setOpen(false)}>
           <div className="modal-panel search-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -182,9 +310,29 @@ export function SearchPanel() {
                   Edits ~/.applypilot/searches.yaml — also used by <code>applypilot run discover</code>.
                 </p>
               </div>
-              <button type="button" className="modal-close" onClick={() => setOpen(false)} aria-label="Close">
-                ✕
-              </button>
+              <div className="modal-header-actions">
+                {running && (
+                  <button
+                    type="button"
+                    className="modal-minimize"
+                    onClick={() => setMinimized(true)}
+                    aria-label="Minimize"
+                  >
+                    –
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="modal-close"
+                  onClick={() => {
+                    setOpen(false)
+                    setMinimized(false)
+                  }}
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
             <div className="search-panel">
               <div className="config-section">
@@ -328,8 +476,10 @@ export function SearchPanel() {
                   {running ? stageLabel(stage) : 'Save & Search'}
                 </button>
               </div>
+              {running && renderStageDetail(status, false)}
               {result && <span className="search-result">{result}</span>}
               {error && <span className="search-result search-error">{error}</span>}
+              <WarningsSummary warnings={status?.warnings ?? []} />
             </div>
           </div>
         </div>
