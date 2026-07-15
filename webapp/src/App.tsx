@@ -120,7 +120,13 @@ function App() {
         onUserActionChange={handleUserActionChange}
       />
 
-      {previewJob && <JobPreviewModal job={previewJob} onClose={() => setPreviewUrl(null)} />}
+      {previewJob && (
+        <JobPreviewModal
+          job={previewJob}
+          onClose={() => setPreviewUrl(null)}
+          onUserActionChange={handleUserActionChange}
+        />
+      )}
     </>
   )
 }

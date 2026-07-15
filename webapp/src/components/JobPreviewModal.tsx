@@ -1,15 +1,17 @@
 import { useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { Job } from '../api/types'
+import type { Job, UserAction } from '../api/types'
 import { formatDate } from '../lib/format'
 import { ScorePill } from './ScorePill'
 import { StageBadge } from './StageBadge'
 import { SiteIcon } from './SiteIcon'
+import { UserActionSelect } from './UserActionSelect'
 
 interface Props {
   job: Job
   onClose: () => void
+  onUserActionChange: (job: Job, value: UserAction | null) => void
 }
 
 function MetaRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -21,7 +23,7 @@ function MetaRow({ label, children }: { label: string; children: React.ReactNode
   )
 }
 
-export function JobPreviewModal({ job, onClose }: Props) {
+export function JobPreviewModal({ job, onClose, onUserActionChange }: Props) {
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose()
@@ -47,6 +49,12 @@ export function JobPreviewModal({ job, onClose }: Props) {
 
         <div className="modal-body">
           <div className="meta-grid">
+            <MetaRow label="Mark">
+              <UserActionSelect
+                value={job.user_action}
+                onChange={(value) => onUserActionChange(job, value)}
+              />
+            </MetaRow>
             <MetaRow label="Stage">
               <StageBadge stage={job.stage} />
             </MetaRow>
