@@ -262,6 +262,12 @@ def _run_one_search(
         try:
             df = _scrape_with_retry(kwargs, max_retries=max_retries)
             all_dfs.append(df)
+            if "site" in df.columns:
+                site_counts = df["site"].value_counts().to_dict()
+                log.info("[%s] list stage -> found %d jobs (%s)",
+                         label, len(df), ", ".join(f"{k}={v}" for k, v in site_counts.items()))
+            else:
+                log.info("[%s] list stage -> found %d jobs", label, len(df))
             if fetch_description and "site" in df.columns:
                 li_df = df[df["site"] == "linkedin"]
                 li_detail = int(li_df["description"].notna().sum()) if "description" in li_df.columns else 0
