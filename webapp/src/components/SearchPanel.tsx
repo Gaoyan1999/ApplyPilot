@@ -11,13 +11,24 @@ const STAGE_LABELS: Record<Exclude<SearchRunStage, null>, string> = {
   done: 'Done',
 }
 
+/** Longer, plain-language explanation of what's actually happening during
+ * each stage -- shown alongside the numeric progress bar so the run doesn't
+ * read as an opaque spinner. */
+const STAGE_DESCRIPTIONS: Record<Exclude<SearchRunStage, null>, string> = {
+  discover: 'Searching job boards for postings that match your saved queries and locations.',
+  enrich: 'Visiting each newly found job posting to pull its full description.',
+  score: 'Asking the AI to rate how well each job matches your profile.',
+  done: 'Search complete.',
+}
+
 function stageLabel(stage: SearchRunStage): string {
   return stage ? STAGE_LABELS[stage] : 'Searching…'
 }
 
 /** Renders live in-progress detail for the active stage. `compact` gives a
  * terse one-line variant for the minimized widget; the full variant (with a
- * progress bar and per-site chips) is used in the expanded modal. */
+ * description, progress bar, and per-site chips) is used in the expanded
+ * modal's dedicated progress view. */
 function renderStageDetail(status: SearchStatus | null, compact: boolean): ReactNode {
   if (!status || !status.stage || status.stage === 'done') return null
 
@@ -28,7 +39,13 @@ function renderStageDetail(status: SearchStatus | null, compact: boolean): React
     const sites = Object.entries(status.discover_by_site)
     return (
       <div className="search-progress">
+        <p className="search-stage-description">{STAGE_DESCRIPTIONS.discover}</p>
         <ProgressBar done={status.queries} total={status.queries_total} label="Queries" />
+        <p className="search-progress-summary">
+          {status.queries} of {status.queries_total} searches run — {status.new} new job
+          {status.new === 1 ? '' : 's'} found
+          {status.existing > 0 ? `, ${status.existing} already known` : ''}.
+        </p>
         {sites.length > 0 && (
           <div className="site-progress-row">
             {sites.map(([site, count]) => (
@@ -47,7 +64,11 @@ function renderStageDetail(status: SearchStatus | null, compact: boolean): React
       `${status.enriched}/${status.enrich_total} enriched`
     ) : (
       <div className="search-progress">
+        <p className="search-stage-description">{STAGE_DESCRIPTIONS.enrich}</p>
         <ProgressBar done={status.enriched} total={status.enrich_total} label="Enriching" />
+        <p className="search-progress-summary">
+          {status.enriched} of {status.enrich_total} job pages fetched.
+        </p>
       </div>
     )
   }
@@ -57,7 +78,9 @@ function renderStageDetail(status: SearchStatus | null, compact: boolean): React
       `${status.scored}/${status.score_total} scored`
     ) : (
       <div className="search-progress">
+        <p className="search-stage-description">{STAGE_DESCRIPTIONS.score}</p>
         <ProgressBar done={status.scored} total={status.score_total} label="Scoring" />
+        <p className="search-progress-summary">{status.scored} of {status.score_total} jobs rated.</p>
       </div>
     )
   }
@@ -305,9 +328,15 @@ export function SearchPanel() {
           <div className="modal-panel search-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <h2 className="modal-title">Search config</h2>
+                <h2 className="modal-title">{running ? 'Search in progress' : 'Search config'}</h2>
                 <p className="modal-subtitle">
-                  Edits ~/.applypilot/searches.yaml — also used by <code>applypilot run discover</code>.
+                  {running ? (
+                    'Running your saved search — this can take a few minutes.'
+                  ) : (
+                    <>
+                      Edits ~/.applypilot/searches.yaml — also used by <code>applypilot run discover</code>.
+                    </>
+                  )}
                 </p>
               </div>
               <div className="modal-header-actions">
@@ -335,150 +364,158 @@ export function SearchPanel() {
               </div>
             </div>
             <div className="search-panel">
-              <div className="config-section">
-                <button
-                  type="button"
-                  className="config-section-toggle"
-                  onClick={() => setQueriesOpen((o) => !o)}
-                  aria-expanded={queriesOpen}
-                >
-                  <h3>Search queries ({config.queries.length})</h3>
-                  <span className="chevron">{queriesOpen ? '▾' : '▸'}</span>
-                </button>
-                {queriesOpen && (
-                  <>
-                    {config.queries.map((q, i) => (
+              {running ? (
+                <div className="search-progress-view">
+                  <h3 className="search-stage-heading">{stageLabel(stage)}</h3>
+                  {renderStageDetail(status, false)}
+                </div>
+              ) : (
+                <>
+                  <div className="config-section">
+                    <button
+                      type="button"
+                      className="config-section-toggle"
+                      onClick={() => setQueriesOpen((o) => !o)}
+                      aria-expanded={queriesOpen}
+                    >
+                      <h3>Search queries ({config.queries.length})</h3>
+                      <span className="chevron">{queriesOpen ? '▾' : '▸'}</span>
+                    </button>
+                    {queriesOpen && (
+                      <>
+                        {config.queries.map((q, i) => (
+                          <div className="config-row" key={i}>
+                            <input
+                              type="text"
+                              placeholder="Job title or keywords"
+                              value={q.query}
+                              onChange={(e) => updateQuery(i, { query: e.target.value })}
+                            />
+                            <select
+                              value={q.tier}
+                              onChange={(e) => updateQuery(i, { tier: Number(e.target.value) })}
+                            >
+                              <option value={1}>Tier 1</option>
+                              <option value={2}>Tier 2</option>
+                              <option value={3}>Tier 3</option>
+                            </select>
+                            <button type="button" className="remove-btn" onClick={() => removeQuery(i)} aria-label="Remove query">
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                        <button type="button" className="add-btn" onClick={addQuery}>
+                          + Add query
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="config-section">
+                    <h3>Locations</h3>
+                    {config.locations.map((loc, i) => (
                       <div className="config-row" key={i}>
                         <input
                           type="text"
-                          placeholder="Job title or keywords"
-                          value={q.query}
-                          onChange={(e) => updateQuery(i, { query: e.target.value })}
+                          placeholder="City, state, or Remote"
+                          value={loc.location}
+                          onChange={(e) => updateLocation(i, { location: e.target.value })}
                         />
-                        <select
-                          value={q.tier}
-                          onChange={(e) => updateQuery(i, { tier: Number(e.target.value) })}
-                        >
-                          <option value={1}>Tier 1</option>
-                          <option value={2}>Tier 2</option>
-                          <option value={3}>Tier 3</option>
-                        </select>
-                        <button type="button" className="remove-btn" onClick={() => removeQuery(i)} aria-label="Remove query">
+                        <label className="toggle-check">
+                          <input
+                            type="checkbox"
+                            checked={loc.remote}
+                            onChange={(e) => updateLocation(i, { remote: e.target.checked })}
+                          />
+                          Remote
+                        </label>
+                        <button type="button" className="remove-btn" onClick={() => removeLocation(i)} aria-label="Remove location">
                           ✕
                         </button>
                       </div>
                     ))}
-                    <button type="button" className="add-btn" onClick={addQuery}>
-                      + Add query
-                    </button>
-                  </>
-                )}
-              </div>
-
-              <div className="config-section">
-                <h3>Locations</h3>
-                {config.locations.map((loc, i) => (
-                  <div className="config-row" key={i}>
-                    <input
-                      type="text"
-                      placeholder="City, state, or Remote"
-                      value={loc.location}
-                      onChange={(e) => updateLocation(i, { location: e.target.value })}
-                    />
-                    <label className="toggle-check">
-                      <input
-                        type="checkbox"
-                        checked={loc.remote}
-                        onChange={(e) => updateLocation(i, { remote: e.target.checked })}
-                      />
-                      Remote
-                    </label>
-                    <button type="button" className="remove-btn" onClick={() => removeLocation(i)} aria-label="Remove location">
-                      ✕
+                    <button type="button" className="add-btn" onClick={addLocation}>
+                      + Add location
                     </button>
                   </div>
-                ))}
-                <button type="button" className="add-btn" onClick={addLocation}>
-                  + Add location
-                </button>
-              </div>
 
-              <div className="config-section">
-                <h3>Job boards</h3>
-                <div className="site-checks">
-                  {SEARCHABLE_SITES.map((site) => (
-                    <label key={site} className="toggle-check">
-                      <input
-                        type="checkbox"
-                        checked={config.boards.includes(site)}
-                        onChange={() => toggleBoard(site)}
-                      />
-                      {SITE_META[site].label}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="config-section">
-                <h3>Exclude titles</h3>
-                <textarea
-                  placeholder="One term per line, e.g. senior director"
-                  rows={3}
-                  value={excludeTitlesText}
-                  onChange={(e) => setExcludeTitlesText(e.target.value)}
-                />
-              </div>
-
-              <div className="config-section">
-                <h3>Defaults</h3>
-                <div className="config-row">
-                  <label className="field-label">
-                    Results per board
-                    <input
-                      type="number"
-                      min={1}
-                      max={100}
-                      value={config.defaults.results_per_site}
-                      onChange={(e) =>
-                        setConfig((c) => ({
-                          ...c,
-                          defaults: { ...c.defaults, results_per_site: Number(e.target.value) },
-                        }))
-                      }
-                    />
-                  </label>
-                  <label className="field-label">
-                    Posted within
-                    <select
-                      value={config.defaults.hours_old}
-                      onChange={(e) =>
-                        setConfig((c) => ({
-                          ...c,
-                          defaults: { ...c.defaults, hours_old: Number(e.target.value) },
-                        }))
-                      }
-                    >
-                      {TIME_RANGES.map((r) => (
-                        <option key={r.hours} value={r.hours}>
-                          {r.label}
-                        </option>
+                  <div className="config-section">
+                    <h3>Job boards</h3>
+                    <div className="site-checks">
+                      {SEARCHABLE_SITES.map((site) => (
+                        <label key={site} className="toggle-check">
+                          <input
+                            type="checkbox"
+                            checked={config.boards.includes(site)}
+                            onChange={() => toggleBoard(site)}
+                          />
+                          {SITE_META[site].label}
+                        </label>
                       ))}
-                    </select>
-                  </label>
-                </div>
-              </div>
+                    </div>
+                  </div>
 
-              <div className="config-actions">
-                <button type="button" disabled={busy} onClick={() => handleSave(false)}>
-                  {saving ? 'Saving…' : 'Save'}
-                </button>
-                <button type="button" disabled={busy} onClick={() => handleSave(true)}>
-                  {running ? stageLabel(stage) : 'Save & Search'}
-                </button>
-              </div>
-              {running && renderStageDetail(status, false)}
-              {result && <span className="search-result">{result}</span>}
-              {error && <span className="search-result search-error">{error}</span>}
+                  <div className="config-section">
+                    <h3>Exclude titles</h3>
+                    <textarea
+                      placeholder="One term per line, e.g. senior director"
+                      rows={3}
+                      value={excludeTitlesText}
+                      onChange={(e) => setExcludeTitlesText(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="config-section">
+                    <h3>Defaults</h3>
+                    <div className="config-row">
+                      <label className="field-label">
+                        Results per board
+                        <input
+                          type="number"
+                          min={1}
+                          max={100}
+                          value={config.defaults.results_per_site}
+                          onChange={(e) =>
+                            setConfig((c) => ({
+                              ...c,
+                              defaults: { ...c.defaults, results_per_site: Number(e.target.value) },
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className="field-label">
+                        Posted within
+                        <select
+                          value={config.defaults.hours_old}
+                          onChange={(e) =>
+                            setConfig((c) => ({
+                              ...c,
+                              defaults: { ...c.defaults, hours_old: Number(e.target.value) },
+                            }))
+                          }
+                        >
+                          {TIME_RANGES.map((r) => (
+                            <option key={r.hours} value={r.hours}>
+                              {r.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="config-actions">
+                    <button type="button" disabled={busy} onClick={() => handleSave(false)}>
+                      {saving ? 'Saving…' : 'Save'}
+                    </button>
+                    <button type="button" disabled={busy} onClick={() => handleSave(true)}>
+                      Save & Search
+                    </button>
+                  </div>
+                  {result && <span className="search-result">{result}</span>}
+                  {error && <span className="search-result search-error">{error}</span>}
+                </>
+              )}
               <WarningsSummary warnings={status?.warnings ?? []} />
             </div>
           </div>

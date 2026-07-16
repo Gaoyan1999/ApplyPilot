@@ -334,6 +334,34 @@
   background: var(--bg-subtle);
 }
 
+/* Dedicated full-panel view shown in place of the config form while a
+   search is running -- keeps the user focused on progress instead of
+   editable fields that don't apply mid-run. */
+.search-progress-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.search-stage-heading {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.search-stage-description {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.search-progress-summary {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .site-progress-row {
   display: flex;
   flex-wrap: wrap;
