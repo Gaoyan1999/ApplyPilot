@@ -179,6 +179,13 @@ def _fail(stage: str | None, message: str) -> None:
         _state["error_stage"] = stage
 
 
+def get_new_urls() -> list[str]:
+    """URLs of jobs newly inserted by the most recent run -- backs the
+    overview page's results list (title, fit score, etc.)."""
+    with _lock:
+        return list(_state["new_urls"])
+
+
 def discard_new_jobs() -> int:
     """Delete the jobs newly inserted by the most recent run, leaving
     everything already in the DB untouched. Returns the number of rows

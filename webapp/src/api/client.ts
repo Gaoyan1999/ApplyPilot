@@ -53,6 +53,10 @@ export function getSearchStatus(): Promise<SearchStatus> {
   return getJson<SearchStatus>('/api/search/status')
 }
 
+export function getSearchNewJobs(): Promise<Job[]> {
+  return getJson<Job[]>('/api/search/new-jobs')
+}
+
 export function discardNewSearchResults(): Promise<{ deleted: number }> {
   return sendJson<{ deleted: number }>('/api/search/discard-new', 'POST')
 }

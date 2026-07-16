@@ -434,6 +434,45 @@
   border: 1px solid var(--error-fg);
 }
 
+/* Step 3: the actual jobs this run found, title + score */
+.search-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.search-results-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.search-results-row:last-child {
+  border-bottom: none;
+}
+
+.search-results-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-results-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .site-progress-row {
   display: flex;
   flex-wrap: wrap;
