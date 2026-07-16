@@ -33,8 +33,8 @@ export function JobPreviewModal({ job, onClose, onUserActionChange }: Props) {
   }, [onClose])
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-backdrop job-detail-backdrop" onClick={onClose}>
+      <div className="modal-panel job-detail-panel" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div>
             <h2 className="modal-title">{job.title || '(untitled)'}</h2>
