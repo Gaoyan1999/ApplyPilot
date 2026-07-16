@@ -1005,6 +1005,52 @@ table.jobs-table {
   margin: 0 0 12px;
 }
 
+.section-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.section-heading-row .section-heading {
+  margin: 0;
+}
+
+.section-heading-row button {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--text);
+  color: var(--bg);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.section-heading-row button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.cover-letter-text {
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 0 0 20px;
+}
+
+.cover-letter-error {
+  color: var(--error-fg);
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+
 .modal-body p {
   margin: 0 0 12px;
 }

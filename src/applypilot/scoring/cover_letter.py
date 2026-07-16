@@ -183,6 +183,81 @@ def generate_cover_letter(
     return letter  # last attempt even if failed
 
 
+# ── Save Helper (shared by batch + single-job paths) ──────────────────────
+
+def _save_cover_letter(letter: str, job: dict) -> dict:
+    """Write a generated letter to .txt + .pdf and return the paths.
+
+    Args:
+        letter: Generated cover letter text.
+        job:    Job dict (needs "title" and "site" for the filename).
+
+    Returns:
+        {"text": str, "path": str, "pdf_path": str | None}
+    """
+    safe_title = re.sub(r"[^\w\s-]", "", job["title"])[:50].strip().replace(" ", "_")
+    safe_site = re.sub(r"[^\w\s-]", "", job["site"])[:20].strip().replace(" ", "_")
+    prefix = f"{safe_site}_{safe_title}"
+
+    COVER_LETTER_DIR.mkdir(parents=True, exist_ok=True)
+    cl_path = COVER_LETTER_DIR / f"{prefix}_CL.txt"
+    cl_path.write_text(letter, encoding="utf-8")
+
+    pdf_path = None
+    try:
+        from applypilot.scoring.pdf import convert_to_pdf
+        pdf_path = str(convert_to_pdf(cl_path))
+    except Exception:
+        log.debug("PDF generation failed for %s", cl_path, exc_info=True)
+
+    return {"text": letter, "path": str(cl_path), "pdf_path": pdf_path}
+
+
+# ── Single-Job Entry Point (web dashboard "Generate cover letter" button) ─
+
+def generate_cover_letter_for_job(url: str, validation_mode: str = "normal") -> dict:
+    """Generate (or regenerate) a cover letter for one job on demand.
+
+    Same LLM call as the batch path, just scoped to a single job and run
+    synchronously so a web request can wait on the result.
+
+    Args:
+        url:             Job URL (primary key in the jobs table).
+        validation_mode: "strict", "normal", or "lenient".
+
+    Returns:
+        {"text": str, "path": str, "pdf_path": str | None, "cover_letter_at": str}
+
+    Raises:
+        ValueError: If the job doesn't exist or has no description yet.
+    """
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM jobs WHERE url = ?", (url,)).fetchone()
+    if row is None:
+        raise ValueError(f"Job not found: {url}")
+
+    job = dict(zip(row.keys(), row))
+    if not job.get("full_description"):
+        raise ValueError("Job has no description yet — run enrichment first.")
+
+    profile = load_profile()
+    resume_text = RESUME_PATH.read_text(encoding="utf-8")
+
+    letter = generate_cover_letter(resume_text, job, profile, validation_mode=validation_mode)
+    result = _save_cover_letter(letter, job)
+
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        "UPDATE jobs SET cover_letter_path=?, cover_letter_at=?, "
+        "cover_attempts=COALESCE(cover_attempts,0)+1 WHERE url=?",
+        (result["path"], now, url),
+    )
+    conn.commit()
+
+    result["cover_letter_at"] = now
+    return result
+
+
 # ── Batch Entry Point ────────────────────────────────────────────────────
 
 def run_cover_letters(min_score: int = 7, limit: int = 20,
@@ -236,27 +311,12 @@ def run_cover_letters(min_score: int = 7, limit: int = 20,
         try:
             letter = generate_cover_letter(resume_text, job, profile,
                                           validation_mode=validation_mode)
-
-            # Build safe filename prefix
-            safe_title = re.sub(r"[^\w\s-]", "", job["title"])[:50].strip().replace(" ", "_")
-            safe_site = re.sub(r"[^\w\s-]", "", job["site"])[:20].strip().replace(" ", "_")
-            prefix = f"{safe_site}_{safe_title}"
-
-            cl_path = COVER_LETTER_DIR / f"{prefix}_CL.txt"
-            cl_path.write_text(letter, encoding="utf-8")
-
-            # Generate PDF (best-effort)
-            pdf_path = None
-            try:
-                from applypilot.scoring.pdf import convert_to_pdf
-                pdf_path = str(convert_to_pdf(cl_path))
-            except Exception:
-                log.debug("PDF generation failed for %s", cl_path, exc_info=True)
+            save_result = _save_cover_letter(letter, job)
 
             result = {
                 "url": job["url"],
-                "path": str(cl_path),
-                "pdf_path": pdf_path,
+                "path": save_result["path"],
+                "pdf_path": save_result["pdf_path"],
                 "title": job["title"],
                 "site": job["site"],
             }

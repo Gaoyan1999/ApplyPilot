@@ -190,7 +190,12 @@ def store_jobspy_results(
             detail_scraped_at = now
 
         # Extract apply URL if JobSpy provided it
-        apply_url = str(row.get("job_url_direct", "")) if str(row.get("job_url_direct", "")) != "nan" else None
+        raw_apply_url = row.get("job_url_direct")
+        apply_url = (
+            str(raw_apply_url)
+            if raw_apply_url is not None and str(raw_apply_url) != "nan"
+            else None
+        )
 
         try:
             conn.execute(

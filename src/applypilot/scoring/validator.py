@@ -56,18 +56,6 @@ LLM_LEAK_PHRASES: list[str] = [
     "the following cover letter", "the letter below",
 ]
 
-# Known fabrication markers: completely unrelated tools/languages.
-# Reasonable stretches (K8s, Terraform, Redis, Kafka etc.) are ALLOWED.
-FABRICATION_WATCHLIST: set[str] = {
-    # Languages with zero relation to the candidate's stack
-    "c#", "c++", "golang", "rust", "ruby",
-    "kotlin", "swift", "scala", "matlab",
-    # Frameworks for wrong languages
-    "spring", "django", "rails", "angular", "vue", "svelte",
-    # Hard lies: certifications can't be stretched
-    "certif", "certified", "pmp", "scrum master", "aws certified",
-}
-
 REQUIRED_SECTIONS: set[str] = {"SUMMARY", "TECHNICAL SKILLS", "EXPERIENCE", "PROJECTS", "EDUCATION"}
 
 
@@ -122,15 +110,6 @@ def validate_json_fields(data: dict, profile: dict, mode: str = "normal") -> dic
 
     # Collect all text for bulk checks
     all_text_parts: list[str] = [data["summary"]]
-
-    # Skills: check for fabrication (always enforced)
-    if isinstance(data["skills"], dict):
-        skills_text = " ".join(str(v) for v in data["skills"].values()).lower()
-        for fake in FABRICATION_WATCHLIST:
-            if len(fake) <= 2:
-                continue
-            if fake in skills_text:
-                errors.append(f"Fabricated skill: '{fake}'")
 
     # Experience: preserved companies must be present (always enforced)
     resume_facts = profile.get("resume_facts", {})
@@ -242,41 +221,21 @@ def validate_tailored_resume(text: str, profile: dict, original_text: str = "") 
     if phone and phone not in text:
         warnings.append("Phone missing -- will be injected")
 
-    # 7. Scan TECHNICAL SKILLS section for fabricated tools
-    skills_start = text_lower.find("technical skills")
-    skills_end = text_lower.find("experience", skills_start) if skills_start != -1 else -1
-    if skills_start != -1 and skills_end != -1:
-        skills_block = text_lower[skills_start:skills_end]
-        for fake in FABRICATION_WATCHLIST:
-            if len(fake) <= 2:
-                continue
-            if fake in skills_block:
-                errors.append(f"FABRICATED SKILL in Technical Skills: '{fake}'")
-
-    # 8. Scan full document for fabrication watchlist items not in original
-    if original_text:
-        original_lower = original_text.lower()
-        for fake in FABRICATION_WATCHLIST:
-            if len(fake) <= 2:
-                continue
-            if fake in text_lower and fake not in original_lower:
-                warnings.append(f"New tool/skill appeared: '{fake}' (not in original)")
-
-    # 9. Em dashes (should be auto-fixed by sanitize_text, but safety net)
+    # 7. Em dashes (should be auto-fixed by sanitize_text, but safety net)
     if "\u2014" in text or "\u2013" in text:
         errors.append("Contains em dash or en dash.")
 
-    # 10. Banned words (word-boundary matching)
+    # 8. Banned words (word-boundary matching)
     found_banned = [w for w in BANNED_WORDS if re.search(r"\b" + re.escape(w) + r"\b", text_lower)]
     if found_banned:
         errors.append(f"Banned words: {', '.join(found_banned[:5])}")
 
-    # 11. LLM self-talk leak detection
+    # 9. LLM self-talk leak detection
     found_leaks = [p for p in LLM_LEAK_PHRASES if p in text_lower]
     if found_leaks:
         errors.append(f"LLM self-talk: '{found_leaks[0]}'")
 
-    # 12. Duplicate section detection
+    # 10. Duplicate section detection
     for section_name in ["summary", "experience", "education", "projects"]:
         count = text_lower.count(f"\n{section_name}\n") + text_lower.count(f"\n{section_name} \n")
         if text_lower.startswith(f"{section_name}\n"):

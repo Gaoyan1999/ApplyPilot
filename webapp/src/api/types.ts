@@ -28,6 +28,7 @@ export interface Job {
   scored_at: string | null
   tailored_at: string | null
   tailor_attempts: number
+  cover_letter_path: string | null
   cover_letter_at: string | null
   cover_attempts: number
   applied_at: string | null
