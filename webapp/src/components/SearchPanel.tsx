@@ -1,5 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { ApiError, getSearchConfig, getSearchStatus, runSearch, saveSearchConfig } from '../api/client'
+import {
+  ApiError,
+  confirmSearchResults,
+  discardNewSearchResults,
+  getSearchConfig,
+  getSearchStatus,
+  runSearch,
+  saveSearchConfig,
+} from '../api/client'
 import type { SearchConfig, SearchRunStage, SearchStatus } from '../api/types'
 import { ProgressBar } from './ProgressBar'
 import { SEARCHABLE_SITES, SiteIcon, SITE_META } from './SiteIcon'
@@ -27,8 +35,8 @@ function stageLabel(stage: SearchRunStage): string {
 
 /** Renders live in-progress detail for the active stage. `compact` gives a
  * terse one-line variant for the minimized widget; the full variant (with a
- * description, progress bar, and per-site chips) is used in the expanded
- * modal's dedicated progress view. */
+ * description, progress bar, and per-site chips) is used as the current
+ * step's body inside SearchLog. */
 function renderStageDetail(status: SearchStatus | null, compact: boolean): ReactNode {
   if (!status || !status.stage || status.stage === 'done') return null
 
@@ -88,6 +96,96 @@ function renderStageDetail(status: SearchStatus | null, compact: boolean): React
   return null
 }
 
+const STAGE_ORDER: ('discover' | 'enrich' | 'score')[] = ['discover', 'enrich', 'score']
+
+const STAGE_STEP_TITLES: Record<(typeof STAGE_ORDER)[number], string> = {
+  discover: 'Searching job boards',
+  enrich: 'Fetching job details',
+  score: 'Rating fit',
+}
+
+/** Final one-line (plus site chips, for discover) recap of a stage that has
+ * already finished -- what renderStageDetail shows live, frozen in place. */
+function stageDoneSummary(stage: (typeof STAGE_ORDER)[number], status: SearchStatus): ReactNode {
+  if (stage === 'discover') {
+    const sites = Object.entries(status.discover_by_site)
+    return (
+      <>
+        <p className="search-log-step-summary">
+          Found {status.new} new job{status.new === 1 ? '' : 's'}
+          {status.existing > 0 ? ` (${status.existing} already known)` : ''} across {status.queries_total} search
+          {status.queries_total === 1 ? '' : 'es'}.
+        </p>
+        {sites.length > 0 && (
+          <div className="site-progress-row">
+            {sites.map(([site, count]) => (
+              <span className="site-progress-chip" key={site}>
+                <SiteIcon site={site} /> {count}
+              </span>
+            ))}
+          </div>
+        )}
+      </>
+    )
+  }
+  if (stage === 'enrich') {
+    return (
+      <p className="search-log-step-summary">
+        Fetched full descriptions for {status.enriched} of {status.enrich_total} job
+        {status.enrich_total === 1 ? '' : 's'}.
+      </p>
+    )
+  }
+  return (
+    <p className="search-log-step-summary">
+      Rated {status.scored} of {status.score_total} job{status.score_total === 1 ? '' : 's'} for fit.
+    </p>
+  )
+}
+
+/** Accumulating step-by-step log of a search run. Earlier stages stay
+ * visible with their frozen final summary once the run moves on to the
+ * next one, instead of being replaced by a single current-stage view --
+ * used both mid-run (as steps complete one at a time) and on the final
+ * overview (all steps shown as done). */
+function SearchLog({ status }: { status: SearchStatus }) {
+  const currentIdx =
+    status.stage && status.stage !== 'done'
+      ? STAGE_ORDER.indexOf(status.stage as (typeof STAGE_ORDER)[number])
+      : STAGE_ORDER.length - 1
+  const erroredIdx = status.error ? currentIdx : -1
+  const lastVisible = status.error ? Math.max(currentIdx, 0) : status.running ? currentIdx : STAGE_ORDER.length - 1
+
+  return (
+    <div className="search-log">
+      {STAGE_ORDER.map((s, i) => {
+        if (i > lastVisible) return null
+        const isCurrent = status.running && i === currentIdx
+        const isErrored = i === erroredIdx
+        return (
+          <div
+            key={s}
+            className={`search-log-step${isCurrent ? ' search-log-step-current' : ''}${isErrored ? ' search-log-step-error' : ''}`}
+          >
+            <div className="search-log-step-header">
+              <span className="search-log-step-icon" aria-hidden="true">
+                {isErrored ? '✕' : isCurrent ? '●' : '✓'}
+              </span>
+              <span className="search-log-step-title">
+                Step {i + 1}: {STAGE_STEP_TITLES[s]}
+              </span>
+            </div>
+            <div className="search-log-step-body">
+              {isCurrent ? renderStageDetail(status, false) : stageDoneSummary(s, status)}
+              {isErrored && <p className="search-result search-error">{status.error}</p>}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 /** Non-blocking summary of third-party calls that permanently failed after
  * retries (a LinkedIn/Glassdoor scrape, an LLM call, a detail-page fetch).
  * These never stop the run -- this is just visibility into what got skipped. */
@@ -126,6 +224,8 @@ const TIME_RANGES: { label: string; hours: number }[] = [
   { label: 'Past month', hours: 720 },
 ]
 
+type ConfirmState = 'pending' | 'confirmed' | 'discarded'
+
 export function SearchPanel() {
   const [open, setOpen] = useState(false)
   const [minimized, setMinimized] = useState(false)
@@ -137,8 +237,24 @@ export function SearchPanel() {
   const [saving, setSaving] = useState(false)
   const [stage, setStage] = useState<SearchRunStage>(null)
   const [status, setStatus] = useState<SearchStatus | null>(null)
+  // Config-page-only feedback (saving the form, independent of any run).
+  const [configMessage, setConfigMessage] = useState<string | null>(null)
+  const [configError, setConfigError] = useState<string | null>(null)
+  // Run-outcome signals -- only ever touched by the polling loop (a run just
+  // finished) or by starting a new run (reset to null). Drives the
+  // config/progress/overview phase split below.
   const [result, setResult] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [confirmState, setConfirmState] = useState<ConfirmState>('pending')
+  const [confirmBusy, setConfirmBusy] = useState(false)
+
+  // Three mutually exclusive pages -- never mixed. `progress` and `overview`
+  // both hide the editable config form entirely.
+  const phase: 'config' | 'progress' | 'overview' = running
+    ? 'progress'
+    : result !== null || error !== null
+      ? 'overview'
+      : 'config'
 
   useEffect(() => {
     getSearchStatus().then((s) => {
@@ -157,7 +273,7 @@ export function SearchPanel() {
         setConfig(cfg)
         setExcludeTitlesText(cfg.exclude_titles.join('\n'))
       })
-      .catch(() => setError('Could not load search config'))
+      .catch(() => setConfigError('Could not load search config'))
       .finally(() => setConfigLoaded(true))
   }, [open, configLoaded])
 
@@ -184,11 +300,7 @@ export function SearchPanel() {
             const where = s.error_stage ? ` during ${s.error_stage}` : ''
             setError(`${s.error}${where}`)
           } else {
-            setResult(
-              `${s.queries} quer${s.queries === 1 ? 'y' : 'ies'} run, ` +
-                `${s.new} new job${s.new === 1 ? '' : 's'} found, ` +
-                `${s.enriched} enriched, ${s.scored} rated`
-            )
+            setResult('done')
             setError(null)
           }
         }
@@ -237,8 +349,8 @@ export function SearchPanel() {
   }
 
   async function handleSave(andSearch: boolean) {
-    setResult(null)
-    setError(null)
+    setConfigMessage(null)
+    setConfigError(null)
     setSaving(true)
     try {
       const excludeTitles = excludeTitlesText
@@ -253,18 +365,55 @@ export function SearchPanel() {
         setStatus(s)
         setRunning(true)
         setStage(s.stage ?? 'discover')
+        setResult(null)
+        setError(null)
+        setConfirmState('pending')
       } else {
-        setResult('Search config saved')
+        setConfigMessage('Search config saved')
       }
     } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
+      if (andSearch && e instanceof ApiError && e.status === 409) {
         setRunning(true)
       } else {
-        setError(e instanceof Error ? e.message : 'Save failed')
+        setConfigError(e instanceof Error ? e.message : 'Save failed')
       }
     } finally {
       setSaving(false)
     }
+  }
+
+  async function handleConfirm() {
+    setConfirmBusy(true)
+    try {
+      await confirmSearchResults()
+      setConfirmState('confirmed')
+    } catch (e) {
+      setConfigError(e instanceof Error ? e.message : 'Could not confirm results')
+    } finally {
+      setConfirmBusy(false)
+    }
+  }
+
+  async function handleDiscard() {
+    const count = status?.new ?? 0
+    if (!window.confirm(`Discard ${count} newly found job${count === 1 ? '' : 's'}? This can't be undone.`)) {
+      return
+    }
+    setConfirmBusy(true)
+    try {
+      await discardNewSearchResults()
+      setConfirmState('discarded')
+    } catch (e) {
+      setConfigError(e instanceof Error ? e.message : 'Could not discard results')
+    } finally {
+      setConfirmBusy(false)
+    }
+  }
+
+  function handleNewSearch() {
+    setResult(null)
+    setError(null)
+    setConfirmState('pending')
   }
 
   const busy = running || saving
@@ -328,10 +477,14 @@ export function SearchPanel() {
           <div className="modal-panel search-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <h2 className="modal-title">{running ? 'Search in progress' : 'Search config'}</h2>
+                <h2 className="modal-title">
+                  {phase === 'progress' ? 'Search in progress' : phase === 'overview' ? 'Search results' : 'Search config'}
+                </h2>
                 <p className="modal-subtitle">
-                  {running ? (
+                  {phase === 'progress' ? (
                     'Running your saved search — this can take a few minutes.'
+                  ) : phase === 'overview' ? (
+                    "New jobs are saved automatically as they're found — use Discard below to remove just this run's finds."
                   ) : (
                     <>
                       Edits ~/.applypilot/searches.yaml — also used by <code>applypilot run discover</code>.
@@ -340,7 +493,7 @@ export function SearchPanel() {
                 </p>
               </div>
               <div className="modal-header-actions">
-                {running && (
+                {phase === 'progress' && (
                   <button
                     type="button"
                     className="modal-minimize"
@@ -364,12 +517,50 @@ export function SearchPanel() {
               </div>
             </div>
             <div className="search-panel">
-              {running ? (
+              {phase === 'progress' && status && (
                 <div className="search-progress-view">
-                  <h3 className="search-stage-heading">{stageLabel(stage)}</h3>
-                  {renderStageDetail(status, false)}
+                  <SearchLog status={status} />
                 </div>
-              ) : (
+              )}
+
+              {phase === 'overview' && status && (
+                <div className="search-overview">
+                  <SearchLog status={status} />
+                  {status.new > 0 && confirmState === 'pending' && (
+                    <div className="search-overview-actions">
+                      <button
+                        type="button"
+                        className="search-discard-btn"
+                        disabled={confirmBusy}
+                        onClick={handleDiscard}
+                      >
+                        Discard {status.new} new job{status.new === 1 ? '' : 's'}
+                      </button>
+                      <button type="button" disabled={confirmBusy} onClick={handleConfirm}>
+                        {confirmBusy ? 'Saving…' : 'Confirm & keep'}
+                      </button>
+                    </div>
+                  )}
+                  {confirmState === 'confirmed' && (
+                    <p className="search-result">Kept — new jobs are in your dashboard.</p>
+                  )}
+                  {confirmState === 'discarded' && (
+                    <p className="search-result">Discarded — new jobs from this run were removed.</p>
+                  )}
+                  {status.new === 0 && confirmState === 'pending' && (
+                    <p className="search-result">No new jobs found this run.</p>
+                  )}
+                  {configError && <span className="search-result search-error">{configError}</span>}
+                  <WarningsSummary warnings={status.warnings} />
+                  <div className="config-actions">
+                    <button type="button" onClick={handleNewSearch}>
+                      New search
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {phase === 'config' && (
                 <>
                   <div className="config-section">
                     <button
@@ -512,11 +703,10 @@ export function SearchPanel() {
                       Save & Search
                     </button>
                   </div>
-                  {result && <span className="search-result">{result}</span>}
-                  {error && <span className="search-result search-error">{error}</span>}
+                  {configMessage && <span className="search-result">{configMessage}</span>}
+                  {configError && <span className="search-result search-error">{configError}</span>}
                 </>
               )}
-              <WarningsSummary warnings={status?.warnings ?? []} />
             </div>
           </div>
         </div>

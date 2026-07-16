@@ -50,12 +50,20 @@ _state: dict = {
     "warnings": [],
     "error": None,
     "error_stage": None,
+    # URLs of jobs newly inserted by the most recent run -- internal
+    # bookkeeping only (not part of the public status payload) so the
+    # dashboard's "discard" action can remove exactly this run's new rows
+    # without touching anything already in the DB. Cleared once
+    # discarded/confirmed.
+    "new_urls": [],
 }
 
 
 def get_status() -> dict:
     with _lock:
-        return dict(_state)
+        state = dict(_state)
+    state.pop("new_urls", None)
+    return state
 
 
 def start_search() -> bool:
@@ -82,6 +90,7 @@ def start_search() -> bool:
             warnings=[],
             error=None,
             error_stage=None,
+            new_urls=[],
         )
 
     thread = threading.Thread(target=_run, daemon=True)
@@ -134,6 +143,7 @@ def _run() -> None:
             _state["existing"] = discover_stats.get("existing", 0)
             _state["discover_errors"] = discover_stats.get("errors", 0)
             _state["discover_by_site"] = discover_stats.get("by_site", {})
+            _state["new_urls"] = discover_stats.get("new_urls", [])
 
         with _lock:
             _state["stage"] = "enrich"
@@ -167,3 +177,33 @@ def _fail(stage: str | None, message: str) -> None:
     with _lock:
         _state["error"] = message
         _state["error_stage"] = stage
+
+
+def discard_new_jobs() -> int:
+    """Delete the jobs newly inserted by the most recent run, leaving
+    everything already in the DB untouched. Returns the number of rows
+    deleted (0 if a run is still in progress, or there's nothing left to
+    discard -- e.g. already discarded/confirmed, or no new jobs this run)."""
+    from applypilot.database import get_connection
+
+    with _lock:
+        if _state["running"]:
+            return 0
+        urls = _state["new_urls"]
+        if not urls:
+            return 0
+        _state["new_urls"] = []
+
+    conn = get_connection()
+    placeholders = ",".join("?" for _ in urls)
+    cursor = conn.execute(f"DELETE FROM jobs WHERE url IN ({placeholders})", urls)
+    conn.commit()
+    return cursor.rowcount
+
+
+def confirm_new_jobs() -> None:
+    """Mark the most recent run's new jobs as reviewed. They were already
+    saved to the DB during discovery -- this just clears the discard-eligible
+    set so a stray discard call can't remove them after the fact."""
+    with _lock:
+        _state["new_urls"] = []

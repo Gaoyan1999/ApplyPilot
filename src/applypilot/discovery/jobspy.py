@@ -124,6 +124,7 @@ def store_jobspy_results(
     df,
     source_label: str,
     by_site: dict[str, int] | None = None,
+    new_urls: list[str] | None = None,
 ) -> tuple[int, int]:
     """Store JobSpy DataFrame results into the DB. Returns (new, existing).
 
@@ -131,6 +132,10 @@ def store_jobspy_results(
     newly-inserted rows (site label as stored, i.e. `row["site"]` or
     `source_label` as a fallback) -- lets callers report live discovery
     progress broken down by job board.
+
+    If `new_urls` is passed, every newly-inserted job's URL is appended to
+    it -- lets a caller (the web dashboard) later discard just this run's
+    new rows without touching anything already in the DB.
     """
     from applypilot.config import get_excluded_titles
 
@@ -198,6 +203,8 @@ def store_jobspy_results(
             new += 1
             if by_site is not None:
                 by_site[site_label] = by_site.get(site_label, 0) + 1
+            if new_urls is not None:
+                new_urls.append(url)
         except sqlite3.IntegrityError:
             existing += 1
 
@@ -303,7 +310,7 @@ def _run_one_search(
 
     if not all_dfs:
         log.error("[%s]: all sites failed", label)
-        return {"new": 0, "existing": 0, "errors": 1, "filtered": 0, "total": 0, "label": label, "by_site": {}}
+        return {"new": 0, "existing": 0, "errors": 1, "filtered": 0, "total": 0, "label": label, "by_site": {}, "new_urls": []}
 
     import pandas as pd
     import warnings
@@ -313,7 +320,7 @@ def _run_one_search(
 
     if len(df) == 0:
         log.info("[%s] 0 results", label)
-        return {"new": 0, "existing": 0, "errors": 0, "filtered": 0, "total": 0, "label": label, "by_site": {}}
+        return {"new": 0, "existing": 0, "errors": 0, "filtered": 0, "total": 0, "label": label, "by_site": {}, "new_urls": []}
 
     # Filter by location before storing
     before = len(df)
@@ -325,14 +332,18 @@ def _run_one_search(
 
     conn = get_connection()
     by_site: dict[str, int] = {}
+    new_urls: list[str] = []
     try:
-        new, existing = store_jobspy_results(conn, df, s["query"], by_site=by_site)
+        new, existing = store_jobspy_results(conn, df, s["query"], by_site=by_site, new_urls=new_urls)
     except Exception as e:
         # Storage errors shouldn't abort the whole crawl -- log, warn, move on.
         log.error("[%s] failed to store results: %s", label, e)
         if on_warning:
             on_warning(f"[{label}] failed to store results: {e}")
-        return {"new": 0, "existing": 0, "errors": 1, "filtered": filtered, "total": before, "label": label, "by_site": {}}
+        return {
+            "new": 0, "existing": 0, "errors": 1, "filtered": filtered, "total": before,
+            "label": label, "by_site": {}, "new_urls": [],
+        }
 
     msg = f"[{label}] {before} results -> {new} new, {existing} dupes"
     if filtered:
@@ -341,7 +352,7 @@ def _run_one_search(
 
     return {
         "new": new, "existing": existing, "errors": 0, "filtered": filtered,
-        "total": before, "label": label, "by_site": by_site,
+        "total": before, "label": label, "by_site": by_site, "new_urls": new_urls,
     }
 
 
@@ -476,6 +487,7 @@ def _full_crawl(
     total_existing = 0
     total_errors = 0
     total_by_site: dict[str, int] = {}
+    total_new_urls: list[str] = []
     completed = 0
 
     for s in searches:
@@ -491,6 +503,7 @@ def _full_crawl(
         total_errors += result["errors"]
         for site, count in result.get("by_site", {}).items():
             total_by_site[site] = total_by_site.get(site, 0) + count
+        total_new_urls.extend(result.get("new_urls", []))
 
         if completed % 5 == 0 or completed == len(searches):
             log.info("Progress: %d/%d queries done (%d new, %d dupes, %d errors)",
@@ -520,6 +533,7 @@ def _full_crawl(
         "db_total": db_total,
         "queries": len(searches),
         "by_site": total_by_site,
+        "new_urls": total_new_urls,
     }
 
 

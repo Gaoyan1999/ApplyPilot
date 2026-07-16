@@ -208,6 +208,23 @@ def get_search_status() -> dict:
     return search_state.get_status()
 
 
+@app.post("/api/search/discard-new")
+def discard_new_search_results() -> dict:
+    """Delete the jobs newly found by the most recently completed run,
+    leaving everything else in the DB untouched."""
+    deleted = search_state.discard_new_jobs()
+    return {"deleted": deleted}
+
+
+@app.post("/api/search/confirm")
+def confirm_new_search_results() -> dict:
+    """Acknowledge the most recently completed run's new jobs. They're
+    already saved (discovery writes straight to the DB) -- this just closes
+    the window for discarding them."""
+    search_state.confirm_new_jobs()
+    return {"ok": True}
+
+
 def _resolve_static_dir() -> Path | None:
     """Find the built frontend (webapp/dist), if it exists.
 
