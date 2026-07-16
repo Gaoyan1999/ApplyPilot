@@ -73,6 +73,7 @@ function App() {
       if (!q) return true
       return (
         (job.title || '').toLowerCase().includes(q) ||
+        (job.company || '').toLowerCase().includes(q) ||
         (job.site || '').toLowerCase().includes(q) ||
         (job.location || '').toLowerCase().includes(q)
       )

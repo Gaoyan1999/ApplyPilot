@@ -37,7 +37,7 @@ init_db()
 # columns (strategy, agent_id, last_attempted_at, apply_duration_ms,
 # apply_task_id, verification_confidence).
 _JOB_FIELDS = [
-    "url", "title", "site", "job_type", "location", "salary",
+    "url", "title", "company", "site", "job_type", "location", "salary",
     "fit_score", "score_reasoning",
     "application_url", "full_description",
     "discovered_at", "scored_at",
