@@ -144,11 +144,7 @@ export function JobPreviewModal({ job, onClose, onUserActionChange }: Props) {
             </button>
           </div>
           {coverLetterError && <p className="cover-letter-error">{coverLetterError}</p>}
-          {coverLetterText ? (
-            <pre className="cover-letter-text">{coverLetterText}</pre>
-          ) : (
-            !coverLetterLoading && <p className="empty-state">No cover letter yet.</p>
-          )}
+          {coverLetterText && <pre className="cover-letter-text">{coverLetterText}</pre>}
 
           <h3 className="section-heading">Job Description</h3>
           {job.full_description ? (
