@@ -344,12 +344,6 @@
   padding: 8px 0;
 }
 
-.search-stage-heading {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-}
-
 .search-stage-description {
   margin: 0;
   font-size: 13px;
@@ -360,6 +354,123 @@
   margin: 0;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+/* Step-by-step run log: each stage gets its own block that stays visible
+   (frozen on its final summary) once the run moves past it, instead of
+   being replaced by the next stage. Used both mid-run and on the final
+   overview page. */
+.search-log {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.search-log-step {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+}
+
+.search-log-step-current {
+  border-color: var(--stage-enriched-fg);
+}
+
+.search-log-step-error {
+  border-color: var(--error-fg);
+}
+
+.search-log-step-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.search-log-step-icon {
+  color: var(--text-muted);
+}
+
+.search-log-step-current .search-log-step-icon {
+  color: var(--stage-enriched-fg);
+}
+
+.search-log-step-error .search-log-step-icon {
+  color: var(--error-fg);
+}
+
+.search-log-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.search-log-step-summary {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* The final overview page (log recap + confirm/discard) */
+.search-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.search-overview-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.search-panel .search-discard-btn {
+  background: transparent;
+  color: var(--error-fg);
+  border: 1px solid var(--error-fg);
+}
+
+/* Step 3: the actual jobs this run found, title + score */
+.search-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.search-results-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.search-results-row:last-child {
+  border-bottom: none;
+}
+
+.search-results-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-results-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .site-progress-row {

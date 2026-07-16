@@ -208,6 +208,51 @@ def get_search_status() -> dict:
     return search_state.get_status()
 
 
+@app.get("/api/search/new-jobs")
+def get_search_new_jobs() -> list[dict]:
+    """Full job records (title, fit score, etc.) for the most recently
+    completed run's newly-found jobs -- backs the overview page's results
+    list. Ordered by fit score so the best matches surface first."""
+    urls = search_state.get_new_urls()
+    if not urls:
+        return []
+
+    conn = get_connection()
+    placeholders = ",".join("?" for _ in urls)
+    rows = conn.execute(
+        f"SELECT * FROM jobs WHERE url IN ({placeholders}) ORDER BY fit_score DESC", urls
+    ).fetchall()
+    if not rows:
+        return []
+
+    columns = rows[0].keys()
+    jobs = [dict(zip(columns, row)) for row in rows]
+
+    result = []
+    for job in jobs:
+        out = {field: job.get(field) for field in _JOB_FIELDS}
+        out["stage"] = compute_stage(job)
+        result.append(out)
+    return result
+
+
+@app.post("/api/search/discard-new")
+def discard_new_search_results() -> dict:
+    """Delete the jobs newly found by the most recently completed run,
+    leaving everything else in the DB untouched."""
+    deleted = search_state.discard_new_jobs()
+    return {"deleted": deleted}
+
+
+@app.post("/api/search/confirm")
+def confirm_new_search_results() -> dict:
+    """Acknowledge the most recently completed run's new jobs. They're
+    already saved (discovery writes straight to the DB) -- this just closes
+    the window for discarding them."""
+    search_state.confirm_new_jobs()
+    return {"ok": True}
+
+
 def _resolve_static_dir() -> Path | None:
     """Find the built frontend (webapp/dist), if it exists.
 
