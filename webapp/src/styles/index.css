@@ -975,6 +975,16 @@ table.jobs-table {
   padding: 6px;
 }
 
+/* Portaled to <body> so it escapes .jobs-table-wrap's overflow-x: auto
+   clipping -- position is computed in viewport coordinates via JS instead
+   of relying on a positioned ancestor. */
+.user-action-popover-portal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+}
+
 .user-action-option {
   display: flex;
   align-items: center;
