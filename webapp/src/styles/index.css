@@ -701,6 +701,42 @@ table.jobs-table {
   text-align: center;
 }
 
+.jobs-table-group-row {
+  cursor: pointer;
+  user-select: none;
+}
+
+.jobs-table-group-row:hover .jobs-table-group-header {
+  filter: brightness(0.97);
+}
+
+.jobs-table-group-header {
+  background: var(--stage-enriched-bg);
+  color: var(--stage-enriched-fg);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.group-chevron {
+  display: inline-block;
+  margin-right: 6px;
+  transition: transform 0.15s ease;
+}
+
+.group-chevron-collapsed {
+  transform: rotate(-90deg);
+}
+
+.group-count {
+  margin-left: 8px;
+  opacity: 0.75;
+  font-weight: 400;
+  text-transform: none;
+}
+
 .empty-state {
   padding: 40px 12px;
   text-align: center;
