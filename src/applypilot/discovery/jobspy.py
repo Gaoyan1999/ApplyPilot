@@ -490,6 +490,19 @@ def _full_crawl(
     total_new_urls: list[str] = []
     completed = 0
 
+    # Report the true total up front -- otherwise a caller polling status
+    # sees queries_total=0 (e.g. "0 of 0 searches run") until the first of
+    # potentially many combos finishes, which can take a while.
+    if on_progress:
+        on_progress({
+            "queries_done": 0,
+            "queries_total": len(searches),
+            "new": 0,
+            "existing": 0,
+            "errors": 0,
+            "by_site": {},
+        })
+
     for s in searches:
         result = _run_one_search(
             s, sites, results_per_site, hours_old,
