@@ -248,17 +248,25 @@ def _run_one_search(
             "hours_old": hours_old,
             "description_format": "markdown",
             "country_indeed": defaults.get("country_indeed", "usa"),
-            "verbose": 0,
+            "verbose": 2,
         }
         if s.get("remote"):
             kwargs["is_remote"] = True
         if proxy_config:
             kwargs["proxies"] = [proxy_config["jobspy"]]
-        if "linkedin" in other_sites:
+        fetch_description = "linkedin" in other_sites
+        if fetch_description:
             kwargs["linkedin_fetch_description"] = True
+        log.info("[%s] list stage -> querying %s (results_wanted=%d, hours_old=%d)",
+                 label, ", ".join(other_sites), results_per_site, hours_old)
         try:
             df = _scrape_with_retry(kwargs, max_retries=max_retries)
             all_dfs.append(df)
+            if fetch_description and "site" in df.columns:
+                li_df = df[df["site"] == "linkedin"]
+                li_detail = int(li_df["description"].notna().sum()) if "description" in li_df.columns else 0
+                log.info("[%s] detail stage -> LinkedIn: %d jobs listed, %d detail-page requests fetched",
+                         label, len(li_df), li_detail)
         except Exception as e:
             log.error("[%s] (non-gd): %s", label, e)
             if on_warning:
@@ -273,7 +281,7 @@ def _run_one_search(
             "results_wanted": results_per_site,
             "hours_old": hours_old,
             "description_format": "markdown",
-            "verbose": 0,
+            "verbose": 2,
         }
         if s.get("remote"):
             gd_kwargs["is_remote"] = True
