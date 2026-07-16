@@ -68,3 +68,15 @@ export function confirmSearchResults(): Promise<{ ok: boolean }> {
 export function setJobUserAction(url: string, userAction: UserAction | null): Promise<Job> {
   return sendJson<Job>(`/api/jobs/${encodeURIComponent(url)}`, 'PATCH', { user_action: userAction })
 }
+
+export interface CoverLetterText {
+  text: string | null
+}
+
+export function getCoverLetter(url: string): Promise<CoverLetterText> {
+  return getJson<CoverLetterText>(`/api/jobs/${encodeURIComponent(url)}/cover-letter`)
+}
+
+export function generateCoverLetter(url: string): Promise<CoverLetterText> {
+  return sendJson<CoverLetterText>(`/api/jobs/${encodeURIComponent(url)}/cover-letter`, 'POST')
+}

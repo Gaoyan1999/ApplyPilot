@@ -22,6 +22,11 @@ from applypilot.database import get_connection, get_stats, init_db
 from applypilot.server import search_state
 from applypilot.server.stages import STAGE_ORDER, USER_ACTIONS, compute_stage
 
+_NEEDS_LLM_KEY_DETAIL = (
+    "This requires an LLM API key. Run 'applypilot init' or set "
+    "GEMINI_API_KEY / OPENAI_API_KEY / LLM_URL."
+)
+
 console = Console()
 
 app = FastAPI(title="ApplyPilot Dashboard")
@@ -42,7 +47,7 @@ _JOB_FIELDS = [
     "application_url", "full_description",
     "discovered_at", "scored_at",
     "tailored_at", "tailor_attempts",
-    "cover_letter_at", "cover_attempts",
+    "cover_letter_path", "cover_letter_at", "cover_attempts",
     "applied_at", "apply_status", "apply_error", "apply_attempts",
     "detail_error", "user_action",
 ]
@@ -128,6 +133,36 @@ def update_job_user_action(url: str, body: UserActionBody) -> dict:
         raise HTTPException(status_code=404, detail="Job not found")
 
     return {"url": url, "user_action": body.user_action}
+
+
+@app.get("/api/jobs/{url:path}/cover-letter")
+def get_job_cover_letter(url: str) -> dict:
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT cover_letter_path FROM jobs WHERE url = ?", (url,)
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    path = row["cover_letter_path"]
+    if not path or not Path(path).exists():
+        return {"text": None}
+
+    return {"text": Path(path).read_text(encoding="utf-8")}
+
+
+@app.post("/api/jobs/{url:path}/cover-letter")
+def generate_job_cover_letter(url: str) -> dict:
+    if get_tier() < 2:
+        raise HTTPException(status_code=400, detail=_NEEDS_LLM_KEY_DETAIL)
+
+    from applypilot.scoring.cover_letter import generate_cover_letter_for_job
+
+    try:
+        return generate_cover_letter_for_job(url)
+    except ValueError as e:
+        status_code = 404 if "not found" in str(e) else 400
+        raise HTTPException(status_code=status_code, detail=str(e)) from e
 
 
 class SearchQuery(BaseModel):

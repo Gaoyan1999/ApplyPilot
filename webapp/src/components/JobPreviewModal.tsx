@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { ApiError, generateCoverLetter, getCoverLetter } from '../api/client'
 import type { Job, UserAction } from '../api/types'
 import { formatDate } from '../lib/format'
 import { ScorePill } from './ScorePill'
@@ -24,6 +25,10 @@ function MetaRow({ label, children }: { label: string; children: React.ReactNode
 }
 
 export function JobPreviewModal({ job, onClose, onUserActionChange }: Props) {
+  const [coverLetterText, setCoverLetterText] = useState<string | null>(null)
+  const [coverLetterLoading, setCoverLetterLoading] = useState(false)
+  const [coverLetterError, setCoverLetterError] = useState<string | null>(null)
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose()
@@ -31,6 +36,34 @@ export function JobPreviewModal({ job, onClose, onUserActionChange }: Props) {
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [onClose])
+
+  useEffect(() => {
+    setCoverLetterText(null)
+    setCoverLetterError(null)
+    if (!job.cover_letter_path) return
+    let cancelled = false
+    getCoverLetter(job.url)
+      .then((res) => {
+        if (!cancelled) setCoverLetterText(res.text)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [job.url, job.cover_letter_path])
+
+  async function handleGenerateCoverLetter() {
+    setCoverLetterLoading(true)
+    setCoverLetterError(null)
+    try {
+      const res = await generateCoverLetter(job.url)
+      setCoverLetterText(res.text)
+    } catch (e) {
+      setCoverLetterError(e instanceof ApiError ? e.message : 'Failed to generate cover letter')
+    } finally {
+      setCoverLetterLoading(false)
+    }
+  }
 
   return (
     <div className="modal-backdrop job-detail-backdrop" onClick={onClose}>
@@ -94,6 +127,28 @@ export function JobPreviewModal({ job, onClose, onUserActionChange }: Props) {
             {job.apply_error && <MetaRow label="Apply error">{job.apply_error}</MetaRow>}
             {job.detail_error && <MetaRow label="Enrichment error">{job.detail_error}</MetaRow>}
           </div>
+
+          <div className="section-heading-row">
+            <h3 className="section-heading">Cover Letter</h3>
+            <button
+              type="button"
+              disabled={coverLetterLoading || !job.full_description}
+              title={!job.full_description ? 'Needs a job description first' : undefined}
+              onClick={handleGenerateCoverLetter}
+            >
+              {coverLetterLoading
+                ? 'Generating…'
+                : coverLetterText
+                  ? 'Regenerate'
+                  : 'Generate cover letter'}
+            </button>
+          </div>
+          {coverLetterError && <p className="cover-letter-error">{coverLetterError}</p>}
+          {coverLetterText ? (
+            <pre className="cover-letter-text">{coverLetterText}</pre>
+          ) : (
+            !coverLetterLoading && <p className="empty-state">No cover letter yet.</p>
+          )}
 
           <h3 className="section-heading">Job Description</h3>
           {job.full_description ? (
