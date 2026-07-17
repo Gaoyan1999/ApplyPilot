@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ApiError, getJobs, getStatus, setJobUserAction } from './api/client'
+import { ApiError, getJobs, getStatus, setJobDismissed, setJobUserAction } from './api/client'
 import type { Job, JobType, UserAction } from './api/types'
 import { usePolling } from './hooks/usePolling'
 import { useTheme } from './hooks/useTheme'
@@ -63,7 +63,7 @@ function App() {
     if (!jobs) return []
     const q = search.trim().toLowerCase()
     const filtered = jobs.filter((job) => {
-      if (job.user_action === 'not_for_me' && !showDismissed) return false
+      if (job.dismissed && !showDismissed) return false
       if (!matchesMultiSelect(jobTypeFilterMode, jobTypeFilter, job.job_type ?? 'unknown')) return false
       if (!matchesMultiSelect(userActionFilterMode, userActionFilter, job.user_action)) return false
       if (!q) return true
@@ -93,6 +93,15 @@ function App() {
       setActionError(null)
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : 'Failed to update action')
+    }
+  }
+
+  async function handleDismissChange(job: Job, dismissed: boolean) {
+    try {
+      await setJobDismissed(job.url, dismissed)
+      setActionError(null)
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : 'Failed to update dismissed state')
     }
   }
 
@@ -160,6 +169,7 @@ function App() {
           job={previewJob}
           onClose={() => setPreviewUrl(null)}
           onUserActionChange={handleUserActionChange}
+          onDismissChange={handleDismissChange}
         />
       )}
     </>

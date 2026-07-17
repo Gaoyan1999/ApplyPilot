@@ -77,6 +77,10 @@ export function setJobUserAction(url: string, userAction: UserAction | null): Pr
   return sendJson<Job>(`/api/jobs/${encodeURIComponent(url)}`, 'PATCH', { user_action: userAction })
 }
 
+export function setJobDismissed(url: string, dismissed: boolean): Promise<Job> {
+  return sendJson<Job>(`/api/jobs/${encodeURIComponent(url)}`, 'PATCH', { dismissed })
+}
+
 export interface CoverLetterText {
   text: string | null
 }

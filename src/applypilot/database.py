@@ -74,7 +74,8 @@ def init_db(db_path: Path | str | None = None) -> sqlite3.Connection:
       - Apply:      applied_at, apply_status, apply_error, apply_attempts,
                    agent_id, last_attempted_at, apply_duration_ms, apply_task_id,
                    verification_confidence
-      - User:       user_action (manual label, see applypilot.server.stages.USER_ACTIONS)
+      - User:       user_action (manual label, see applypilot.server.stages.USER_ACTIONS),
+                   dismissed (boolean "not for me" flag, hides the job from the dashboard)
 
     Args:
         db_path: Override the default DB_PATH.
@@ -135,7 +136,8 @@ def init_db(db_path: Path | str | None = None) -> sqlite3.Connection:
             verification_confidence TEXT,
 
             -- Manual user annotation
-            user_action           TEXT
+            user_action           TEXT,
+            dismissed             INTEGER DEFAULT 0
         )
     """)
     conn.commit()
@@ -190,6 +192,7 @@ _ALL_COLUMNS: dict[str, str] = {
     "verification_confidence": "TEXT",
     # Manual user annotation
     "user_action": "TEXT",
+    "dismissed": "INTEGER DEFAULT 0",
 }
 
 

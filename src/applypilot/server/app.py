@@ -71,7 +71,7 @@ _JOB_FIELDS = [
     "tailored_at", "tailor_attempts",
     "cover_letter_path", "cover_letter_at", "cover_attempts",
     "applied_at", "apply_status", "apply_error", "apply_attempts",
-    "detail_error", "user_action",
+    "detail_error", "user_action", "dismissed",
 ]
 
 
@@ -129,6 +129,7 @@ def get_jobs() -> list[dict]:
     result = []
     for job in jobs:
         out = {field: job.get(field) for field in _JOB_FIELDS}
+        out["dismissed"] = bool(out.get("dismissed"))
         out["stage"] = compute_stage(job)
         result.append(out)
     return result
@@ -136,25 +137,48 @@ def get_jobs() -> list[dict]:
 
 class UserActionBody(BaseModel):
     user_action: str | None = None
+    dismissed: bool | None = None
 
 
 @app.patch("/api/jobs/{url:path}")
 def update_job_user_action(url: str, body: UserActionBody) -> dict:
-    if body.user_action is not None and body.user_action not in USER_ACTIONS:
+    """Partial update of a job's manual annotations.
+
+    Only fields actually present in the request body are touched -- e.g. a
+    request with just `{"dismissed": true}` leaves `user_action` untouched,
+    and vice versa. `user_action` and `dismissed` are independent: a job can
+    be dismissed regardless of whatever user_action it also has, or none.
+    """
+    fields_set = body.model_fields_set
+    if "user_action" in fields_set and body.user_action is not None and body.user_action not in USER_ACTIONS:
         raise HTTPException(
             status_code=400,
             detail=f"user_action must be one of {USER_ACTIONS} or null",
         )
+    if not fields_set:
+        raise HTTPException(status_code=400, detail="No fields to update")
 
+    updates: dict[str, object] = {}
+    if "user_action" in fields_set:
+        updates["user_action"] = body.user_action
+    if "dismissed" in fields_set:
+        updates["dismissed"] = 1 if body.dismissed else 0
+
+    set_clause = ", ".join(f"{col} = ?" for col in updates)
     conn = get_connection()
     cursor = conn.execute(
-        "UPDATE jobs SET user_action = ? WHERE url = ?", (body.user_action, url)
+        f"UPDATE jobs SET {set_clause} WHERE url = ?", (*updates.values(), url)
     )
     conn.commit()
     if cursor.rowcount == 0:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    return {"url": url, "user_action": body.user_action}
+    response: dict[str, object] = {"url": url}
+    if "user_action" in updates:
+        response["user_action"] = updates["user_action"]
+    if "dismissed" in updates:
+        response["dismissed"] = bool(updates["dismissed"])
+    return response
 
 
 @app.get("/api/jobs/{url:path}/cover-letter")

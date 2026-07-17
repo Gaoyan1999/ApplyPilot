@@ -11,7 +11,6 @@ export type Stage =
 export type JobType = 'full_time' | 'intern' | 'contract' | 'unknown'
 
 export type UserAction =
-  | 'not_for_me'
   | 'need_tailor'
   | 'need_auto_apply'
   | 'applied'
@@ -46,6 +45,7 @@ export interface Job {
   detail_error: string | null
   stage: Stage
   user_action: UserAction | null
+  dismissed: boolean
 }
 
 export interface ScoreDistItem {
