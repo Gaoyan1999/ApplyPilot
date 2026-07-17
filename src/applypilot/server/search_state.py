@@ -43,6 +43,8 @@ _state: dict = {
     "existing": 0,
     "discover_errors": 0,
     "discover_by_site": {},
+    "current_query": None,
+    "current_location": None,
     "enriched": 0,
     "enrich_total": 0,
     "scored": 0,
@@ -83,6 +85,8 @@ def start_search() -> bool:
             existing=0,
             discover_errors=0,
             discover_by_site={},
+            current_query=None,
+            current_location=None,
             enriched=0,
             enrich_total=0,
             scored=0,
@@ -106,6 +110,8 @@ def _on_discover_progress(evt: dict) -> None:
         _state["existing"] = evt["existing"]
         _state["discover_errors"] = evt["errors"]
         _state["discover_by_site"] = evt["by_site"]
+        _state["current_query"] = evt.get("current_query")
+        _state["current_location"] = evt.get("current_location")
 
 
 def _on_enrich_progress(evt: dict) -> None:

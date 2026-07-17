@@ -91,6 +91,8 @@ export interface SearchStatus {
   existing: number
   discover_errors: number
   discover_by_site: Record<string, number>
+  current_query: string | null
+  current_location: string | null
   enriched: number
   enrich_total: number
   scored: number

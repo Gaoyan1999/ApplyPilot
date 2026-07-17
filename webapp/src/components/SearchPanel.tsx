@@ -65,6 +65,11 @@ function displayStageIndex(stage: SearchRunStage): number {
   return DISPLAY_STAGES.length
 }
 
+function currentQueryText(status: SearchStatus): string | null {
+  if (!status.current_query || !status.current_location) return null
+  return `Querying "${status.current_query}" in ${status.current_location}...`
+}
+
 function discoverSummaryText(status: SearchStatus): string {
   return (
     `Found ${status.new} new job${status.new === 1 ? '' : 's'}` +
@@ -96,6 +101,9 @@ function SearchStepBody({ status, isCurrent }: { status: SearchStatus; isCurrent
       <>
         <p className="search-stage-description">{STAGE_DESCRIPTIONS.discover}</p>
         <ProgressBar done={status.queries} total={status.queries_total} label="Queries" />
+        {currentQueryText(status) && (
+          <p className="search-progress-summary">{currentQueryText(status)}</p>
+        )}
         <SiteChips status={status} />
       </>
     )

@@ -510,9 +510,26 @@ def _full_crawl(
             "existing": 0,
             "errors": 0,
             "by_site": {},
+            "current_query": None,
+            "current_location": None,
         })
 
     for s in searches:
+        # Reported before the (potentially slow) scrape call so a status
+        # poll mid-search shows what's actually in flight, not just the
+        # count of what's already finished.
+        if on_progress:
+            on_progress({
+                "queries_done": completed,
+                "queries_total": len(searches),
+                "new": total_new,
+                "existing": total_existing,
+                "errors": total_errors,
+                "by_site": dict(total_by_site),
+                "current_query": s["query"],
+                "current_location": f"{s['location']} (remote)" if s.get("remote") else s["location"],
+            })
+
         result = _run_one_search(
             s, sites, results_per_site, hours_old,
             proxy_config, defaults, max_retries,
@@ -539,6 +556,8 @@ def _full_crawl(
                 "existing": total_existing,
                 "errors": total_errors,
                 "by_site": dict(total_by_site),
+                "current_query": None,
+                "current_location": None,
             })
 
     # Final stats
