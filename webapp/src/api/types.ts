@@ -10,7 +10,14 @@ export type Stage =
 
 export type JobType = 'full_time' | 'intern' | 'contract' | 'unknown'
 
-export type UserAction = 'not_for_me' | 'need_tailor' | 'need_auto_apply'
+export type UserAction =
+  | 'need_tailor'
+  | 'need_auto_apply'
+  | 'applied'
+  | 'interviewing'
+  | 'offer'
+  | 'rejected'
+  | 'closed'
 
 export interface Job {
   url: string
@@ -38,6 +45,7 @@ export interface Job {
   detail_error: string | null
   stage: Stage
   user_action: UserAction | null
+  dismissed: boolean
 }
 
 export interface ScoreDistItem {
@@ -76,6 +84,18 @@ export interface SearchConfig {
   exclude_titles: string[]
   boards: string[]
   defaults: SearchConfigDefaults
+}
+
+export interface PromptEntry {
+  text: string
+  default: string
+  is_custom: boolean
+}
+
+export interface PromptsConfig {
+  cover_letter: PromptEntry
+  tailoring: PromptEntry
+  scoring: PromptEntry
 }
 
 export type SearchRunStage = 'discover' | 'enrich' | 'score' | 'done' | null

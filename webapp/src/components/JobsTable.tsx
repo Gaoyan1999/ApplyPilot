@@ -13,7 +13,7 @@ import { ScorePill } from './ScorePill'
 import { SiteIcon } from './SiteIcon'
 import { UserActionSelect } from './UserActionSelect'
 
-export type SortKey = 'title' | 'company' | 'site' | 'job_type' | 'fit_score' | 'stage' | 'discovered_at'
+export type SortKey = 'title' | 'company' | 'site' | 'location' | 'job_type' | 'fit_score' | 'stage' | 'discovered_at'
 export type SortDir = 'asc' | 'desc'
 
 interface Props {
@@ -31,6 +31,7 @@ const COLUMNS: { key: SortKey; label: string; defaultWidth: number }[] = [
   { key: 'title', label: 'Title', defaultWidth: 280 },
   { key: 'company', label: 'Company', defaultWidth: 160 },
   { key: 'site', label: 'Link', defaultWidth: 60 },
+  { key: 'location', label: 'Location', defaultWidth: 160 },
   { key: 'job_type', label: 'Job Type', defaultWidth: 120 },
   { key: 'fit_score', label: 'Score', defaultWidth: 90 },
   { key: 'discovered_at', label: 'Discovered', defaultWidth: 90 },
@@ -168,6 +169,7 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview, onUserAct
                           <SiteIcon site={job.site} />
                         </a>
                       </td>
+                      <td>{job.location || '—'}</td>
                       <td>
                         <JobTypeBadge jobType={job.job_type} />
                       </td>

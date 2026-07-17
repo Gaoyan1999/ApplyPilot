@@ -13,6 +13,7 @@ interface Props {
   job: Job
   onClose: () => void
   onUserActionChange: (job: Job, value: UserAction | null) => void
+  onDismissChange: (job: Job, dismissed: boolean) => void
 }
 
 function MetaRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -24,7 +25,7 @@ function MetaRow({ label, children }: { label: string; children: React.ReactNode
   )
 }
 
-export function JobPreviewModal({ job, onClose, onUserActionChange }: Props) {
+export function JobPreviewModal({ job, onClose, onUserActionChange, onDismissChange }: Props) {
   const [coverLetterText, setCoverLetterText] = useState<string | null>(null)
   const [coverLetterLoading, setCoverLetterLoading] = useState(false)
   const [coverLetterError, setCoverLetterError] = useState<string | null>(null)
@@ -75,9 +76,19 @@ export function JobPreviewModal({ job, onClose, onUserActionChange }: Props) {
               {[job.company, job.site, job.location].filter(Boolean).join(' · ')}
             </div>
           </div>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
-            ✕
-          </button>
+          <div className="modal-header-actions">
+            <button
+              type="button"
+              className={`dismiss-toggle${job.dismissed ? ' dismiss-toggle-active' : ''}`}
+              onClick={() => onDismissChange(job, !job.dismissed)}
+              title={job.dismissed ? 'Show this job in the dashboard again' : 'Hide this job from the dashboard'}
+            >
+              {job.dismissed ? 'Restore' : 'Not for me'}
+            </button>
+            <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
+              ✕
+            </button>
+          </div>
         </div>
 
         <div className="modal-body">

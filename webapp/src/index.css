@@ -42,12 +42,20 @@
   --jobtype-unknown-bg: var(--stage-discovered-bg);
   --jobtype-unknown-fg: var(--stage-discovered-fg);
 
-  --useraction-notforme-bg: var(--stage-failed-bg);
-  --useraction-notforme-fg: var(--stage-failed-fg);
   --useraction-needtailor-bg: var(--stage-scored-bg);
   --useraction-needtailor-fg: var(--stage-scored-fg);
   --useraction-needautoapply-bg: var(--stage-applying-bg);
   --useraction-needautoapply-fg: var(--stage-applying-fg);
+  --useraction-applied-bg: var(--stage-applied-bg);
+  --useraction-applied-fg: var(--stage-applied-fg);
+  --useraction-interviewing-bg: var(--stage-tailored-bg);
+  --useraction-interviewing-fg: var(--stage-tailored-fg);
+  --useraction-offer-bg: var(--stage-cover-bg);
+  --useraction-offer-fg: var(--stage-cover-fg);
+  --useraction-rejected-bg: var(--error-bg);
+  --useraction-rejected-fg: var(--error-fg);
+  --useraction-closed-bg: var(--stage-discovered-bg);
+  --useraction-closed-fg: var(--stage-discovered-fg);
 
   color-scheme: light;
 }
@@ -147,12 +155,20 @@
   --jobtype-unknown-bg: var(--stage-discovered-bg);
   --jobtype-unknown-fg: var(--stage-discovered-fg);
 
-  --useraction-notforme-bg: var(--stage-failed-bg);
-  --useraction-notforme-fg: var(--stage-failed-fg);
   --useraction-needtailor-bg: var(--stage-scored-bg);
   --useraction-needtailor-fg: var(--stage-scored-fg);
   --useraction-needautoapply-bg: var(--stage-applying-bg);
   --useraction-needautoapply-fg: var(--stage-applying-fg);
+  --useraction-applied-bg: var(--stage-applied-bg);
+  --useraction-applied-fg: var(--stage-applied-fg);
+  --useraction-interviewing-bg: var(--stage-tailored-bg);
+  --useraction-interviewing-fg: var(--stage-tailored-fg);
+  --useraction-offer-bg: var(--stage-cover-bg);
+  --useraction-offer-fg: var(--stage-cover-fg);
+  --useraction-rejected-bg: var(--error-bg);
+  --useraction-rejected-fg: var(--error-fg);
+  --useraction-closed-bg: var(--stage-discovered-bg);
+  --useraction-closed-fg: var(--stage-discovered-fg);
 
   color-scheme: light;
 }
@@ -201,12 +217,20 @@
   --jobtype-unknown-bg: var(--stage-discovered-bg);
   --jobtype-unknown-fg: var(--stage-discovered-fg);
 
-  --useraction-notforme-bg: var(--stage-failed-bg);
-  --useraction-notforme-fg: var(--stage-failed-fg);
   --useraction-needtailor-bg: var(--stage-scored-bg);
   --useraction-needtailor-fg: var(--stage-scored-fg);
   --useraction-needautoapply-bg: var(--stage-applying-bg);
   --useraction-needautoapply-fg: var(--stage-applying-fg);
+  --useraction-applied-bg: var(--stage-applied-bg);
+  --useraction-applied-fg: var(--stage-applied-fg);
+  --useraction-interviewing-bg: var(--stage-tailored-bg);
+  --useraction-interviewing-fg: var(--stage-tailored-fg);
+  --useraction-offer-bg: var(--stage-cover-bg);
+  --useraction-offer-fg: var(--stage-cover-fg);
+  --useraction-rejected-bg: var(--error-bg);
+  --useraction-rejected-fg: var(--error-fg);
+  --useraction-closed-bg: var(--stage-discovered-bg);
+  --useraction-closed-fg: var(--stage-discovered-fg);
 
   color-scheme: dark;
 }

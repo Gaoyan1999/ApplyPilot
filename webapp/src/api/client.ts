@@ -1,4 +1,4 @@
-import type { Job, SearchConfig, SearchStatus, Status, UserAction } from './types'
+import type { Job, PromptsConfig, SearchConfig, SearchStatus, Status, UserAction } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -45,6 +45,14 @@ export function saveSearchConfig(config: SearchConfig): Promise<SearchConfig> {
   return sendJson<SearchConfig>('/api/search/config', 'PUT', config)
 }
 
+export function getPrompts(): Promise<PromptsConfig> {
+  return getJson<PromptsConfig>('/api/prompts')
+}
+
+export function savePrompts(body: { cover_letter: string; tailoring: string; scoring: string }): Promise<PromptsConfig> {
+  return sendJson<PromptsConfig>('/api/prompts', 'PUT', body)
+}
+
 export function runSearch(): Promise<SearchStatus> {
   return sendJson<SearchStatus>('/api/search/run', 'POST')
 }
@@ -67,6 +75,10 @@ export function confirmSearchResults(): Promise<{ ok: boolean }> {
 
 export function setJobUserAction(url: string, userAction: UserAction | null): Promise<Job> {
   return sendJson<Job>(`/api/jobs/${encodeURIComponent(url)}`, 'PATCH', { user_action: userAction })
+}
+
+export function setJobDismissed(url: string, dismissed: boolean): Promise<Job> {
+  return sendJson<Job>(`/api/jobs/${encodeURIComponent(url)}`, 'PATCH', { dismissed })
 }
 
 export interface CoverLetterText {

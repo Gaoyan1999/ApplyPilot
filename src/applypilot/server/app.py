@@ -2,9 +2,10 @@
 
 Mostly read-only: serves job/pipeline state from the SQLite database to the
 React frontend in ../../webapp. The only writes are editing searches.yaml
-(/api/search/config) and triggering a discover -> enrich -> score run
-(/api/search/run). No auth (local-only tool). Live updates are done via
-client-side polling, not WebSockets.
+(/api/search/config), editing prompt template overrides (/api/prompts), and
+triggering a discover -> enrich -> score run (/api/search/run). No auth
+(local-only tool). Live updates are done via client-side polling, not
+WebSockets.
 """
 
 import logging
@@ -18,8 +19,17 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from rich.console import Console
 
-from applypilot.config import get_tier, load_search_config, save_search_config
+from applypilot.config import (
+    get_tier,
+    load_prompt_overrides,
+    load_search_config,
+    save_prompt_overrides,
+    save_search_config,
+)
 from applypilot.database import get_connection, get_stats, init_db
+from applypilot.scoring.cover_letter import DEFAULT_COVER_LETTER_TEMPLATE
+from applypilot.scoring.scorer import DEFAULT_SCORING_TEMPLATE
+from applypilot.scoring.tailor import DEFAULT_TAILOR_TEMPLATE
 from applypilot.server import search_state
 from applypilot.server.stages import STAGE_ORDER, USER_ACTIONS, compute_stage
 
@@ -61,7 +71,7 @@ _JOB_FIELDS = [
     "tailored_at", "tailor_attempts",
     "cover_letter_path", "cover_letter_at", "cover_attempts",
     "applied_at", "apply_status", "apply_error", "apply_attempts",
-    "detail_error", "user_action",
+    "detail_error", "user_action", "dismissed",
 ]
 
 
@@ -119,6 +129,7 @@ def get_jobs() -> list[dict]:
     result = []
     for job in jobs:
         out = {field: job.get(field) for field in _JOB_FIELDS}
+        out["dismissed"] = bool(out.get("dismissed"))
         out["stage"] = compute_stage(job)
         result.append(out)
     return result
@@ -126,25 +137,48 @@ def get_jobs() -> list[dict]:
 
 class UserActionBody(BaseModel):
     user_action: str | None = None
+    dismissed: bool | None = None
 
 
 @app.patch("/api/jobs/{url:path}")
 def update_job_user_action(url: str, body: UserActionBody) -> dict:
-    if body.user_action is not None and body.user_action not in USER_ACTIONS:
+    """Partial update of a job's manual annotations.
+
+    Only fields actually present in the request body are touched -- e.g. a
+    request with just `{"dismissed": true}` leaves `user_action` untouched,
+    and vice versa. `user_action` and `dismissed` are independent: a job can
+    be dismissed regardless of whatever user_action it also has, or none.
+    """
+    fields_set = body.model_fields_set
+    if "user_action" in fields_set and body.user_action is not None and body.user_action not in USER_ACTIONS:
         raise HTTPException(
             status_code=400,
             detail=f"user_action must be one of {USER_ACTIONS} or null",
         )
+    if not fields_set:
+        raise HTTPException(status_code=400, detail="No fields to update")
 
+    updates: dict[str, object] = {}
+    if "user_action" in fields_set:
+        updates["user_action"] = body.user_action
+    if "dismissed" in fields_set:
+        updates["dismissed"] = 1 if body.dismissed else 0
+
+    set_clause = ", ".join(f"{col} = ?" for col in updates)
     conn = get_connection()
     cursor = conn.execute(
-        "UPDATE jobs SET user_action = ? WHERE url = ?", (body.user_action, url)
+        f"UPDATE jobs SET {set_clause} WHERE url = ?", (*updates.values(), url)
     )
     conn.commit()
     if cursor.rowcount == 0:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    return {"url": url, "user_action": body.user_action}
+    response: dict[str, object] = {"url": url}
+    if "user_action" in updates:
+        response["user_action"] = updates["user_action"]
+    if "dismissed" in updates:
+        response["dismissed"] = bool(updates["dismissed"])
+    return response
 
 
 @app.get("/api/jobs/{url:path}/cover-letter")
@@ -228,6 +262,43 @@ def get_search_config() -> dict:
 def put_search_config(body: SearchConfigBody) -> dict:
     saved = save_search_config(body.model_dump())
     return _public_search_config(saved)
+
+
+class PromptsBody(BaseModel):
+    cover_letter: str = ""
+    tailoring: str = ""
+    scoring: str = ""
+
+
+_PROMPT_DEFAULTS = {
+    "cover_letter": DEFAULT_COVER_LETTER_TEMPLATE,
+    "tailoring": DEFAULT_TAILOR_TEMPLATE,
+    "scoring": DEFAULT_SCORING_TEMPLATE,
+}
+
+
+def _effective_prompts() -> dict:
+    """Shape stored overrides + built-in defaults into the Settings-page payload."""
+    overrides = load_prompt_overrides()
+    return {
+        key: {
+            "text": overrides.get(key, default),
+            "default": default,
+            "is_custom": key in overrides,
+        }
+        for key, default in _PROMPT_DEFAULTS.items()
+    }
+
+
+@app.get("/api/prompts")
+def get_prompts() -> dict:
+    return _effective_prompts()
+
+
+@app.put("/api/prompts")
+def put_prompts(body: PromptsBody) -> dict:
+    save_prompt_overrides(body.model_dump())
+    return _effective_prompts()
 
 
 @app.post("/api/search/run", status_code=202)
