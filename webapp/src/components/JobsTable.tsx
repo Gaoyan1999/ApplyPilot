@@ -1,7 +1,12 @@
 import { Fragment, useMemo } from 'react'
 import type { Job, UserAction } from '../api/types'
-import { BUCKET_LABELS, BUCKET_ORDER, getDateBucket, type DateBucket } from '../lib/dateBuckets'
-import { formatDate } from '../lib/format'
+import {
+  compareDateGroupKeysDesc,
+  formatDateGroupLabel,
+  getDateGroupKey,
+  type DateGroupKey,
+} from '../lib/dateBuckets'
+import { formatTime } from '../lib/format'
 import { useLocalStorageState } from '../hooks/useLocalStorageState'
 import { JobTypeBadge } from './JobTypeBadge'
 import { ScorePill } from './ScorePill'
@@ -20,31 +25,75 @@ interface Props {
   onUserActionChange: (job: Job, value: UserAction | null) => void
 }
 
-const COLUMNS: { key: SortKey; label: string }[] = [
-  { key: 'title', label: 'Title' },
-  { key: 'company', label: 'Company' },
-  { key: 'site', label: 'Link' },
-  { key: 'job_type', label: 'Job Type' },
-  { key: 'fit_score', label: 'Score' },
-  { key: 'discovered_at', label: 'Discovered' },
+type ColumnKey = SortKey | 'action'
+
+const COLUMNS: { key: SortKey; label: string; defaultWidth: number }[] = [
+  { key: 'title', label: 'Title', defaultWidth: 280 },
+  { key: 'company', label: 'Company', defaultWidth: 160 },
+  { key: 'site', label: 'Link', defaultWidth: 60 },
+  { key: 'job_type', label: 'Job Type', defaultWidth: 120 },
+  { key: 'fit_score', label: 'Score', defaultWidth: 90 },
+  { key: 'discovered_at', label: 'Discovered', defaultWidth: 90 },
 ]
 
+const ACTION_COLUMN_KEY: ColumnKey = 'action'
+const DEFAULT_ACTION_WIDTH = 140
+const MIN_COLUMN_WIDTH = 48
+
+const DEFAULT_COLUMN_WIDTHS: Record<ColumnKey, number> = {
+  ...Object.fromEntries(COLUMNS.map((col) => [col.key, col.defaultWidth])),
+  [ACTION_COLUMN_KEY]: DEFAULT_ACTION_WIDTH,
+} as Record<ColumnKey, number>
+
 export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview, onUserActionChange }: Props) {
-  const [collapsedBuckets, setCollapsedBuckets] = useLocalStorageState<DateBucket[]>(
+  const [collapsedBuckets, setCollapsedBuckets] = useLocalStorageState<DateGroupKey[]>(
     'applypilot-collapsed-date-buckets',
     [],
   )
 
+  const [columnWidths, setColumnWidths] = useLocalStorageState<Record<ColumnKey, number>>(
+    'applypilot-jobs-table-column-widths',
+    DEFAULT_COLUMN_WIDTHS,
+  )
+
+  function startResize(key: ColumnKey, e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startWidth = columnWidths[key] ?? DEFAULT_COLUMN_WIDTHS[key]
+    document.body.classList.add('col-resizing')
+
+    function onMouseMove(ev: MouseEvent) {
+      const width = Math.max(MIN_COLUMN_WIDTH, startWidth + (ev.clientX - startX))
+      setColumnWidths((prev) => ({ ...prev, [key]: width }))
+    }
+
+    function onMouseUp() {
+      document.body.classList.remove('col-resizing')
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+  }
+
   const jobsByBucket = useMemo(() => {
-    const map = new Map<DateBucket, Job[]>()
-    for (const bucket of BUCKET_ORDER) map.set(bucket, [])
+    const map = new Map<DateGroupKey, Job[]>()
     for (const job of jobs) {
-      map.get(getDateBucket(job.discovered_at))!.push(job)
+      const key = getDateGroupKey(job.discovered_at)
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(job)
     }
     return map
   }, [jobs])
 
-  function toggleBucket(bucket: DateBucket) {
+  const bucketOrder = useMemo(
+    () => Array.from(jobsByBucket.keys()).sort(compareDateGroupKeysDesc),
+    [jobsByBucket],
+  )
+
+  function toggleBucket(bucket: DateGroupKey) {
     setCollapsedBuckets((prev) =>
       prev.includes(bucket) ? prev.filter((b) => b !== bucket) : [...prev, bucket],
     )
@@ -56,20 +105,38 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview, onUserAct
 
   return (
     <div className="jobs-table-wrap">
-      <table className="jobs-table">
+      <table className="jobs-table" style={{ tableLayout: 'fixed' }}>
+        <colgroup>
+          {COLUMNS.map((col) => (
+            <col key={col.key} style={{ width: columnWidths[col.key] ?? col.defaultWidth }} />
+          ))}
+          <col style={{ width: columnWidths[ACTION_COLUMN_KEY] ?? DEFAULT_ACTION_WIDTH }} />
+        </colgroup>
         <thead>
           <tr>
             {COLUMNS.map((col) => (
               <th key={col.key} onClick={() => onSort(col.key)}>
                 {col.label}
                 {sortKey === col.key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                <div
+                  className="column-resize-handle"
+                  onMouseDown={(e) => startResize(col.key, e)}
+                  onClick={(e) => e.stopPropagation()}
+                />
               </th>
             ))}
-            <th>Action</th>
+            <th>
+              Action
+              <div
+                className="column-resize-handle"
+                onMouseDown={(e) => startResize(ACTION_COLUMN_KEY, e)}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </th>
           </tr>
         </thead>
         <tbody>
-          {BUCKET_ORDER.map((bucket) => {
+          {bucketOrder.map((bucket) => {
             const bucketJobs = jobsByBucket.get(bucket) ?? []
             if (bucketJobs.length === 0) return null
             const collapsed = collapsedBuckets.includes(bucket)
@@ -78,7 +145,7 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview, onUserAct
                 <tr className="jobs-table-group-row" onClick={() => toggleBucket(bucket)}>
                   <td colSpan={COLUMNS.length + 1} className="jobs-table-group-header">
                     <span className={`group-chevron${collapsed ? ' group-chevron-collapsed' : ''}`}>▾</span>
-                    {BUCKET_LABELS[bucket]}
+                    {formatDateGroupLabel(bucket)}
                     <span className="group-count">{bucketJobs.length}</span>
                   </td>
                 </tr>
@@ -107,7 +174,7 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview, onUserAct
                       <td>
                         <ScorePill score={job.fit_score} />
                       </td>
-                      <td>{formatDate(job.discovered_at)}</td>
+                      <td>{formatTime(job.discovered_at)}</td>
                       <td>
                         <UserActionSelect
                           value={job.user_action}
