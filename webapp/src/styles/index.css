@@ -290,6 +290,27 @@
   word-break: break-word;
 }
 
+.search-discover-log {
+  margin: 0;
+  padding: 8px 10px;
+  list-style: none;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.search-discover-log li {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Progress bar */
 .progress-bar-row {
   display: flex;

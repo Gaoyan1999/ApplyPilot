@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   ApiError,
   confirmSearchResults,
@@ -78,6 +78,29 @@ function discoverSummaryText(status: SearchStatus): string {
   )
 }
 
+/** Scrolling per-query result log, mirroring the backend terminal output --
+ * e.g. `["graduate software engineer" in Australia (remote) [tier 1]] 50
+ * results -> 21 new, 4 dupes, 24 filtered (location)`. Pinned to the bottom
+ * so the newest line is always visible as more come in. */
+function DiscoverLog({ lines }: { lines: string[] }) {
+  const ref = useRef<HTMLUListElement>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [lines])
+
+  if (lines.length === 0) return null
+
+  return (
+    <ul className="search-discover-log" ref={ref}>
+      {lines.map((line, i) => (
+        <li key={i}>{line}</li>
+      ))}
+    </ul>
+  )
+}
+
 function SiteChips({ status }: { status: SearchStatus }) {
   const sites = Object.entries(status.discover_by_site)
   if (sites.length === 0) return null
@@ -104,6 +127,7 @@ function SearchStepBody({ status, isCurrent }: { status: SearchStatus; isCurrent
         {currentQueryText(status) && (
           <p className="search-progress-summary">{currentQueryText(status)}</p>
         )}
+        <DiscoverLog lines={status.discover_log} />
         <SiteChips status={status} />
       </>
     )

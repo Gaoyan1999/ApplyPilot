@@ -548,6 +548,16 @@ def _full_crawl(
             log.info("Progress: %d/%d queries done (%d new, %d dupes, %d errors)",
                      completed, len(searches), total_new, total_existing, total_errors)
 
+        # Same shape as _run_one_search's own log line -- surfaced to the
+        # frontend so the dashboard can show exactly what the terminal shows,
+        # e.g. `["graduate software engineer" in Australia (remote) [tier 1]]
+        # 50 results -> 21 new, 4 dupes, 24 filtered (location)`.
+        log_line = f"[{result['label']}] {result['total']} results -> {result['new']} new, {result['existing']} dupes"
+        if result["filtered"]:
+            log_line += f", {result['filtered']} filtered (location)"
+        if result["errors"]:
+            log_line += " (failed)"
+
         if on_progress:
             on_progress({
                 "queries_done": completed,
@@ -558,6 +568,7 @@ def _full_crawl(
                 "by_site": dict(total_by_site),
                 "current_query": None,
                 "current_location": None,
+                "log_line": log_line,
             })
 
     # Final stats

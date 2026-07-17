@@ -93,6 +93,7 @@ export interface SearchStatus {
   discover_by_site: Record<string, number>
   current_query: string | null
   current_location: string | null
+  discover_log: string[]
   enriched: number
   enrich_total: number
   scored: number
