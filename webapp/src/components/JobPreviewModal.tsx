@@ -45,6 +45,11 @@ export function JobPreviewModal({
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
+  // Keyed on job.url alone, not job.cover_letter_path: generating a cover
+  // letter already sets coverLetterText locally from the response, and the
+  // refresh that follows updates cover_letter_path on this same job -- keying
+  // on that too would re-fetch text we already have. Only switching to a
+  // different job should trigger a fresh load.
   useEffect(() => {
     setCoverLetterText(null)
     setCoverLetterError(null)
@@ -58,7 +63,7 @@ export function JobPreviewModal({
     return () => {
       cancelled = true
     }
-  }, [job.url, job.cover_letter_path])
+  }, [job.url])
 
   async function handleGenerateCoverLetter() {
     setCoverLetterLoading(true)
