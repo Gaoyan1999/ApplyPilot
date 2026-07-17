@@ -26,7 +26,6 @@ function PromptField({ label, description, value, onChange, onReset, resetDisabl
     <div className="prompt-field">
       <p className="prompt-field-description">{description}</p>
       <textarea
-        rows={16}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         spellCheck={false}
