@@ -144,11 +144,6 @@
   margin-bottom: 16px;
 }
 
-.prompt-field label {
-  font-size: 13px;
-  font-weight: 600;
-}
-
 .prompt-field-description {
   font-size: 12px;
   color: var(--text-muted);
