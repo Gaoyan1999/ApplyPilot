@@ -96,7 +96,6 @@ function SearchStepBody({ status, isCurrent }: { status: SearchStatus; isCurrent
       <>
         <p className="search-stage-description">{STAGE_DESCRIPTIONS.discover}</p>
         <ProgressBar done={status.queries} total={status.queries_total} label="Queries" />
-        <p className="search-progress-summary">{discoverSummaryText(status)}</p>
         <SiteChips status={status} />
       </>
     )
