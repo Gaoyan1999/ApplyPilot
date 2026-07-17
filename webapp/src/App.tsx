@@ -52,6 +52,7 @@ function App() {
     'applypilot-filter-user-action-mode',
     'is',
   )
+  const [showDismissed, setShowDismissed] = useLocalStorageState('applypilot-show-dismissed', false)
   const [sortKey, setSortKey] = useState<SortKey>('discovered_at')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -62,6 +63,7 @@ function App() {
     if (!jobs) return []
     const q = search.trim().toLowerCase()
     const filtered = jobs.filter((job) => {
+      if (job.user_action === 'not_for_me' && !showDismissed) return false
       if (!matchesMultiSelect(jobTypeFilterMode, jobTypeFilter, job.job_type ?? 'unknown')) return false
       if (!matchesMultiSelect(userActionFilterMode, userActionFilter, job.user_action)) return false
       if (!q) return true
@@ -76,6 +78,7 @@ function App() {
   }, [
     jobs,
     search,
+    showDismissed,
     jobTypeFilter,
     jobTypeFilterMode,
     userActionFilter,
@@ -110,7 +113,12 @@ function App() {
         <h1>ApplyPilot Dashboard</h1>
         <div className="app-header-actions">
           <SearchPanel />
-          <SettingsModal theme={theme} onToggleTheme={toggleTheme} />
+          <SettingsModal
+            theme={theme}
+            onToggleTheme={toggleTheme}
+            showDismissed={showDismissed}
+            onToggleShowDismissed={() => setShowDismissed((v) => !v)}
+          />
         </div>
       </div>
       <p className="subtitle">Live view of your job pipeline, refreshed every few seconds.</p>

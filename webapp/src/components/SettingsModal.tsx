@@ -78,20 +78,23 @@ function PromptTabContent({
 interface Props {
   theme: Theme
   onToggleTheme: () => void
+  showDismissed: boolean
+  onToggleShowDismissed: () => void
 }
 
 const EMPTY_DEFAULTS = { cover_letter: '', tailoring: '', scoring: '' }
 
-type SettingsTab = 'appearance' | 'cover_letter' | 'scoring' | 'tailoring'
+type SettingsTab = 'appearance' | 'dashboard' | 'cover_letter' | 'scoring' | 'tailoring'
 
 const TABS: { key: SettingsTab; label: string }[] = [
   { key: 'appearance', label: 'Appearance' },
+  { key: 'dashboard', label: 'Dashboard' },
   { key: 'cover_letter', label: 'Cover Letter' },
   { key: 'scoring', label: 'Scoring' },
   { key: 'tailoring', label: 'Tailoring' },
 ]
 
-export function SettingsModal({ theme, onToggleTheme }: Props) {
+export function SettingsModal({ theme, onToggleTheme, showDismissed, onToggleShowDismissed }: Props) {
   const [open, setOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<SettingsTab>('appearance')
 
@@ -195,6 +198,23 @@ export function SettingsModal({ theme, onToggleTheme }: Props) {
                       <span className="field-label-inline">Theme</span>
                       <ThemeToggle theme={theme} onToggle={onToggleTheme} />
                     </div>
+                  </>
+                )}
+
+                {activeTab === 'dashboard' && (
+                  <>
+                    <h3 className="settings-content-title">Dashboard</h3>
+                    <label className="toggle-check">
+                      <input
+                        type="checkbox"
+                        checked={showDismissed}
+                        onChange={onToggleShowDismissed}
+                      />
+                      Show dismissed jobs (marked "Not for me")
+                    </label>
+                    <p className="prompt-field-description">
+                      Jobs marked "Not for me" are hidden from the dashboard by default. Turn this on to see them again.
+                    </p>
                   </>
                 )}
 

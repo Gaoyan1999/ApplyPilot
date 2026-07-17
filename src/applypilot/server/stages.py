@@ -20,7 +20,15 @@ MAX_ATTEMPTS = 5
 
 # Manual, user-assigned label on a job -- independent of the auto-computed
 # pipeline `stage` above. Stored in the `user_action` column.
-USER_ACTIONS = ["not_for_me", "need_tailor", "need_auto_apply"]
+#
+# Two groups: pre-application reminders (things the user still needs to do),
+# and post-application tracking (for jobs applied to manually, outside the
+# automated Chrome apply pipeline -- which has its own separate apply_status/
+# applied_at fields feeding into `compute_stage` above).
+USER_ACTIONS = [
+    "not_for_me", "need_tailor", "need_auto_apply",
+    "applied", "interviewing", "offer", "rejected", "closed",
+]
 
 
 def compute_stage(job: dict) -> str:

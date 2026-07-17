@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { UserAction } from '../api/types'
 import { CLASS_BY_USER_ACTION, LABEL_BY_USER_ACTION } from './UserActionBadge'
-import { USER_ACTION_ORDER } from './userActionOrder'
+import { APPLICATION_STATUS_ACTIONS, USER_ACTION_ORDER } from './userActionOrder'
 
 interface Props {
   value: UserAction | null
@@ -95,17 +95,21 @@ export function UserActionSelect({ value, onChange }: Props) {
             >
               <span className="user-action-empty">— None</span>
             </button>
-            {USER_ACTION_ORDER.map((action) => (
-              <button
-                key={action}
-                type="button"
-                className={`user-action-option${localValue === action ? ' user-action-option-selected' : ''}`}
-                onClick={() => select(action)}
-              >
-                <span className={`user-action-badge ${CLASS_BY_USER_ACTION[action]}`}>
-                  {LABEL_BY_USER_ACTION[action]}
-                </span>
-              </button>
+            {USER_ACTION_ORDER.map((action, i) => (
+              <div key={action}>
+                {APPLICATION_STATUS_ACTIONS[0] === action && i > 0 && (
+                  <div className="user-action-option-divider" />
+                )}
+                <button
+                  type="button"
+                  className={`user-action-option${localValue === action ? ' user-action-option-selected' : ''}`}
+                  onClick={() => select(action)}
+                >
+                  <span className={`user-action-badge ${CLASS_BY_USER_ACTION[action]}`}>
+                    {LABEL_BY_USER_ACTION[action]}
+                  </span>
+                </button>
+              </div>
             ))}
           </div>,
           document.body,

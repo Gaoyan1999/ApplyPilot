@@ -4,12 +4,22 @@ export const LABEL_BY_USER_ACTION: Record<UserAction, string> = {
   not_for_me: 'Not for me',
   need_tailor: 'Need tailor',
   need_auto_apply: 'Need auto apply',
+  applied: 'Applied',
+  interviewing: 'Interviewing',
+  offer: 'Offer',
+  rejected: 'Rejected',
+  closed: 'Closed',
 }
 
 export const CLASS_BY_USER_ACTION: Record<UserAction, string> = {
   not_for_me: 'user-action-not_for_me',
   need_tailor: 'user-action-need_tailor',
   need_auto_apply: 'user-action-need_auto_apply',
+  applied: 'user-action-applied',
+  interviewing: 'user-action-interviewing',
+  offer: 'user-action-offer',
+  rejected: 'user-action-rejected',
+  closed: 'user-action-closed',
 }
 
 export function UserActionBadge({ userAction }: { userAction: UserAction | null }) {
