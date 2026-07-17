@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   ApiError,
   confirmSearchResults,
@@ -9,7 +9,7 @@ import {
   runSearch,
   saveSearchConfig,
 } from '../api/client'
-import type { Job, SearchConfig, SearchRunStage, SearchStatus } from '../api/types'
+import type { DiscoverLogEntry, Job, SearchConfig, SearchRunStage, SearchStatus } from '../api/types'
 import { ProgressBar } from './ProgressBar'
 import { ScorePill } from './ScorePill'
 import { SEARCHABLE_SITES, SiteIcon, SITE_META } from './SiteIcon'
@@ -65,11 +65,60 @@ function displayStageIndex(stage: SearchRunStage): number {
   return DISPLAY_STAGES.length
 }
 
+function discoverStatusText(status: SearchStatus): string {
+  if (status.current_query && status.current_location) {
+    return `Searching job boards for postings that match your saved queries — currently querying "${status.current_query}" in ${status.current_location}.`
+  }
+  return STAGE_DESCRIPTIONS.discover
+}
+
 function discoverSummaryText(status: SearchStatus): string {
   return (
     `Found ${status.new} new job${status.new === 1 ? '' : 's'}` +
     (status.existing > 0 ? ` (${status.existing} already known)` : '') +
     ` across ${status.queries_total} search${status.queries_total === 1 ? '' : 'es'}.`
+  )
+}
+
+/** Scrolling per-query result log. One row per query x location combo, with
+ * count badges instead of a raw formatted backend string -- new/dupes/
+ * filtered aren't mutually exclusive with "failed" (a storage error can
+ * still have filtered a nonzero number of results before it hit the DB
+ * error), so all applicable badges show together. Pinned to the bottom so
+ * the newest row is always visible as more come in. */
+function DiscoverLogRow({ entry }: { entry: DiscoverLogEntry }) {
+  return (
+    <li className="search-discover-log-row">
+      <span className="search-discover-log-query" title={`"${entry.query}" in ${entry.location}`}>
+        "{entry.query}" in {entry.location}
+      </span>
+      {entry.tier > 0 && <span className="search-discover-log-tier">tier {entry.tier}</span>}
+      <span className="discover-log-badges">
+        {entry.new > 0 && <span className="discover-log-badge new">+{entry.new} new</span>}
+        {entry.existing > 0 && <span className="discover-log-badge dupes">{entry.existing} dupes</span>}
+        {entry.filtered > 0 && <span className="discover-log-badge filtered">{entry.filtered} filtered</span>}
+        {entry.errors > 0 && <span className="discover-log-badge failed">failed</span>}
+      </span>
+    </li>
+  )
+}
+
+function DiscoverLog({ entries }: { entries: DiscoverLogEntry[] }) {
+  const ref = useRef<HTMLUListElement>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [entries])
+
+  if (entries.length === 0) return null
+
+  return (
+    <ul className="search-discover-log" ref={ref}>
+      {entries.map((entry, i) => (
+        <DiscoverLogRow entry={entry} key={i} />
+      ))}
+    </ul>
   )
 }
 
@@ -94,9 +143,9 @@ function SearchStepBody({ status, isCurrent }: { status: SearchStatus; isCurrent
   if (isCurrent && status.stage === 'discover') {
     return (
       <>
-        <p className="search-stage-description">{STAGE_DESCRIPTIONS.discover}</p>
+        <p className="search-stage-description">{discoverStatusText(status)}</p>
         <ProgressBar done={status.queries} total={status.queries_total} label="Queries" />
-        <p className="search-progress-summary">{discoverSummaryText(status)}</p>
+        <DiscoverLog entries={status.discover_log} />
         <SiteChips status={status} />
       </>
     )

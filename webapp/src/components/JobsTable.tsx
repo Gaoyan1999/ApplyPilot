@@ -5,7 +5,6 @@ import { formatDate } from '../lib/format'
 import { useLocalStorageState } from '../hooks/useLocalStorageState'
 import { JobTypeBadge } from './JobTypeBadge'
 import { ScorePill } from './ScorePill'
-import { StageBadge } from './StageBadge'
 import { SiteIcon } from './SiteIcon'
 import { UserActionSelect } from './UserActionSelect'
 
@@ -27,7 +26,6 @@ const COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'site', label: 'Link' },
   { key: 'job_type', label: 'Job Type' },
   { key: 'fit_score', label: 'Score' },
-  { key: 'stage', label: 'Stage' },
   { key: 'discovered_at', label: 'Discovered' },
 ]
 
@@ -108,9 +106,6 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview, onUserAct
                       </td>
                       <td>
                         <ScorePill score={job.fit_score} />
-                      </td>
-                      <td>
-                        <StageBadge stage={job.stage} />
                       </td>
                       <td>{formatDate(job.discovered_at)}</td>
                       <td>

@@ -31,6 +31,11 @@ STAGES = ("discover", "enrich", "score", "done")
 # memory for a run with a lot of individual failures.
 _MAX_WARNINGS = 50
 
+# Cap on how many per-query result entries (discover_log) we keep around for
+# the frontend's live log view -- a large crawl can have hundreds of query x
+# location combos.
+_MAX_LOG_LINES = 200
+
 _lock = threading.Lock()
 _state: dict = {
     "running": False,
@@ -43,6 +48,9 @@ _state: dict = {
     "existing": 0,
     "discover_errors": 0,
     "discover_by_site": {},
+    "current_query": None,
+    "current_location": None,
+    "discover_log": [],
     "enriched": 0,
     "enrich_total": 0,
     "scored": 0,
@@ -83,6 +91,9 @@ def start_search() -> bool:
             existing=0,
             discover_errors=0,
             discover_by_site={},
+            current_query=None,
+            current_location=None,
+            discover_log=[],
             enriched=0,
             enrich_total=0,
             scored=0,
@@ -106,6 +117,11 @@ def _on_discover_progress(evt: dict) -> None:
         _state["existing"] = evt["existing"]
         _state["discover_errors"] = evt["errors"]
         _state["discover_by_site"] = evt["by_site"]
+        _state["current_query"] = evt.get("current_query")
+        _state["current_location"] = evt.get("current_location")
+        log_entry = evt.get("log_entry")
+        if log_entry:
+            _state["discover_log"] = (_state["discover_log"] + [log_entry])[-_MAX_LOG_LINES:]
 
 
 def _on_enrich_progress(evt: dict) -> None:

@@ -83,8 +83,9 @@ def _load_location_config(search_cfg: dict) -> tuple[list[str], list[str]]:
 
     Falls back to sensible defaults if not defined in the YAML.
     """
-    accept = search_cfg.get("location_accept", [])
-    reject = search_cfg.get("location_reject_non_remote", [])
+    location_cfg = search_cfg.get("location", {})
+    accept = location_cfg.get("accept_patterns", [])
+    reject = location_cfg.get("reject_patterns", [])
     return accept, reject
 
 
@@ -271,6 +272,7 @@ def _run_one_search(
             kwargs["linkedin_fetch_description"] = True
         log.info("[%s] list stage -> querying %s (results_wanted=%d, hours_old=%d)",
                  label, ", ".join(other_sites), results_per_site, hours_old)
+        log.info("[%s] scrape_jobs payload: %s", label, {k: v for k, v in kwargs.items() if k != "proxies"})
         try:
             df = _scrape_with_retry(kwargs, max_retries=max_retries)
             all_dfs.append(df)
@@ -305,6 +307,9 @@ def _run_one_search(
             gd_kwargs["is_remote"] = True
         if proxy_config:
             gd_kwargs["proxies"] = [proxy_config["jobspy"]]
+        log.info("[%s] list stage -> querying glassdoor (results_wanted=%d, hours_old=%d)",
+                 label, results_per_site, hours_old)
+        log.info("[%s] scrape_jobs payload: %s", label, {k: v for k, v in gd_kwargs.items() if k != "proxies"})
         try:
             gd_df = _scrape_with_retry(gd_kwargs, max_retries=max_retries)
             all_dfs.append(gd_df)
@@ -506,9 +511,28 @@ def _full_crawl(
             "existing": 0,
             "errors": 0,
             "by_site": {},
+            "current_query": None,
+            "current_location": None,
         })
 
     for s in searches:
+        loc_label = f"{s['location']} (remote)" if s.get("remote") else s["location"]
+
+        # Reported before the (potentially slow) scrape call so a status
+        # poll mid-search shows what's actually in flight, not just the
+        # count of what's already finished.
+        if on_progress:
+            on_progress({
+                "queries_done": completed,
+                "queries_total": len(searches),
+                "new": total_new,
+                "existing": total_existing,
+                "errors": total_errors,
+                "by_site": dict(total_by_site),
+                "current_query": s["query"],
+                "current_location": loc_label,
+            })
+
         result = _run_one_search(
             s, sites, results_per_site, hours_old,
             proxy_config, defaults, max_retries,
@@ -527,6 +551,19 @@ def _full_crawl(
             log.info("Progress: %d/%d queries done (%d new, %d dupes, %d errors)",
                      completed, len(searches), total_new, total_existing, total_errors)
 
+        # Structured per-query result, surfaced to the frontend so it can
+        # render its own UI instead of parsing a formatted log string.
+        log_entry = {
+            "query": s["query"],
+            "location": loc_label,
+            "tier": s.get("tier", 0),
+            "total": result["total"],
+            "new": result["new"],
+            "existing": result["existing"],
+            "filtered": result["filtered"],
+            "errors": result["errors"],
+        }
+
         if on_progress:
             on_progress({
                 "queries_done": completed,
@@ -535,6 +572,9 @@ def _full_crawl(
                 "existing": total_existing,
                 "errors": total_errors,
                 "by_site": dict(total_by_site),
+                "current_query": None,
+                "current_location": None,
+                "log_entry": log_entry,
             })
 
     # Final stats

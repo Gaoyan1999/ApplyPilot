@@ -7,6 +7,7 @@ React frontend in ../../webapp. The only writes are editing searches.yaml
 client-side polling, not WebSockets.
 """
 
+import logging
 import sys
 import threading
 import webbrowser
@@ -21,6 +22,17 @@ from applypilot.config import get_tier, load_search_config, save_search_config
 from applypilot.database import get_connection, get_stats, init_db
 from applypilot.server import search_state
 from applypilot.server.stages import STAGE_ORDER, USER_ACTIONS, compute_stage
+
+# Configures the root logger so applypilot.* loggers (e.g. discovery.jobspy)
+# actually emit -- needed when this module is loaded directly by `uvicorn
+# applypilot.server.app:app` rather than via the CLI, since applypilot.cli
+# (the only other place that calls basicConfig) never gets imported in that
+# path. No-op if a handler is already configured (e.g. by the CLI).
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%H:%M:%S",
+)
 
 _NEEDS_LLM_KEY_DETAIL = (
     "This requires an LLM API key. Run 'applypilot init' or set "

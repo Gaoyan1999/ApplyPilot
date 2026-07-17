@@ -80,6 +80,17 @@ export interface SearchConfig {
 
 export type SearchRunStage = 'discover' | 'enrich' | 'score' | 'done' | null
 
+export interface DiscoverLogEntry {
+  query: string
+  location: string
+  tier: number
+  total: number
+  new: number
+  existing: number
+  filtered: number
+  errors: number
+}
+
 export interface SearchStatus {
   running: boolean
   stage: SearchRunStage
@@ -91,6 +102,9 @@ export interface SearchStatus {
   existing: number
   discover_errors: number
   discover_by_site: Record<string, number>
+  current_query: string | null
+  current_location: string | null
+  discover_log: DiscoverLogEntry[]
   enriched: number
   enrich_total: number
   scored: number
