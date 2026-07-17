@@ -48,8 +48,16 @@ interface Props {
 
 const EMPTY_DEFAULTS = { cover_letter: '', tailoring: '', scoring: '' }
 
+type SettingsTab = 'appearance' | 'prompts'
+
+const TABS: { key: SettingsTab; label: string }[] = [
+  { key: 'appearance', label: 'Appearance' },
+  { key: 'prompts', label: 'Prompts' },
+]
+
 export function SettingsModal({ theme, onToggleTheme }: Props) {
   const [open, setOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<SettingsTab>('appearance')
 
   const [promptsLoaded, setPromptsLoaded] = useState(false)
   const [promptsLoadError, setPromptsLoadError] = useState<string | null>(null)
@@ -130,51 +138,70 @@ export function SettingsModal({ theme, onToggleTheme }: Props) {
               </button>
             </div>
             <div className="settings-panel">
-              <div className="config-section">
-                <h3>Appearance</h3>
-                <div className="config-row">
-                  <span className="field-label-inline">Theme</span>
-                  <ThemeToggle theme={theme} onToggle={onToggleTheme} />
-                </div>
-              </div>
+              <nav className="settings-sidebar">
+                {TABS.map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    className={`settings-nav-item${activeTab === tab.key ? ' active' : ''}`}
+                    onClick={() => setActiveTab(tab.key)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </nav>
 
-              <div className="config-section">
-                <h3>Prompts</h3>
-                {promptsLoadError && <p className="search-result search-error">{promptsLoadError}</p>}
-                {!promptsLoaded && !promptsLoadError && <p className="search-result">Loading…</p>}
-                {promptsLoaded && (
+              <div className="settings-content">
+                {activeTab === 'appearance' && (
                   <>
-                    <PromptField
-                      label="Cover Letter"
-                      description="Structure and voice for the four paragraphs (Intro, Why This Company, Why You, Closing). Banned words, the anti-fabrication guardrails, and sign-off format are always enforced by the code, regardless of what you write here."
-                      value={coverLetterText}
-                      onChange={setCoverLetterText}
-                      onReset={() => setCoverLetterText(defaults.cover_letter)}
-                      resetDisabled={saving}
-                    />
-                    <PromptField
-                      label="Resume Tailoring"
-                      description="Recruiter-scan framing, tailoring rules, and voice guidance for rewriting your resume per job. Skills boundaries, banned words, hard fabrication rules, and the JSON output format are always enforced by the code."
-                      value={tailoringText}
-                      onChange={setTailoringText}
-                      onReset={() => setTailoringText(defaults.tailoring)}
-                      resetDisabled={saving}
-                    />
-                    <PromptField
-                      label="Job Scoring"
-                      description="The rubric (1-10 score bands, what factors matter) used to rate how well each job matches your resume. The exact response format the app parses is always enforced by the code."
-                      value={scoringText}
-                      onChange={setScoringText}
-                      onReset={() => setScoringText(defaults.scoring)}
-                      resetDisabled={saving}
-                    />
-                    <div className="config-actions">
-                      <button type="button" disabled={saving} onClick={handleSavePrompts}>
-                        {saving ? 'Saving…' : 'Save'}
-                      </button>
+                    <h3 className="settings-content-title">Appearance</h3>
+                    <div className="config-row">
+                      <span className="field-label-inline">Theme</span>
+                      <ThemeToggle theme={theme} onToggle={onToggleTheme} />
                     </div>
-                    {saveMessage && <span className="search-result">{saveMessage}</span>}
-                    {saveError && <span className="search-result search-error">{saveError}</span>}
+                  </>
+                )}
+
+                {activeTab === 'prompts' && (
+                  <>
+                    <h3 className="settings-content-title">Prompts</h3>
+                    {promptsLoadError && <p className="search-result search-error">{promptsLoadError}</p>}
+                    {!promptsLoaded && !promptsLoadError && <p className="search-result">Loading…</p>}
+                    {promptsLoaded && (
+                      <>
+                        <PromptField
+                          label="Cover Letter"
+                          description="Structure and voice for the four paragraphs (Intro, Why This Company, Why You, Closing). Banned words, the anti-fabrication guardrails, and sign-off format are always enforced by the code, regardless of what you write here."
+                          value={coverLetterText}
+                          onChange={setCoverLetterText}
+                          onReset={() => setCoverLetterText(defaults.cover_letter)}
+                          resetDisabled={saving}
+                        />
+                        <PromptField
+                          label="Resume Tailoring"
+                          description="Recruiter-scan framing, tailoring rules, and voice guidance for rewriting your resume per job. Skills boundaries, banned words, hard fabrication rules, and the JSON output format are always enforced by the code."
+                          value={tailoringText}
+                          onChange={setTailoringText}
+                          onReset={() => setTailoringText(defaults.tailoring)}
+                          resetDisabled={saving}
+                        />
+                        <PromptField
+                          label="Job Scoring"
+                          description="The rubric (1-10 score bands, what factors matter) used to rate how well each job matches your resume. The exact response format the app parses is always enforced by the code."
+                          value={scoringText}
+                          onChange={setScoringText}
+                          onReset={() => setScoringText(defaults.scoring)}
+                          resetDisabled={saving}
+                        />
+                        <div className="config-actions">
+                          <button type="button" disabled={saving} onClick={handleSavePrompts}>
+                            {saving ? 'Saving…' : 'Save'}
+                          </button>
+                        </div>
+                        {saveMessage && <span className="search-result">{saveMessage}</span>}
+                        {saveError && <span className="search-result search-error">{saveError}</span>}
+                      </>
+                    )}
                   </>
                 )}
               </div>
