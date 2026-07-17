@@ -271,6 +271,7 @@ def _run_one_search(
             kwargs["linkedin_fetch_description"] = True
         log.info("[%s] list stage -> querying %s (results_wanted=%d, hours_old=%d)",
                  label, ", ".join(other_sites), results_per_site, hours_old)
+        log.info("[%s] scrape_jobs payload: %s", label, {k: v for k, v in kwargs.items() if k != "proxies"})
         try:
             df = _scrape_with_retry(kwargs, max_retries=max_retries)
             all_dfs.append(df)
@@ -305,6 +306,9 @@ def _run_one_search(
             gd_kwargs["is_remote"] = True
         if proxy_config:
             gd_kwargs["proxies"] = [proxy_config["jobspy"]]
+        log.info("[%s] list stage -> querying glassdoor (results_wanted=%d, hours_old=%d)",
+                 label, results_per_site, hours_old)
+        log.info("[%s] scrape_jobs payload: %s", label, {k: v for k, v in gd_kwargs.items() if k != "proxies"})
         try:
             gd_df = _scrape_with_retry(gd_kwargs, max_retries=max_retries)
             all_dfs.append(gd_df)
