@@ -1,19 +1,13 @@
-import type { JobType, Stage, UserAction } from '../api/types'
+import type { JobType, UserAction } from '../api/types'
 import { CLASS_BY_JOB_TYPE, LABEL_BY_JOB_TYPE } from './JobTypeBadge'
 import { JOB_TYPE_ORDER } from './jobTypeOrder'
 import { MultiSelectFilter, type FilterMode } from './MultiSelectFilter'
-import { CLASS_BY_STAGE } from './StageBadge'
-import { STAGE_ORDER } from './stageOrder'
 import { CLASS_BY_USER_ACTION, LABEL_BY_USER_ACTION } from './UserActionBadge'
 import { USER_ACTION_ORDER } from './userActionOrder'
 
 interface Props {
   search: string
   onSearchChange: (value: string) => void
-  stageFilter: Stage[]
-  onStageFilterChange: (value: Stage[]) => void
-  stageFilterMode: FilterMode
-  onStageFilterModeChange: (mode: FilterMode) => void
   jobTypeFilter: JobType[]
   onJobTypeFilterChange: (value: JobType[]) => void
   jobTypeFilterMode: FilterMode
@@ -23,12 +17,6 @@ interface Props {
   userActionFilterMode: FilterMode
   onUserActionFilterModeChange: (mode: FilterMode) => void
 }
-
-const STAGE_OPTIONS = STAGE_ORDER.map((stage) => ({
-  value: stage,
-  label: stage,
-  colorClassName: CLASS_BY_STAGE[stage],
-}))
 
 const JOB_TYPE_OPTIONS = JOB_TYPE_ORDER.map((jobType) => ({
   value: jobType,
@@ -45,10 +33,6 @@ const USER_ACTION_OPTIONS = USER_ACTION_ORDER.map((action) => ({
 export function SearchFilterBar({
   search,
   onSearchChange,
-  stageFilter,
-  onStageFilterChange,
-  stageFilterMode,
-  onStageFilterModeChange,
   jobTypeFilter,
   onJobTypeFilterChange,
   jobTypeFilterMode,
@@ -70,14 +54,6 @@ export function SearchFilterBar({
         />
       </div>
       <div className="filter-pills-row">
-        <MultiSelectFilter
-          label="Stage"
-          options={STAGE_OPTIONS}
-          selected={stageFilter}
-          onChange={onStageFilterChange}
-          mode={stageFilterMode}
-          onModeChange={onStageFilterModeChange}
-        />
         <MultiSelectFilter
           label="Job Type"
           options={JOB_TYPE_OPTIONS}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ApiError, getJobs, getStatus, setJobUserAction } from './api/client'
-import type { Job, JobType, Stage, UserAction } from './api/types'
+import type { Job, JobType, UserAction } from './api/types'
 import { usePolling } from './hooks/usePolling'
 import { useTheme } from './hooks/useTheme'
 import { useLocalStorageState } from './hooks/useLocalStorageState'
@@ -11,6 +11,7 @@ import { JobsTable, type SortDir, type SortKey } from './components/JobsTable'
 import { ThemeToggle } from './components/ThemeToggle'
 import { JobPreviewModal } from './components/JobPreviewModal'
 import { SearchPanel } from './components/SearchPanel'
+import { SettingsModal } from './components/SettingsModal'
 import './styles/index.css'
 
 function matchesMultiSelect<T extends string>(mode: FilterMode, selected: T[], value: T | null): boolean {
@@ -39,11 +40,6 @@ function App() {
   const { data: jobs, error: jobsError } = usePolling(getJobs)
 
   const [search, setSearch] = useState('')
-  const [stageFilter, setStageFilter] = useLocalStorageState<Stage[]>('applypilot-filter-stage', [])
-  const [stageFilterMode, setStageFilterMode] = useLocalStorageState<FilterMode>(
-    'applypilot-filter-stage-mode',
-    'is',
-  )
   const [jobTypeFilter, setJobTypeFilter] = useLocalStorageState<JobType[]>('applypilot-filter-job-type', [])
   const [jobTypeFilterMode, setJobTypeFilterMode] = useLocalStorageState<FilterMode>(
     'applypilot-filter-job-type-mode',
@@ -67,7 +63,6 @@ function App() {
     if (!jobs) return []
     const q = search.trim().toLowerCase()
     const filtered = jobs.filter((job) => {
-      if (!matchesMultiSelect(stageFilterMode, stageFilter, job.stage)) return false
       if (!matchesMultiSelect(jobTypeFilterMode, jobTypeFilter, job.job_type ?? 'unknown')) return false
       if (!matchesMultiSelect(userActionFilterMode, userActionFilter, job.user_action)) return false
       if (!q) return true
@@ -82,8 +77,6 @@ function App() {
   }, [
     jobs,
     search,
-    stageFilter,
-    stageFilterMode,
     jobTypeFilter,
     jobTypeFilterMode,
     userActionFilter,
@@ -119,6 +112,7 @@ function App() {
         <div className="app-header-actions">
           <SearchPanel />
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
+          <SettingsModal />
         </div>
       </div>
       <p className="subtitle">Live view of your job pipeline, refreshed every few seconds.</p>
@@ -136,10 +130,6 @@ function App() {
       <SearchFilterBar
         search={search}
         onSearchChange={setSearch}
-        stageFilter={stageFilter}
-        onStageFilterChange={setStageFilter}
-        stageFilterMode={stageFilterMode}
-        onStageFilterModeChange={setStageFilterMode}
         jobTypeFilter={jobTypeFilter}
         onJobTypeFilterChange={setJobTypeFilter}
         jobTypeFilterMode={jobTypeFilterMode}

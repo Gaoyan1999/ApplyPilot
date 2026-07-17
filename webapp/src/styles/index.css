@@ -41,6 +41,34 @@
   height: 16px;
 }
 
+/* Settings */
+.settings-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.settings-trigger:hover {
+  background: var(--border);
+}
+
+.settings-trigger svg {
+  width: 16px;
+  height: 16px;
+}
+
+.modal-panel.settings-modal {
+  max-width: 420px;
+}
+
 .error-banner {
   background: var(--error-bg);
   color: var(--error-fg);
