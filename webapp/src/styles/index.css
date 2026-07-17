@@ -828,6 +828,8 @@ table.jobs-table {
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .jobs-table th {
@@ -838,6 +840,26 @@ table.jobs-table {
   background: var(--bg-subtle);
   position: sticky;
   top: 0;
+}
+
+.column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 6px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.column-resize-handle:hover,
+.column-resize-handle:active {
+  background: var(--border);
+}
+
+body.col-resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .jobs-table tbody tr:last-child td {
