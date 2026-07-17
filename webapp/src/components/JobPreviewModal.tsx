@@ -14,6 +14,7 @@ interface Props {
   onClose: () => void
   onUserActionChange: (job: Job, value: UserAction | null) => void
   onDismissChange: (job: Job, dismissed: boolean) => void
+  onCoverLetterGenerated: () => void
 }
 
 function MetaRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -25,7 +26,13 @@ function MetaRow({ label, children }: { label: string; children: React.ReactNode
   )
 }
 
-export function JobPreviewModal({ job, onClose, onUserActionChange, onDismissChange }: Props) {
+export function JobPreviewModal({
+  job,
+  onClose,
+  onUserActionChange,
+  onDismissChange,
+  onCoverLetterGenerated,
+}: Props) {
   const [coverLetterText, setCoverLetterText] = useState<string | null>(null)
   const [coverLetterLoading, setCoverLetterLoading] = useState(false)
   const [coverLetterError, setCoverLetterError] = useState<string | null>(null)
@@ -59,6 +66,7 @@ export function JobPreviewModal({ job, onClose, onUserActionChange, onDismissCha
     try {
       const res = await generateCoverLetter(job.url)
       setCoverLetterText(res.text)
+      onCoverLetterGenerated()
     } catch (e) {
       setCoverLetterError(e instanceof ApiError ? e.message : 'Failed to generate cover letter')
     } finally {
