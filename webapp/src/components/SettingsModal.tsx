@@ -84,11 +84,10 @@ interface Props {
 
 const EMPTY_DEFAULTS = { cover_letter: '', tailoring: '', scoring: '' }
 
-type SettingsTab = 'appearance' | 'dashboard' | 'cover_letter' | 'scoring' | 'tailoring'
+type SettingsTab = 'general' | 'cover_letter' | 'scoring' | 'tailoring'
 
 const TABS: { key: SettingsTab; label: string }[] = [
-  { key: 'appearance', label: 'Appearance' },
-  { key: 'dashboard', label: 'Dashboard' },
+  { key: 'general', label: 'General' },
   { key: 'cover_letter', label: 'Cover Letter' },
   { key: 'scoring', label: 'Scoring' },
   { key: 'tailoring', label: 'Tailoring' },
@@ -96,7 +95,7 @@ const TABS: { key: SettingsTab; label: string }[] = [
 
 export function SettingsModal({ theme, onToggleTheme, showDismissed, onToggleShowDismissed }: Props) {
   const [open, setOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<SettingsTab>('appearance')
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general')
 
   const [promptsLoaded, setPromptsLoaded] = useState(false)
   const [promptsLoadError, setPromptsLoadError] = useState<string | null>(null)
@@ -191,19 +190,13 @@ export function SettingsModal({ theme, onToggleTheme, showDismissed, onToggleSho
               </nav>
 
               <div className="settings-content">
-                {activeTab === 'appearance' && (
+                {activeTab === 'general' && (
                   <>
-                    <h3 className="settings-content-title">Appearance</h3>
+                    <h3 className="settings-content-title">General</h3>
                     <div className="config-row">
                       <span className="field-label-inline">Theme</span>
                       <ThemeToggle theme={theme} onToggle={onToggleTheme} />
                     </div>
-                  </>
-                )}
-
-                {activeTab === 'dashboard' && (
-                  <>
-                    <h3 className="settings-content-title">Dashboard</h3>
                     <label className="toggle-check">
                       <input
                         type="checkbox"
