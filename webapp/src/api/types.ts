@@ -78,6 +78,18 @@ export interface SearchConfig {
   defaults: SearchConfigDefaults
 }
 
+export interface PromptEntry {
+  text: string
+  default: string
+  is_custom: boolean
+}
+
+export interface PromptsConfig {
+  cover_letter: PromptEntry
+  tailoring: PromptEntry
+  scoring: PromptEntry
+}
+
 export type SearchRunStage = 'discover' | 'enrich' | 'score' | 'done' | null
 
 export interface DiscoverLogEntry {

@@ -2,9 +2,10 @@
 
 Mostly read-only: serves job/pipeline state from the SQLite database to the
 React frontend in ../../webapp. The only writes are editing searches.yaml
-(/api/search/config) and triggering a discover -> enrich -> score run
-(/api/search/run). No auth (local-only tool). Live updates are done via
-client-side polling, not WebSockets.
+(/api/search/config), editing prompt template overrides (/api/prompts), and
+triggering a discover -> enrich -> score run (/api/search/run). No auth
+(local-only tool). Live updates are done via client-side polling, not
+WebSockets.
 """
 
 import logging
@@ -18,8 +19,17 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from rich.console import Console
 
-from applypilot.config import get_tier, load_search_config, save_search_config
+from applypilot.config import (
+    get_tier,
+    load_prompt_overrides,
+    load_search_config,
+    save_prompt_overrides,
+    save_search_config,
+)
 from applypilot.database import get_connection, get_stats, init_db
+from applypilot.scoring.cover_letter import DEFAULT_COVER_LETTER_TEMPLATE
+from applypilot.scoring.scorer import DEFAULT_SCORING_TEMPLATE
+from applypilot.scoring.tailor import DEFAULT_TAILOR_TEMPLATE
 from applypilot.server import search_state
 from applypilot.server.stages import STAGE_ORDER, USER_ACTIONS, compute_stage
 
@@ -228,6 +238,43 @@ def get_search_config() -> dict:
 def put_search_config(body: SearchConfigBody) -> dict:
     saved = save_search_config(body.model_dump())
     return _public_search_config(saved)
+
+
+class PromptsBody(BaseModel):
+    cover_letter: str = ""
+    tailoring: str = ""
+    scoring: str = ""
+
+
+_PROMPT_DEFAULTS = {
+    "cover_letter": DEFAULT_COVER_LETTER_TEMPLATE,
+    "tailoring": DEFAULT_TAILOR_TEMPLATE,
+    "scoring": DEFAULT_SCORING_TEMPLATE,
+}
+
+
+def _effective_prompts() -> dict:
+    """Shape stored overrides + built-in defaults into the Settings-page payload."""
+    overrides = load_prompt_overrides()
+    return {
+        key: {
+            "text": overrides.get(key, default),
+            "default": default,
+            "is_custom": key in overrides,
+        }
+        for key, default in _PROMPT_DEFAULTS.items()
+    }
+
+
+@app.get("/api/prompts")
+def get_prompts() -> dict:
+    return _effective_prompts()
+
+
+@app.put("/api/prompts")
+def put_prompts(body: PromptsBody) -> dict:
+    save_prompt_overrides(body.model_dump())
+    return _effective_prompts()
 
 
 @app.post("/api/search/run", status_code=202)

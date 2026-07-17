@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable
 from datetime import datetime, timezone
 
-from applypilot.config import RESUME_PATH, load_profile
+from applypilot.config import RESUME_PATH, load_profile, load_prompt_overrides
 from applypilot.database import get_connection, get_jobs_by_stage
 from applypilot.llm import get_client
 
@@ -21,9 +21,11 @@ log = logging.getLogger(__name__)
 
 # ── Scoring Prompt ────────────────────────────────────────────────────────
 
-SCORE_PROMPT = """You are a job fit evaluator. Given a candidate's resume and a job description, score how well the candidate fits the role.
-
-SCORING CRITERIA:
+# The user-editable part of the scoring prompt (the fit rubric). Customizable
+# from the Settings page; falls back to this default when no override is
+# stored. The response-format contract is always appended by code (see
+# _build_score_prompt) since _parse_score_response depends on it exactly.
+DEFAULT_SCORING_TEMPLATE = """SCORING CRITERIA:
 - 9-10: Perfect match. Candidate has direct experience in nearly all required skills and qualifications.
 - 7-8: Strong match. Candidate has most required skills, minor gaps easily bridged.
 - 5-6: Moderate match. Candidate has some relevant skills but missing key requirements.
@@ -34,7 +36,21 @@ IMPORTANT FACTORS:
 - Weight technical skills heavily (programming languages, frameworks, tools)
 - Consider transferable experience (automation, scripting, API work)
 - Factor in the candidate's project experience
-- Be realistic about experience level vs. job requirements (years of experience, seniority)
+- Be realistic about experience level vs. job requirements (years of experience, seniority)"""
+
+
+def _build_score_prompt(template: str | None = None) -> str:
+    """Build the job fit scoring prompt.
+
+    The rubric comes from `template` (a Settings-page override) if given,
+    else DEFAULT_SCORING_TEMPLATE. The response-format contract is always
+    appended by code, regardless of the template, since it can't be edited
+    away without breaking `_parse_score_response`.
+    """
+    rubric = template or DEFAULT_SCORING_TEMPLATE
+    return f"""You are a job fit evaluator. Given a candidate's resume and a job description, score how well the candidate fits the role.
+
+{rubric}
 
 RESPOND IN EXACTLY THIS FORMAT (no other text):
 SCORE: [1-10]
@@ -71,25 +87,27 @@ def _parse_score_response(response: str) -> dict:
     return {"score": score, "keywords": keywords, "reasoning": reasoning}
 
 
-def score_job(resume_text: str, job: dict) -> dict:
+def score_job(resume_text: str, job: dict, score_prompt: str) -> dict:
     """Score a single job against the resume.
 
     Args:
         resume_text: The candidate's full resume text.
         job: Job dict with keys: title, site, location, full_description.
+        score_prompt: The scoring system prompt, built once per batch via
+            _build_score_prompt() (includes any Settings-page override).
 
     Returns:
         {"score": int, "keywords": str, "reasoning": str}
     """
     job_text = (
         f"TITLE: {job['title']}\n"
-        f"COMPANY: {job['site']}\n"
+        f"COMPANY: {job.get('company') or 'the company'}\n"
         f"LOCATION: {job.get('location', 'N/A')}\n\n"
         f"DESCRIPTION:\n{(job.get('full_description') or '')[:6000]}"
     )
 
     messages = [
-        {"role": "system", "content": SCORE_PROMPT},
+        {"role": "system", "content": score_prompt},
         {"role": "user", "content": f"RESUME:\n{resume_text}\n\n---\n\nJOB POSTING:\n{job_text}"},
     ]
 
@@ -147,9 +165,11 @@ def run_scoring(
     completed = 0
     errors = 0
     results: list[dict] = []
+    overrides = load_prompt_overrides()
+    score_prompt = _build_score_prompt(overrides.get("scoring"))
 
     for job in jobs:
-        result = score_job(resume_text, job)
+        result = score_job(resume_text, job, score_prompt)
         result["url"] = job["url"]
         completed += 1
 

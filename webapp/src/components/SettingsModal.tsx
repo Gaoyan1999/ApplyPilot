@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react'
+import { ApiError, getPrompts, savePrompts } from '../api/client'
+import type { Theme } from '../hooks/useTheme'
+import { ThemeToggle } from './ThemeToggle'
 
 function SettingsIcon() {
   return (
@@ -9,8 +12,54 @@ function SettingsIcon() {
   )
 }
 
-export function SettingsModal() {
+interface PromptFieldProps {
+  label: string
+  description: string
+  value: string
+  onChange: (value: string) => void
+  onReset: () => void
+  resetDisabled: boolean
+}
+
+function PromptField({ label, description, value, onChange, onReset, resetDisabled }: PromptFieldProps) {
+  return (
+    <div className="prompt-field">
+      <label>{label}</label>
+      <p className="prompt-field-description">{description}</p>
+      <textarea
+        rows={10}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        spellCheck={false}
+      />
+      <div className="prompt-field-footer">
+        <button type="button" className="reset-btn" disabled={resetDisabled} onClick={onReset}>
+          Reset to default
+        </button>
+      </div>
+    </div>
+  )
+}
+
+interface Props {
+  theme: Theme
+  onToggleTheme: () => void
+}
+
+const EMPTY_DEFAULTS = { cover_letter: '', tailoring: '', scoring: '' }
+
+export function SettingsModal({ theme, onToggleTheme }: Props) {
   const [open, setOpen] = useState(false)
+
+  const [promptsLoaded, setPromptsLoaded] = useState(false)
+  const [promptsLoadError, setPromptsLoadError] = useState<string | null>(null)
+  const [defaults, setDefaults] = useState(EMPTY_DEFAULTS)
+  const [coverLetterText, setCoverLetterText] = useState('')
+  const [tailoringText, setTailoringText] = useState('')
+  const [scoringText, setScoringText] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -20,6 +69,44 @@ export function SettingsModal() {
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [open])
+
+  useEffect(() => {
+    if (!open || promptsLoaded) return
+    getPrompts()
+      .then((cfg) => {
+        setCoverLetterText(cfg.cover_letter.text)
+        setTailoringText(cfg.tailoring.text)
+        setScoringText(cfg.scoring.text)
+        setDefaults({
+          cover_letter: cfg.cover_letter.default,
+          tailoring: cfg.tailoring.default,
+          scoring: cfg.scoring.default,
+        })
+      })
+      .catch(() => setPromptsLoadError('Could not load prompts'))
+      .finally(() => setPromptsLoaded(true))
+  }, [open, promptsLoaded])
+
+  async function handleSavePrompts() {
+    setSaving(true)
+    setSaveMessage(null)
+    setSaveError(null)
+    try {
+      const saved = await savePrompts({
+        cover_letter: coverLetterText,
+        tailoring: tailoringText,
+        scoring: scoringText,
+      })
+      setCoverLetterText(saved.cover_letter.text)
+      setTailoringText(saved.tailoring.text)
+      setScoringText(saved.scoring.text)
+      setSaveMessage('Prompts saved')
+    } catch (e) {
+      setSaveError(e instanceof ApiError ? e.message : 'Failed to save prompts')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <>
@@ -42,7 +129,56 @@ export function SettingsModal() {
                 ✕
               </button>
             </div>
-            <div className="modal-body" />
+            <div className="settings-panel">
+              <div className="config-section">
+                <h3>Appearance</h3>
+                <div className="config-row">
+                  <span className="field-label-inline">Theme</span>
+                  <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+                </div>
+              </div>
+
+              <div className="config-section">
+                <h3>Prompts</h3>
+                {promptsLoadError && <p className="search-result search-error">{promptsLoadError}</p>}
+                {!promptsLoaded && !promptsLoadError && <p className="search-result">Loading…</p>}
+                {promptsLoaded && (
+                  <>
+                    <PromptField
+                      label="Cover Letter"
+                      description="Structure and voice for the four paragraphs (Intro, Why This Company, Why You, Closing). Banned words, the anti-fabrication guardrails, and sign-off format are always enforced by the code, regardless of what you write here."
+                      value={coverLetterText}
+                      onChange={setCoverLetterText}
+                      onReset={() => setCoverLetterText(defaults.cover_letter)}
+                      resetDisabled={saving}
+                    />
+                    <PromptField
+                      label="Resume Tailoring"
+                      description="Recruiter-scan framing, tailoring rules, and voice guidance for rewriting your resume per job. Skills boundaries, banned words, hard fabrication rules, and the JSON output format are always enforced by the code."
+                      value={tailoringText}
+                      onChange={setTailoringText}
+                      onReset={() => setTailoringText(defaults.tailoring)}
+                      resetDisabled={saving}
+                    />
+                    <PromptField
+                      label="Job Scoring"
+                      description="The rubric (1-10 score bands, what factors matter) used to rate how well each job matches your resume. The exact response format the app parses is always enforced by the code."
+                      value={scoringText}
+                      onChange={setScoringText}
+                      onReset={() => setScoringText(defaults.scoring)}
+                      resetDisabled={saving}
+                    />
+                    <div className="config-actions">
+                      <button type="button" disabled={saving} onClick={handleSavePrompts}>
+                        {saving ? 'Saving…' : 'Save'}
+                      </button>
+                    </div>
+                    {saveMessage && <span className="search-result">{saveMessage}</span>}
+                    {saveError && <span className="search-result search-error">{saveError}</span>}
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

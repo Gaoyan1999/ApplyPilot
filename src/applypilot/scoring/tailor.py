@@ -16,7 +16,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from applypilot.config import RESUME_PATH, TAILORED_DIR, load_profile
+from applypilot.config import RESUME_PATH, TAILORED_DIR, load_profile, load_prompt_overrides
 from applypilot.database import get_connection, get_jobs_by_stage
 from applypilot.llm import get_client
 from applypilot.scoring.validator import (
@@ -33,54 +33,16 @@ MAX_ATTEMPTS = 5  # max cross-run retries before giving up
 
 # ── Prompt Builders (profile-driven) ──────────────────────────────────────
 
-def _build_tailor_prompt(profile: dict) -> str:
-    """Build the resume tailoring system prompt from the user's profile.
-
-    All skills boundaries, preserved entities, and formatting rules are
-    derived from the profile -- nothing is hardcoded.
-    """
-    boundary = profile.get("skills_boundary", {})
-    resume_facts = profile.get("resume_facts", {})
-
-    # Format skills boundary for the prompt
-    skills_lines = []
-    for category, items in boundary.items():
-        if isinstance(items, list) and items:
-            label = category.replace("_", " ").title()
-            skills_lines.append(f"{label}: {', '.join(items)}")
-    skills_block = "\n".join(skills_lines)
-
-    # Preserved entities
-    companies = resume_facts.get("preserved_companies", [])
-    projects = resume_facts.get("preserved_projects", [])
-    school = resume_facts.get("preserved_school", "")
-    real_metrics = resume_facts.get("real_metrics", [])
-
-    companies_str = ", ".join(companies) if companies else "N/A"
-    projects_str = ", ".join(projects) if projects else "N/A"
-    metrics_str = ", ".join(real_metrics) if real_metrics else "N/A"
-
-    # Include ALL banned words from the validator so the LLM knows exactly
-    # what will be rejected — the validator checks for these automatically.
-    banned_str = ", ".join(BANNED_WORDS)
-
-    education = profile.get("experience", {})
-    education_level = education.get("education_level", "")
-
-    return f"""You are a senior technical recruiter rewriting a resume to get this person an interview.
-
-Take the base resume and job description. Return a tailored resume as a JSON object.
-
-## RECRUITER SCAN (6 seconds):
+# The user-editable part of the tailoring prompt (recruiter-scan framing,
+# tailoring rules, voice). Customizable from the Settings page; falls back
+# to this default when no override is stored. The skills boundary, banned
+# words, hard fabrication rules, and JSON output schema are always appended
+# by code (see _build_tailor_prompt) since parsing/validation depend on them.
+DEFAULT_TAILOR_TEMPLATE = """## RECRUITER SCAN (6 seconds):
 1. Title -- matches what they're hiring?
 2. Summary -- 2 sentences proving you've done this work
 3. First 3 bullets of most recent role -- verbs and outcomes match?
 4. Skills -- must-haves visible immediately?
-
-## SKILLS BOUNDARY (real skills only):
-{skills_block}
-
-You MAY add 2-3 closely related tools (Kubernetes if Docker, Terraform if AWS, Redis if PostgreSQL). No unrelated languages/frameworks.
 
 ## TAILORING RULES:
 
@@ -100,9 +62,60 @@ BULLETS: Strong verb + what you built + quantified impact. Vary verbs (Built, De
 - Write like a real engineer. Short, direct.
 - GOOD: "Automated financial reporting with Python + API integrations, cut processing time from 10 hours to 2"
 - BAD: "Leveraged cutting-edge AI technologies to drive transformative operational efficiencies"
-- BANNED WORDS (using ANY of these = validation failure — do not use them even once):
-  {banned_str}
-- No em dashes. Use commas, periods, or hyphens.
+- No em dashes. Use commas, periods, or hyphens."""
+
+
+def _build_tailor_prompt(profile: dict, template: str | None = None) -> str:
+    """Build the resume tailoring system prompt from the user's profile.
+
+    All skills boundaries, preserved entities, and formatting rules are
+    derived from the profile -- nothing is hardcoded. The recruiter-scan/
+    tailoring-rules/voice portion comes from `template` (a Settings-page
+    override) if given, else DEFAULT_TAILOR_TEMPLATE. The skills boundary,
+    banned words, hard rules, and JSON output schema are always appended by
+    code, regardless of the template, so they can't be edited away.
+    """
+    boundary = profile.get("skills_boundary", {})
+    resume_facts = profile.get("resume_facts", {})
+
+    # Format skills boundary for the prompt
+    skills_lines = []
+    for category, items in boundary.items():
+        if isinstance(items, list) and items:
+            label = category.replace("_", " ").title()
+            skills_lines.append(f"{label}: {', '.join(items)}")
+    skills_block = "\n".join(skills_lines)
+
+    # Preserved entities
+    companies = resume_facts.get("preserved_companies", [])
+    school = resume_facts.get("preserved_school", "")
+    real_metrics = resume_facts.get("real_metrics", [])
+
+    companies_str = ", ".join(companies) if companies else "N/A"
+    metrics_str = ", ".join(real_metrics) if real_metrics else "N/A"
+
+    # Include ALL banned words from the validator so the LLM knows exactly
+    # what will be rejected — the validator checks for these automatically.
+    banned_str = ", ".join(BANNED_WORDS)
+
+    education = profile.get("experience", {})
+    education_level = education.get("education_level", "")
+
+    tailoring_section = template or DEFAULT_TAILOR_TEMPLATE
+
+    return f"""You are a senior technical recruiter rewriting a resume to get this person an interview.
+
+Take the base resume and job description. Return a tailored resume as a JSON object.
+
+## SKILLS BOUNDARY (real skills only):
+{skills_block}
+
+You MAY add 2-3 closely related tools (Kubernetes if Docker, Terraform if AWS, Redis if PostgreSQL). No unrelated languages/frameworks.
+
+{tailoring_section}
+
+BANNED WORDS (using ANY of these = validation failure — do not use them even once):
+{banned_str}
 
 ## HARD RULES:
 - Do NOT invent work, companies, degrees, or certifications
@@ -370,7 +383,7 @@ def tailor_resume(
     """
     job_text = (
         f"TITLE: {job['title']}\n"
-        f"COMPANY: {job['site']}\n"
+        f"COMPANY: {job.get('company') or 'the company'}\n"
         f"LOCATION: {job.get('location', 'N/A')}\n\n"
         f"DESCRIPTION:\n{(job.get('full_description') or '')[:6000]}"
     )
@@ -382,7 +395,8 @@ def tailor_resume(
     avoid_notes: list[str] = []
     tailored = ""
     client = get_client()
-    tailor_prompt_base = _build_tailor_prompt(profile)
+    overrides = load_prompt_overrides()
+    tailor_prompt_base = _build_tailor_prompt(profile, overrides.get("tailoring"))
 
     for attempt in range(max_retries + 1):
         report["attempts"] = attempt + 1

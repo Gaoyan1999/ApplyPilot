@@ -8,7 +8,6 @@ import { StatPills } from './components/StatPills'
 import { SearchFilterBar } from './components/SearchFilterBar'
 import type { FilterMode } from './components/MultiSelectFilter'
 import { JobsTable, type SortDir, type SortKey } from './components/JobsTable'
-import { ThemeToggle } from './components/ThemeToggle'
 import { JobPreviewModal } from './components/JobPreviewModal'
 import { SearchPanel } from './components/SearchPanel'
 import { SettingsModal } from './components/SettingsModal'
@@ -111,8 +110,7 @@ function App() {
         <h1>ApplyPilot Dashboard</h1>
         <div className="app-header-actions">
           <SearchPanel />
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          <SettingsModal />
+          <SettingsModal theme={theme} onToggleTheme={toggleTheme} />
         </div>
       </div>
       <p className="subtitle">Live view of your job pipeline, refreshed every few seconds.</p>

@@ -71,6 +71,69 @@
   height: 85vh;
 }
 
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.field-label-inline {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.prompt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.prompt-field label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.prompt-field-description {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.prompt-field textarea {
+  min-height: 200px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.prompt-field-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.reset-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 0;
+}
+
+.reset-btn:hover:not(:disabled) {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.reset-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .error-banner {
   background: var(--error-bg);
   color: var(--error-fg);
@@ -136,7 +199,8 @@
 .search-panel input[type='text'],
 .search-panel input[type='number'],
 .search-panel select,
-.search-panel textarea {
+.search-panel textarea,
+.settings-panel textarea {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px 10px;
@@ -146,7 +210,8 @@
   font-family: inherit;
 }
 
-.search-panel textarea {
+.search-panel textarea,
+.settings-panel textarea {
   resize: vertical;
   width: 100%;
 }
@@ -254,7 +319,8 @@
   cursor: pointer;
 }
 
-.search-panel button {
+.search-panel button,
+.settings-panel .config-actions button {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px 14px;
@@ -265,7 +331,8 @@
   cursor: pointer;
 }
 
-.search-panel button:disabled {
+.search-panel button:disabled,
+.settings-panel .config-actions button:disabled {
   opacity: 0.6;
   cursor: default;
 }
