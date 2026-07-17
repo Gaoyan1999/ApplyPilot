@@ -515,6 +515,8 @@ def _full_crawl(
         })
 
     for s in searches:
+        loc_label = f"{s['location']} (remote)" if s.get("remote") else s["location"]
+
         # Reported before the (potentially slow) scrape call so a status
         # poll mid-search shows what's actually in flight, not just the
         # count of what's already finished.
@@ -527,7 +529,7 @@ def _full_crawl(
                 "errors": total_errors,
                 "by_site": dict(total_by_site),
                 "current_query": s["query"],
-                "current_location": f"{s['location']} (remote)" if s.get("remote") else s["location"],
+                "current_location": loc_label,
             })
 
         result = _run_one_search(
@@ -548,15 +550,18 @@ def _full_crawl(
             log.info("Progress: %d/%d queries done (%d new, %d dupes, %d errors)",
                      completed, len(searches), total_new, total_existing, total_errors)
 
-        # Same shape as _run_one_search's own log line -- surfaced to the
-        # frontend so the dashboard can show exactly what the terminal shows,
-        # e.g. `["graduate software engineer" in Australia (remote) [tier 1]]
-        # 50 results -> 21 new, 4 dupes, 24 filtered (location)`.
-        log_line = f"[{result['label']}] {result['total']} results -> {result['new']} new, {result['existing']} dupes"
-        if result["filtered"]:
-            log_line += f", {result['filtered']} filtered (location)"
-        if result["errors"]:
-            log_line += " (failed)"
+        # Structured per-query result, surfaced to the frontend so it can
+        # render its own UI instead of parsing a formatted log string.
+        log_entry = {
+            "query": s["query"],
+            "location": loc_label,
+            "tier": s.get("tier", 0),
+            "total": result["total"],
+            "new": result["new"],
+            "existing": result["existing"],
+            "filtered": result["filtered"],
+            "errors": result["errors"],
+        }
 
         if on_progress:
             on_progress({
@@ -568,7 +573,7 @@ def _full_crawl(
                 "by_site": dict(total_by_site),
                 "current_query": None,
                 "current_location": None,
-                "log_line": log_line,
+                "log_entry": log_entry,
             })
 
     # Final stats

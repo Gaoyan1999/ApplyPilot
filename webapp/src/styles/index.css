@@ -292,24 +292,64 @@
 
 .search-discover-log {
   margin: 0;
-  padding: 8px 10px;
+  padding: 4px 10px;
   list-style: none;
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: 12px;
   color: var(--text-muted);
   background: var(--bg-subtle);
   border: 1px solid var(--border);
   border-radius: 8px;
-  max-height: 140px;
+  max-height: 220px;
   overflow-y: auto;
 }
 
-.search-discover-log li {
+.search-discover-log-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.search-discover-log-row:last-child {
+  border-bottom: none;
+}
+
+.search-discover-log-query {
+  flex: 1;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.search-discover-log-tier {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.discover-log-badges {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.discover-log-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.discover-log-badge.new { background: var(--score-high-bg); color: var(--score-high-fg); }
+.discover-log-badge.dupes { background: var(--score-low-bg); color: var(--score-low-fg); }
+.discover-log-badge.filtered { background: var(--score-mid-bg); color: var(--score-mid-fg); }
+.discover-log-badge.failed { background: var(--stage-failed-bg); color: var(--stage-failed-fg); }
 
 /* Progress bar */
 .progress-bar-row {

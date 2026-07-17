@@ -31,7 +31,7 @@ STAGES = ("discover", "enrich", "score", "done")
 # memory for a run with a lot of individual failures.
 _MAX_WARNINGS = 50
 
-# Cap on how many per-query result lines (discover_log) we keep around for
+# Cap on how many per-query result entries (discover_log) we keep around for
 # the frontend's live log view -- a large crawl can have hundreds of query x
 # location combos.
 _MAX_LOG_LINES = 200
@@ -119,9 +119,9 @@ def _on_discover_progress(evt: dict) -> None:
         _state["discover_by_site"] = evt["by_site"]
         _state["current_query"] = evt.get("current_query")
         _state["current_location"] = evt.get("current_location")
-        log_line = evt.get("log_line")
-        if log_line:
-            _state["discover_log"] = (_state["discover_log"] + [log_line])[-_MAX_LOG_LINES:]
+        log_entry = evt.get("log_entry")
+        if log_entry:
+            _state["discover_log"] = (_state["discover_log"] + [log_entry])[-_MAX_LOG_LINES:]
 
 
 def _on_enrich_progress(evt: dict) -> None:

@@ -9,7 +9,7 @@ import {
   runSearch,
   saveSearchConfig,
 } from '../api/client'
-import type { Job, SearchConfig, SearchRunStage, SearchStatus } from '../api/types'
+import type { DiscoverLogEntry, Job, SearchConfig, SearchRunStage, SearchStatus } from '../api/types'
 import { ProgressBar } from './ProgressBar'
 import { ScorePill } from './ScorePill'
 import { SEARCHABLE_SITES, SiteIcon, SITE_META } from './SiteIcon'
@@ -65,9 +65,11 @@ function displayStageIndex(stage: SearchRunStage): number {
   return DISPLAY_STAGES.length
 }
 
-function currentQueryText(status: SearchStatus): string | null {
-  if (!status.current_query || !status.current_location) return null
-  return `Querying "${status.current_query}" in ${status.current_location}...`
+function discoverStatusText(status: SearchStatus): string {
+  if (status.current_query && status.current_location) {
+    return `Searching job boards for postings that match your saved queries — currently querying "${status.current_query}" in ${status.current_location}.`
+  }
+  return STAGE_DESCRIPTIONS.discover
 }
 
 function discoverSummaryText(status: SearchStatus): string {
@@ -78,24 +80,43 @@ function discoverSummaryText(status: SearchStatus): string {
   )
 }
 
-/** Scrolling per-query result log, mirroring the backend terminal output --
- * e.g. `["graduate software engineer" in Australia (remote) [tier 1]] 50
- * results -> 21 new, 4 dupes, 24 filtered (location)`. Pinned to the bottom
- * so the newest line is always visible as more come in. */
-function DiscoverLog({ lines }: { lines: string[] }) {
+/** Scrolling per-query result log. One row per query x location combo, with
+ * count badges instead of a raw formatted backend string -- new/dupes/
+ * filtered aren't mutually exclusive with "failed" (a storage error can
+ * still have filtered a nonzero number of results before it hit the DB
+ * error), so all applicable badges show together. Pinned to the bottom so
+ * the newest row is always visible as more come in. */
+function DiscoverLogRow({ entry }: { entry: DiscoverLogEntry }) {
+  return (
+    <li className="search-discover-log-row">
+      <span className="search-discover-log-query" title={`"${entry.query}" in ${entry.location}`}>
+        "{entry.query}" in {entry.location}
+      </span>
+      {entry.tier > 0 && <span className="search-discover-log-tier">tier {entry.tier}</span>}
+      <span className="discover-log-badges">
+        {entry.new > 0 && <span className="discover-log-badge new">+{entry.new} new</span>}
+        {entry.existing > 0 && <span className="discover-log-badge dupes">{entry.existing} dupes</span>}
+        {entry.filtered > 0 && <span className="discover-log-badge filtered">{entry.filtered} filtered</span>}
+        {entry.errors > 0 && <span className="discover-log-badge failed">failed</span>}
+      </span>
+    </li>
+  )
+}
+
+function DiscoverLog({ entries }: { entries: DiscoverLogEntry[] }) {
   const ref = useRef<HTMLUListElement>(null)
 
   useEffect(() => {
     const el = ref.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [lines])
+  }, [entries])
 
-  if (lines.length === 0) return null
+  if (entries.length === 0) return null
 
   return (
     <ul className="search-discover-log" ref={ref}>
-      {lines.map((line, i) => (
-        <li key={i}>{line}</li>
+      {entries.map((entry, i) => (
+        <DiscoverLogRow entry={entry} key={i} />
       ))}
     </ul>
   )
@@ -122,12 +143,9 @@ function SearchStepBody({ status, isCurrent }: { status: SearchStatus; isCurrent
   if (isCurrent && status.stage === 'discover') {
     return (
       <>
-        <p className="search-stage-description">{STAGE_DESCRIPTIONS.discover}</p>
+        <p className="search-stage-description">{discoverStatusText(status)}</p>
         <ProgressBar done={status.queries} total={status.queries_total} label="Queries" />
-        {currentQueryText(status) && (
-          <p className="search-progress-summary">{currentQueryText(status)}</p>
-        )}
-        <DiscoverLog lines={status.discover_log} />
+        <DiscoverLog entries={status.discover_log} />
         <SiteChips status={status} />
       </>
     )
