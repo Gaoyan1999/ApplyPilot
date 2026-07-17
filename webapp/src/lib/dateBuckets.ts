@@ -27,12 +27,7 @@ export function formatDateGroupLabel(key: DateGroupKey, now: Date = new Date()):
   if (date.getTime() === today.getTime()) return 'Today'
   if (date.getTime() === yesterday.getTime()) return 'Yesterday'
 
-  return date.toLocaleDateString(undefined, {
-    weekday: 'long',
-    month: 'short',
-    day: 'numeric',
-    year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
-  })
+  return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}`
 }
 
 export function compareDateGroupKeysDesc(a: DateGroupKey, b: DateGroupKey): number {
