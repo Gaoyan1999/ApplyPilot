@@ -46,8 +46,9 @@ def _load_location_filter(search_cfg: dict | None = None):
     if search_cfg is None:
         search_cfg = config.load_search_config()
 
-    accept = search_cfg.get("location_accept", [])
-    reject = search_cfg.get("location_reject_non_remote", [])
+    location_cfg = search_cfg.get("location", {})
+    accept = location_cfg.get("accept_patterns", [])
+    reject = location_cfg.get("reject_patterns", [])
     return accept, reject
 
 
