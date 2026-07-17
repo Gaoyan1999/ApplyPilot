@@ -1,7 +1,12 @@
 import { Fragment, useMemo } from 'react'
 import type { Job, UserAction } from '../api/types'
-import { BUCKET_LABELS, BUCKET_ORDER, getDateBucket, type DateBucket } from '../lib/dateBuckets'
-import { formatDate } from '../lib/format'
+import {
+  compareDateGroupKeysDesc,
+  formatDateGroupLabel,
+  getDateGroupKey,
+  type DateGroupKey,
+} from '../lib/dateBuckets'
+import { formatTime } from '../lib/format'
 import { useLocalStorageState } from '../hooks/useLocalStorageState'
 import { JobTypeBadge } from './JobTypeBadge'
 import { ScorePill } from './ScorePill'
@@ -30,21 +35,27 @@ const COLUMNS: { key: SortKey; label: string }[] = [
 ]
 
 export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview, onUserActionChange }: Props) {
-  const [collapsedBuckets, setCollapsedBuckets] = useLocalStorageState<DateBucket[]>(
+  const [collapsedBuckets, setCollapsedBuckets] = useLocalStorageState<DateGroupKey[]>(
     'applypilot-collapsed-date-buckets',
     [],
   )
 
   const jobsByBucket = useMemo(() => {
-    const map = new Map<DateBucket, Job[]>()
-    for (const bucket of BUCKET_ORDER) map.set(bucket, [])
+    const map = new Map<DateGroupKey, Job[]>()
     for (const job of jobs) {
-      map.get(getDateBucket(job.discovered_at))!.push(job)
+      const key = getDateGroupKey(job.discovered_at)
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(job)
     }
     return map
   }, [jobs])
 
-  function toggleBucket(bucket: DateBucket) {
+  const bucketOrder = useMemo(
+    () => Array.from(jobsByBucket.keys()).sort(compareDateGroupKeysDesc),
+    [jobsByBucket],
+  )
+
+  function toggleBucket(bucket: DateGroupKey) {
     setCollapsedBuckets((prev) =>
       prev.includes(bucket) ? prev.filter((b) => b !== bucket) : [...prev, bucket],
     )
@@ -69,7 +80,7 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview, onUserAct
           </tr>
         </thead>
         <tbody>
-          {BUCKET_ORDER.map((bucket) => {
+          {bucketOrder.map((bucket) => {
             const bucketJobs = jobsByBucket.get(bucket) ?? []
             if (bucketJobs.length === 0) return null
             const collapsed = collapsedBuckets.includes(bucket)
@@ -78,7 +89,7 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview, onUserAct
                 <tr className="jobs-table-group-row" onClick={() => toggleBucket(bucket)}>
                   <td colSpan={COLUMNS.length + 1} className="jobs-table-group-header">
                     <span className={`group-chevron${collapsed ? ' group-chevron-collapsed' : ''}`}>▾</span>
-                    {BUCKET_LABELS[bucket]}
+                    {formatDateGroupLabel(bucket)}
                     <span className="group-count">{bucketJobs.length}</span>
                   </td>
                 </tr>
@@ -107,7 +118,7 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview, onUserAct
                       <td>
                         <ScorePill score={job.fit_score} />
                       </td>
-                      <td>{formatDate(job.discovered_at)}</td>
+                      <td>{formatTime(job.discovered_at)}</td>
                       <td>
                         <UserActionSelect
                           value={job.user_action}
