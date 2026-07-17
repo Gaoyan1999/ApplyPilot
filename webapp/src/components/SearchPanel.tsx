@@ -317,7 +317,15 @@ const TIME_RANGES: { label: string; hours: number }[] = [
   { label: 'Past month', hours: 720 },
 ]
 
-export function SearchPanel() {
+interface Props {
+  /** Called whenever a search run may have changed the jobs DB -- on start,
+   * on each in-progress status tick (discovery writes rows as it goes), and
+   * after confirm/discard -- so the dashboard's jobs table and stat pills
+   * can refetch without a background poll of their own. */
+  onActivity: () => void
+}
+
+export function SearchPanel({ onActivity }: Props) {
   const [open, setOpen] = useState(false)
   const [minimized, setMinimized] = useState(false)
   const [config, setConfig] = useState<SearchConfig>(EMPTY_CONFIG)
@@ -385,6 +393,7 @@ export function SearchPanel() {
         const s = await getSearchStatus()
         setStatus(s)
         setStage(s.stage)
+        onActivity()
         if (!s.running) {
           setRunning(false)
           if (s.error) {
@@ -401,7 +410,7 @@ export function SearchPanel() {
       }
     }, 2000)
     return () => clearInterval(timer)
-  }, [running])
+  }, [running, onActivity])
 
   function addQuery() {
     setConfig((c) => ({ ...c, queries: [...c.queries, { query: '', tier: 1 }] }))
@@ -459,6 +468,7 @@ export function SearchPanel() {
         setStage(s.stage ?? 'discover')
         setResult(null)
         setError(null)
+        onActivity()
       } else {
         setConfigMessage('Search config saved')
       }
@@ -504,6 +514,7 @@ export function SearchPanel() {
     try {
       await discardNewSearchResults()
       closeAndReset()
+      onActivity()
     } catch (e) {
       setConfigError(e instanceof Error ? e.message : 'Could not discard results')
     } finally {

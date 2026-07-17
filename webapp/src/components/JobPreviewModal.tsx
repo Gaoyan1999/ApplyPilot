@@ -14,6 +14,7 @@ interface Props {
   onClose: () => void
   onUserActionChange: (job: Job, value: UserAction | null) => void
   onDismissChange: (job: Job, dismissed: boolean) => void
+  onCoverLetterGenerated: () => void
 }
 
 function MetaRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -25,7 +26,13 @@ function MetaRow({ label, children }: { label: string; children: React.ReactNode
   )
 }
 
-export function JobPreviewModal({ job, onClose, onUserActionChange, onDismissChange }: Props) {
+export function JobPreviewModal({
+  job,
+  onClose,
+  onUserActionChange,
+  onDismissChange,
+  onCoverLetterGenerated,
+}: Props) {
   const [coverLetterText, setCoverLetterText] = useState<string | null>(null)
   const [coverLetterLoading, setCoverLetterLoading] = useState(false)
   const [coverLetterError, setCoverLetterError] = useState<string | null>(null)
@@ -38,6 +45,11 @@ export function JobPreviewModal({ job, onClose, onUserActionChange, onDismissCha
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
+  // Keyed on job.url alone, not job.cover_letter_path: generating a cover
+  // letter already sets coverLetterText locally from the response, and the
+  // refresh that follows updates cover_letter_path on this same job -- keying
+  // on that too would re-fetch text we already have. Only switching to a
+  // different job should trigger a fresh load.
   useEffect(() => {
     setCoverLetterText(null)
     setCoverLetterError(null)
@@ -51,7 +63,7 @@ export function JobPreviewModal({ job, onClose, onUserActionChange, onDismissCha
     return () => {
       cancelled = true
     }
-  }, [job.url, job.cover_letter_path])
+  }, [job.url])
 
   async function handleGenerateCoverLetter() {
     setCoverLetterLoading(true)
@@ -59,6 +71,7 @@ export function JobPreviewModal({ job, onClose, onUserActionChange, onDismissCha
     try {
       const res = await generateCoverLetter(job.url)
       setCoverLetterText(res.text)
+      onCoverLetterGenerated()
     } catch (e) {
       setCoverLetterError(e instanceof ApiError ? e.message : 'Failed to generate cover letter')
     } finally {

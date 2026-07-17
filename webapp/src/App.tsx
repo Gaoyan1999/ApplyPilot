@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { ApiError, getJobs, getStatus, setJobDismissed, setJobUserAction } from './api/client'
 import type { Job, JobType, UserAction } from './api/types'
-import { usePolling } from './hooks/usePolling'
+import { useRefreshable } from './hooks/useRefreshable'
 import { useTheme } from './hooks/useTheme'
 import { useLocalStorageState } from './hooks/useLocalStorageState'
 import { StatPills } from './components/StatPills'
@@ -35,8 +35,16 @@ function sortJobs(jobs: Job[], key: SortKey, dir: SortDir): Job[] {
 
 function App() {
   const { theme, toggleTheme } = useTheme()
-  const { data: status, error: statusError } = usePolling(getStatus)
-  const { data: jobs, error: jobsError } = usePolling(getJobs)
+  const { data: status, error: statusError, refresh: refreshStatus } = useRefreshable(getStatus)
+  const { data: jobs, error: jobsError, refresh: refreshJobs } = useRefreshable(getJobs)
+
+  // Refetches status + jobs on-demand -- passed down to whatever just
+  // changed the DB (a local mutation, or SearchPanel while a run is
+  // actively writing rows) instead of polling blindly on a timer.
+  const refresh = useCallback(() => {
+    refreshStatus()
+    refreshJobs()
+  }, [refreshStatus, refreshJobs])
 
   const [search, setSearch] = useState('')
   const [jobTypeFilter, setJobTypeFilter] = useLocalStorageState<JobType[]>('applypilot-filter-job-type', [])
@@ -91,6 +99,7 @@ function App() {
     try {
       await setJobUserAction(job.url, value)
       setActionError(null)
+      refresh()
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : 'Failed to update action')
     }
@@ -100,6 +109,7 @@ function App() {
     try {
       await setJobDismissed(job.url, dismissed)
       setActionError(null)
+      refresh()
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : 'Failed to update dismissed state')
     }
@@ -121,7 +131,7 @@ function App() {
       <div className="app-header">
         <h1>ApplyPilot Dashboard</h1>
         <div className="app-header-actions">
-          <SearchPanel />
+          <SearchPanel onActivity={refresh} />
           <SettingsModal
             theme={theme}
             onToggleTheme={toggleTheme}
@@ -130,7 +140,7 @@ function App() {
           />
         </div>
       </div>
-      <p className="subtitle">Live view of your job pipeline, refreshed every few seconds.</p>
+      <p className="subtitle">Live view of your job pipeline, updated as jobs are found or changed.</p>
 
       {error && (
         <div className="error-banner">
@@ -170,6 +180,7 @@ function App() {
           onClose={() => setPreviewUrl(null)}
           onUserActionChange={handleUserActionChange}
           onDismissChange={handleDismissChange}
+          onCoverLetterGenerated={refresh}
         />
       )}
     </>
