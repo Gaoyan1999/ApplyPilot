@@ -283,12 +283,12 @@ def validate_cover_letter(text: str, mode: str = "normal") -> dict:
             else:  # normal
                 warnings.append(msg)
 
-    # 3. Word count
+    # 3. Word count (4-paragraph structure targets ~300 words)
     words = len(text.split())
-    if mode == "strict" and words > 250:
-        errors.append(f"Too long ({words} words). Max 250.")
-    elif mode == "normal" and words > 275:
-        warnings.append(f"Long ({words} words). Target 250.")
+    if mode == "strict" and words > 300:
+        errors.append(f"Too long ({words} words). Max 300.")
+    elif mode == "normal" and words > 325:
+        warnings.append(f"Long ({words} words). Target 300.")
     # lenient: no word count check
 
     # 4. LLM self-talk — always an error regardless of mode
