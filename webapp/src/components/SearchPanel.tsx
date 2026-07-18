@@ -92,7 +92,6 @@ function DiscoverLogRow({ entry }: { entry: DiscoverLogEntry }) {
       <span className="search-discover-log-query" title={`"${entry.query}" in ${entry.location}`}>
         "{entry.query}" in {entry.location}
       </span>
-      {entry.tier > 0 && <span className="search-discover-log-tier">tier {entry.tier}</span>}
       <span className="discover-log-badges">
         {entry.new > 0 && <span className="discover-log-badge new">+{entry.new} new</span>}
         {entry.existing > 0 && <span className="discover-log-badge dupes">{entry.existing} dupes</span>}
@@ -674,14 +673,6 @@ export function SearchPanel({ onActivity }: Props) {
                               value={q.query}
                               onChange={(e) => updateQuery(i, { query: e.target.value })}
                             />
-                            <select
-                              value={q.tier}
-                              onChange={(e) => updateQuery(i, { tier: Number(e.target.value) })}
-                            >
-                              <option value={1}>Tier 1</option>
-                              <option value={2}>Tier 2</option>
-                              <option value={3}>Tier 3</option>
-                            </select>
                             <button type="button" className="remove-btn" onClick={() => removeQuery(i)} aria-label="Remove query">
                               ✕
                             </button>
