@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
-import { ApiError, getPrompts, savePrompts } from '../api/client'
+import { ApiError, getPrompts, getSearchConfig, savePrompts, saveSearchConfig } from '../api/client'
+import type { SearchConfig } from '../api/types'
 import type { Theme } from '../hooks/useTheme'
+import { SEARCHABLE_SITES, SITE_META } from './SiteIcon'
+import { TIME_RANGES } from './SearchPanel'
 import { ThemeToggle } from './ThemeToggle'
 
 function SettingsIcon() {
@@ -84,10 +87,11 @@ interface Props {
 
 const EMPTY_DEFAULTS = { cover_letter: '', tailoring: '', scoring: '' }
 
-type SettingsTab = 'general' | 'cover_letter' | 'scoring' | 'tailoring'
+type SettingsTab = 'general' | 'search' | 'cover_letter' | 'scoring' | 'tailoring'
 
 const TABS: { key: SettingsTab; label: string }[] = [
   { key: 'general', label: 'General' },
+  { key: 'search', label: 'Search Defaults' },
   { key: 'cover_letter', label: 'Cover Letter' },
   { key: 'scoring', label: 'Scoring' },
   { key: 'tailoring', label: 'Tailoring' },
@@ -107,6 +111,13 @@ export function SettingsModal({ theme, onToggleTheme, showDismissed, onToggleSho
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
 
+  const [searchConfig, setSearchConfig] = useState<SearchConfig | null>(null)
+  const [searchConfigError, setSearchConfigError] = useState<string | null>(null)
+  const [excludeTitlesText, setExcludeTitlesText] = useState('')
+  const [searchSaving, setSearchSaving] = useState(false)
+  const [searchSaveMessage, setSearchSaveMessage] = useState<string | null>(null)
+  const [searchSaveError, setSearchSaveError] = useState<string | null>(null)
+
   useEffect(() => {
     if (!open) return
     function onKeyDown(e: KeyboardEvent) {
@@ -114,6 +125,20 @@ export function SettingsModal({ theme, onToggleTheme, showDismissed, onToggleSho
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open])
+
+  // Refetches on every open (same reasoning as SearchPanel's config load) so
+  // a stale in-memory copy here can't clobber queries/locations edited from
+  // the search modal in the meantime.
+  useEffect(() => {
+    if (!open) return
+    setSearchConfigError(null)
+    getSearchConfig()
+      .then((cfg) => {
+        setSearchConfig(cfg)
+        setExcludeTitlesText(cfg.exclude_titles.join('\n'))
+      })
+      .catch(() => setSearchConfigError('Could not load search config'))
   }, [open])
 
   useEffect(() => {
@@ -132,6 +157,36 @@ export function SettingsModal({ theme, onToggleTheme, showDismissed, onToggleSho
       .catch(() => setPromptsLoadError('Could not load prompts'))
       .finally(() => setPromptsLoaded(true))
   }, [open, promptsLoaded])
+
+  function toggleBoard(board: string) {
+    setSearchConfig((c) =>
+      c && {
+        ...c,
+        boards: c.boards.includes(board) ? c.boards.filter((b) => b !== board) : [...c.boards, board],
+      },
+    )
+  }
+
+  async function handleSaveSearchDefaults() {
+    if (!searchConfig) return
+    setSearchSaving(true)
+    setSearchSaveMessage(null)
+    setSearchSaveError(null)
+    try {
+      const excludeTitles = excludeTitlesText
+        .split('\n')
+        .map((t) => t.trim())
+        .filter(Boolean)
+      const saved = await saveSearchConfig({ ...searchConfig, exclude_titles: excludeTitles })
+      setSearchConfig(saved)
+      setExcludeTitlesText(saved.exclude_titles.join('\n'))
+      setSearchSaveMessage('Search defaults saved')
+    } catch (e) {
+      setSearchSaveError(e instanceof ApiError ? e.message : 'Failed to save search defaults')
+    } finally {
+      setSearchSaving(false)
+    }
+  }
 
   async function handleSavePrompts() {
     setSaving(true)
@@ -208,6 +263,91 @@ export function SettingsModal({ theme, onToggleTheme, showDismissed, onToggleSho
                     <p className="prompt-field-description">
                       Jobs marked "Not for me" are hidden from the dashboard by default. Turn this on to see them again.
                     </p>
+                  </>
+                )}
+
+                {activeTab === 'search' && (
+                  <>
+                    <h3 className="settings-content-title">Search Defaults</h3>
+                    {searchConfigError && <p className="search-result search-error">{searchConfigError}</p>}
+                    {!searchConfig && !searchConfigError && <p className="search-result">Loading…</p>}
+                    {searchConfig && (
+                      <>
+                        <div className="config-section">
+                          <h3>Job boards</h3>
+                          <div className="site-checks">
+                            {SEARCHABLE_SITES.map((site) => (
+                              <label key={site} className="toggle-check">
+                                <input
+                                  type="checkbox"
+                                  checked={searchConfig.boards.includes(site)}
+                                  onChange={() => toggleBoard(site)}
+                                />
+                                {SITE_META[site].label}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="config-section">
+                          <h3>Exclude titles</h3>
+                          <textarea
+                            placeholder="One term per line, e.g. senior director"
+                            rows={3}
+                            value={excludeTitlesText}
+                            onChange={(e) => setExcludeTitlesText(e.target.value)}
+                          />
+                        </div>
+
+                        <div className="config-section">
+                          <h3>Defaults</h3>
+                          <div className="config-row">
+                            <label className="field-label">
+                              Results per board
+                              <input
+                                type="number"
+                                min={1}
+                                max={100}
+                                value={searchConfig.defaults.results_per_site}
+                                onChange={(e) =>
+                                  setSearchConfig((c) =>
+                                    c && {
+                                      ...c,
+                                      defaults: { ...c.defaults, results_per_site: Number(e.target.value) },
+                                    },
+                                  )
+                                }
+                              />
+                            </label>
+                            <label className="field-label">
+                              Posted within
+                              <select
+                                value={searchConfig.defaults.hours_old}
+                                onChange={(e) =>
+                                  setSearchConfig((c) =>
+                                    c && { ...c, defaults: { ...c.defaults, hours_old: Number(e.target.value) } },
+                                  )
+                                }
+                              >
+                                {TIME_RANGES.map((r) => (
+                                  <option key={r.hours} value={r.hours}>
+                                    {r.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          </div>
+                        </div>
+
+                        <div className="config-actions">
+                          <button type="button" disabled={searchSaving} onClick={handleSaveSearchDefaults}>
+                            {searchSaving ? 'Saving…' : 'Save'}
+                          </button>
+                        </div>
+                        {searchSaveMessage && <span className="search-result">{searchSaveMessage}</span>}
+                        {searchSaveError && <span className="search-result search-error">{searchSaveError}</span>}
+                      </>
+                    )}
                   </>
                 )}
 
