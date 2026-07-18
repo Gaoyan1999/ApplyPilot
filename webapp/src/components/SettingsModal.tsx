@@ -5,6 +5,7 @@ import type { Theme } from '../hooks/useTheme'
 import { COLUMNS, type SortKey } from './JobsTable'
 import { SEARCHABLE_SITES, SITE_META } from './SiteIcon'
 import { TIME_RANGES } from './SearchPanel'
+import { Switch } from './Switch'
 import { ThemeToggle } from './ThemeToggle'
 
 function SettingsIcon() {
@@ -277,16 +278,14 @@ export function SettingsModal({
 
                     <div className="config-section">
                       <h3>Visible columns</h3>
-                      <div className="site-checks">
+                      <div className="switch-grid">
                         {COLUMNS.map((col) => (
-                          <label key={col.key} className="toggle-check">
-                            <input
-                              type="checkbox"
-                              checked={!hiddenColumns.includes(col.key)}
-                              onChange={() => onToggleColumn(col.key)}
-                            />
-                            {col.label}
-                          </label>
+                          <Switch
+                            key={col.key}
+                            label={col.label}
+                            checked={!hiddenColumns.includes(col.key)}
+                            onChange={() => onToggleColumn(col.key)}
+                          />
                         ))}
                       </div>
                     </div>
