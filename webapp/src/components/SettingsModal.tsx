@@ -61,7 +61,7 @@ function PromptTabContent({
     <>
       <h3 className="settings-content-title">{title}</h3>
       <p className="prompt-field-description">
-        Saved to <code>~/.applypilot/prompts.json</code> — only written once you customize a prompt; until then it falls back to the built-in default.
+        Saved to <code>~/.applypilot/prompts/{title.toLowerCase().replace(' ', '_')}.md</code> — only written once you customize this prompt; until then it falls back to the built-in default.
       </p>
       {loadError && <p className="search-result search-error">{loadError}</p>}
       {!loaded && !loadError && <p className="search-result">Loading…</p>}

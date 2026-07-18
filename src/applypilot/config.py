@@ -14,7 +14,7 @@ PROFILE_PATH = APP_DIR / "profile.json"
 RESUME_PATH = APP_DIR / "resume.txt"
 RESUME_PDF_PATH = APP_DIR / "resume.pdf"
 SEARCH_CONFIG_PATH = APP_DIR / "searches.yaml"
-PROMPTS_PATH = APP_DIR / "prompts.json"
+PROMPTS_DIR = APP_DIR / "prompts"
 ENV_PATH = APP_DIR / ".env"
 
 # Generated output
@@ -184,44 +184,49 @@ PROMPT_KEYS = ("cover_letter", "tailoring", "scoring")
 
 
 def load_prompt_overrides() -> dict[str, str]:
-    """Load user-customized prompt templates from ~/.applypilot/prompts.json.
+    """Load user-customized prompt templates from ~/.applypilot/prompts/*.md.
 
-    Unlike profile.json/searches.yaml, this file is optional -- prompt
-    customization is opt-in, so a missing or unreadable file just means
-    "use the built-in defaults" rather than an error.
+    Each prompt key is its own file (cover_letter.md, tailoring.md,
+    scoring.md) so overrides are easy to read/edit/diff individually.
+    Customization is opt-in, so a missing directory or file just means "use
+    the built-in default" rather than an error.
     """
-    import json
-    if not PROMPTS_PATH.exists():
-        return {}
-    try:
-        data = json.loads(PROMPTS_PATH.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
-    if not isinstance(data, dict):
-        return {}
-    return {k: v for k, v in data.items() if k in PROMPT_KEYS and isinstance(v, str) and v.strip()}
+    overrides = {}
+    for key in PROMPT_KEYS:
+        path = PROMPTS_DIR / f"{key}.md"
+        if not path.exists():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if text:
+            overrides[key] = text
+    return overrides
 
 
 def save_prompt_overrides(data: dict[str, str]) -> dict[str, str]:
     """Persist prompt template overrides, dropping any key left blank.
 
-    A blank value for a known key means "reset to default" -- it's simply
-    omitted from the saved file rather than stored as an empty override.
+    A blank value for a known key means "reset to default" -- its .md file
+    is removed rather than being written out empty.
 
     Returns the overrides dict that was written.
     """
-    import json
+    PROMPTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    overrides = {
-        key: data[key].strip()
-        for key in PROMPT_KEYS
-        if isinstance(data.get(key), str) and data[key].strip()
-    }
-
-    APP_DIR.mkdir(parents=True, exist_ok=True)
-    tmp_path = PROMPTS_PATH.with_name(PROMPTS_PATH.name + ".tmp")
-    tmp_path.write_text(json.dumps(overrides, indent=2), encoding="utf-8")
-    tmp_path.replace(PROMPTS_PATH)
+    overrides = {}
+    for key in PROMPT_KEYS:
+        path = PROMPTS_DIR / f"{key}.md"
+        value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            text = value.strip()
+            overrides[key] = text
+            tmp_path = path.with_name(path.name + ".tmp")
+            tmp_path.write_text(text, encoding="utf-8")
+            tmp_path.replace(path)
+        else:
+            path.unlink(missing_ok=True)
 
     return overrides
 
