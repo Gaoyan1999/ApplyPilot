@@ -12,7 +12,7 @@ import {
 import type { DiscoverLogEntry, Job, SearchConfig, SearchRunStage, SearchStatus } from '../api/types'
 import { ProgressBar } from './ProgressBar'
 import { ScorePill } from './ScorePill'
-import { SEARCHABLE_SITES, SiteIcon, SITE_META } from './SiteIcon'
+import { SiteIcon } from './SiteIcon'
 
 // The dashboard displays discover+enrich as one "Searching" step (fetching
 // full descriptions is an implementation detail of search, not something a
@@ -311,7 +311,7 @@ const EMPTY_CONFIG: SearchConfig = {
   defaults: { results_per_site: 100, hours_old: 168 },
 }
 
-const TIME_RANGES: { label: string; hours: number }[] = [
+export const TIME_RANGES: { label: string; hours: number }[] = [
   { label: 'Past 24 hours', hours: 24 },
   { label: 'Past week', hours: 168 },
   { label: 'Past month', hours: 720 },
@@ -329,8 +329,6 @@ export function SearchPanel({ onActivity }: Props) {
   const [open, setOpen] = useState(false)
   const [minimized, setMinimized] = useState(false)
   const [config, setConfig] = useState<SearchConfig>(EMPTY_CONFIG)
-  const [configLoaded, setConfigLoaded] = useState(false)
-  const [excludeTitlesText, setExcludeTitlesText] = useState('')
   const [queriesOpen, setQueriesOpen] = useState(false)
   const [running, setRunning] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -364,16 +362,17 @@ export function SearchPanel({ onActivity }: Props) {
     }).catch(() => {})
   }, [])
 
+  // Refetches on every open (rather than caching after the first load) so
+  // boards/exclude-titles/defaults edited from Settings in the meantime
+  // aren't clobbered by a stale in-memory copy on the next Save here --
+  // saving PUTs back the whole managed config, including fields this modal
+  // never shows.
   useEffect(() => {
-    if (!open || configLoaded) return
+    if (!open) return
     getSearchConfig()
-      .then((cfg) => {
-        setConfig(cfg)
-        setExcludeTitlesText(cfg.exclude_titles.join('\n'))
-      })
+      .then((cfg) => setConfig(cfg))
       .catch(() => setConfigError('Could not load search config'))
-      .finally(() => setConfigLoaded(true))
-  }, [open, configLoaded])
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -442,23 +441,12 @@ export function SearchPanel({ onActivity }: Props) {
     setConfig((c) => ({ ...c, locations: c.locations.filter((_, idx) => idx !== i) }))
   }
 
-  function toggleBoard(board: string) {
-    setConfig((c) => ({
-      ...c,
-      boards: c.boards.includes(board) ? c.boards.filter((b) => b !== board) : [...c.boards, board],
-    }))
-  }
-
   async function handleSave(andSearch: boolean) {
     setConfigMessage(null)
     setConfigError(null)
     setSaving(true)
     try {
-      const excludeTitles = excludeTitlesText
-        .split('\n')
-        .map((t) => t.trim())
-        .filter(Boolean)
-      const saved = await saveSearchConfig({ ...config, exclude_titles: excludeTitles })
+      const saved = await saveSearchConfig(config)
       setConfig(saved)
 
       if (andSearch) {
@@ -594,6 +582,7 @@ export function SearchPanel({ onActivity }: Props) {
                   ) : (
                     <>
                       Edits ~/.applypilot/searches.yaml — also used by <code>applypilot run discover</code>.
+                      Job boards, excluded titles, and result defaults are in Settings.
                     </>
                   )}
                 </p>
@@ -731,71 +720,6 @@ export function SearchPanel({ onActivity }: Props) {
                     <button type="button" className="add-btn" onClick={addLocation}>
                       + Add location
                     </button>
-                  </div>
-
-                  <div className="config-section">
-                    <h3>Job boards</h3>
-                    <div className="site-checks">
-                      {SEARCHABLE_SITES.map((site) => (
-                        <label key={site} className="toggle-check">
-                          <input
-                            type="checkbox"
-                            checked={config.boards.includes(site)}
-                            onChange={() => toggleBoard(site)}
-                          />
-                          {SITE_META[site].label}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="config-section">
-                    <h3>Exclude titles</h3>
-                    <textarea
-                      placeholder="One term per line, e.g. senior director"
-                      rows={3}
-                      value={excludeTitlesText}
-                      onChange={(e) => setExcludeTitlesText(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="config-section">
-                    <h3>Defaults</h3>
-                    <div className="config-row">
-                      <label className="field-label">
-                        Results per board
-                        <input
-                          type="number"
-                          min={1}
-                          max={100}
-                          value={config.defaults.results_per_site}
-                          onChange={(e) =>
-                            setConfig((c) => ({
-                              ...c,
-                              defaults: { ...c.defaults, results_per_site: Number(e.target.value) },
-                            }))
-                          }
-                        />
-                      </label>
-                      <label className="field-label">
-                        Posted within
-                        <select
-                          value={config.defaults.hours_old}
-                          onChange={(e) =>
-                            setConfig((c) => ({
-                              ...c,
-                              defaults: { ...c.defaults, hours_old: Number(e.target.value) },
-                            }))
-                          }
-                        >
-                          {TIME_RANGES.map((r) => (
-                            <option key={r.hours} value={r.hours}>
-                              {r.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
                   </div>
 
                   <div className="config-actions">
