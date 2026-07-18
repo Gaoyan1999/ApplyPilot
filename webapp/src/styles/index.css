@@ -1205,14 +1205,14 @@ body.col-resizing {
   background: var(--border);
 }
 
-.job-detail-toolbar {
-  display: flex;
-  align-items: center;
-  padding: 10px 12px 0;
-  flex-shrink: 0;
-}
-
+/* Overlaid rather than given its own toolbar row -- reserving a row for a
+   single icon left an awkward empty strip above the title. Hidden until the
+   panel is hovered, like Notion's own collapse control. */
 .job-detail-close {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1223,11 +1223,26 @@ body.col-resizing {
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, background 0.12s ease;
+  pointer-events: none;
+}
+
+.job-detail-panel:hover .job-detail-close {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .job-detail-close:hover {
   background: var(--bg-subtle);
   color: var(--text);
+}
+
+.job-detail-close:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  outline: 2px solid var(--stage-enriched-fg);
+  outline-offset: 1px;
 }
 
 @keyframes job-detail-slide-in {
