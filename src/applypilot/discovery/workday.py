@@ -23,6 +23,7 @@ from applypilot import config
 from applypilot.config import CONFIG_DIR
 from applypilot.database import get_connection, init_db
 from applypilot.employment_type import classify_job_type
+from applypilot.search_config import SearchYamlConfig
 
 log = logging.getLogger(__name__)
 
@@ -41,15 +42,12 @@ def load_employers() -> dict:
 
 # -- Location filtering from search config -----------------------------------
 
-def _load_location_filter(search_cfg: dict | None = None):
+def _load_location_filter(search_cfg: SearchYamlConfig | None = None):
     """Load location accept/reject lists from search config."""
     if search_cfg is None:
         search_cfg = config.load_search_config()
 
-    location_cfg = search_cfg.get("location", {})
-    accept = location_cfg.get("accept_patterns", [])
-    reject = location_cfg.get("reject_patterns", [])
-    return accept, reject
+    return search_cfg.location.accept_patterns, search_cfg.location.reject_patterns
 
 
 def _location_ok(location: str | None, accept: list[str], reject: list[str]) -> bool:
@@ -503,26 +501,26 @@ def run_workday_discovery(employers: dict | None = None, workers: int = 1) -> di
         return {"found": 0, "new": 0, "existing": 0, "queries": 0}
 
     search_cfg = config.load_search_config()
-    queries_cfg = search_cfg.get("queries", [])
+    queries_cfg = search_cfg.queries
     accept_locs, reject_locs = _load_location_filter(search_cfg)
 
     # Default to tier 1-2 queries for workday scraping
-    max_tier = search_cfg.get("workday_max_tier", 2)
-    queries = [q["query"] for q in queries_cfg if q.get("tier", 99) <= max_tier]
+    max_tier = search_cfg.workday_max_tier
+    queries = [q.query for q in queries_cfg if q.tier <= max_tier]
 
     if not queries:
         # Fallback: use all queries
-        queries = [q["query"] for q in queries_cfg]
+        queries = [q.query for q in queries_cfg]
 
     if not queries:
         log.warning("No search queries configured in searches.yaml.")
         return {"found": 0, "new": 0, "existing": 0, "queries": 0}
 
-    proxy = search_cfg.get("proxy")
+    proxy = search_cfg.proxy
     if proxy:
         setup_proxy(proxy)
 
-    location_filter = search_cfg.get("workday_location_filter", True)
+    location_filter = search_cfg.workday_location_filter
 
     log.info("Workday crawl: %d queries x %d employers (workers=%d)", len(queries), len(employers), workers)
 

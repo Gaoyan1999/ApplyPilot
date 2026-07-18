@@ -30,6 +30,7 @@ from applypilot.database import get_connection, get_stats, init_db
 from applypilot.scoring.cover_letter import DEFAULT_COVER_LETTER_TEMPLATE
 from applypilot.scoring.scorer import DEFAULT_SCORING_TEMPLATE
 from applypilot.scoring.tailor import DEFAULT_TAILOR_TEMPLATE
+from applypilot.search_config import SearchYamlConfig
 from applypilot.server import search_state
 from applypilot.server.stages import STAGE_ORDER, USER_ACTIONS, compute_stage
 
@@ -234,17 +235,16 @@ class SearchConfigBody(BaseModel):
     defaults: SearchConfigDefaults = SearchConfigDefaults()
 
 
-def _public_search_config(cfg: dict) -> dict:
-    """Shape a full searches.yaml dict down to the fields the web editor manages."""
-    defaults = cfg.get("defaults", {})
+def _public_search_config(cfg: SearchYamlConfig) -> dict:
+    """Shape a full searches.yaml config down to the fields the web editor manages."""
     return {
-        "queries": cfg.get("queries", []),
-        "locations": cfg.get("locations", []),
-        "exclude_titles": cfg.get("exclude_titles", []),
-        "boards": cfg.get("boards", []),
+        "queries": [q.model_dump() for q in cfg.queries],
+        "locations": [loc.model_dump() for loc in cfg.locations],
+        "exclude_titles": cfg.exclude_titles,
+        "boards": cfg.boards,
         "defaults": {
-            "results_per_site": defaults.get("results_per_site", 100),
-            "hours_old": defaults.get("hours_old", 72),
+            "results_per_site": cfg.defaults.results_per_site,
+            "hours_old": cfg.defaults.hours_old,
         },
     }
 

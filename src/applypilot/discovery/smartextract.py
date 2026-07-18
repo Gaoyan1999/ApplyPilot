@@ -33,6 +33,7 @@ from applypilot.config import CONFIG_DIR
 from applypilot.database import get_connection, init_db, store_jobs, get_stats
 from applypilot.employment_type import classify_job_type
 from applypilot.llm import get_client
+from applypilot.search_config import SearchYamlConfig
 
 log = logging.getLogger(__name__)
 
@@ -49,14 +50,11 @@ UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 
 # -- Location filtering -------------------------------------------------------
 
-def _load_location_filter(search_cfg: dict | None = None):
+def _load_location_filter(search_cfg: SearchYamlConfig | None = None):
     """Load location accept/reject lists from search config."""
     if search_cfg is None:
         search_cfg = config.load_search_config()
-    location_cfg = search_cfg.get("location", {})
-    accept = location_cfg.get("accept_patterns", [])
-    reject = location_cfg.get("reject_patterns", [])
-    return accept, reject
+    return search_cfg.location.accept_patterns, search_cfg.location.reject_patterns
 
 
 def _location_ok(location: str | None, accept: list[str], reject: list[str]) -> bool:
@@ -969,7 +967,7 @@ def _run_one_site(name: str, url: str) -> dict:
 
 def build_scrape_targets(
     sites: list[dict] | None = None,
-    search_cfg: dict | None = None,
+    search_cfg: SearchYamlConfig | None = None,
 ) -> list[dict]:
     """Build the full list of (name, url) targets from sites + search config queries.
 
@@ -986,10 +984,9 @@ def build_scrape_targets(
     if search_cfg is None:
         search_cfg = config.load_search_config()
 
-    queries_cfg = search_cfg.get("queries", [])
-    queries = [q["query"] for q in queries_cfg]
-    locs = search_cfg.get("locations", [])
-    default_location = locs[0]["location"] if locs else ""
+    queries = [q.query for q in search_cfg.queries]
+    locs = search_cfg.locations
+    default_location = locs[0].location if locs else ""
 
     targets: list[dict] = []
 

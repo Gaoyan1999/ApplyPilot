@@ -210,8 +210,6 @@ def _setup_searches() -> None:
         "# Edit this file to refine your job search queries.",
         "",
         "defaults:",
-        f'  location: "{location}"',
-        f"  distance: {distance}",
         "  hours_old: 72",
         "  results_per_site: 50",
         "",

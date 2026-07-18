@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 from applypilot import config
+from applypilot.search_config import SearchYamlConfig
 
 logger = logging.getLogger(__name__)
 
@@ -92,16 +93,16 @@ def _build_profile_summary(profile: dict) -> str:
     return "\n".join(lines)
 
 
-def _build_location_check(profile: dict, search_config: dict) -> str:
+def _build_location_check(profile: dict, search_config: SearchYamlConfig) -> str:
     """Build the location eligibility check section of the prompt.
 
     Uses the accept_patterns from search config to determine which cities
     are acceptable for hybrid/onsite roles.
     """
     personal = profile["personal"]
-    location_cfg = search_config.get("location", {})
-    accept_patterns = location_cfg.get("accept_patterns", [])
-    primary_city = personal.get("city", location_cfg.get("primary", "your city"))
+    location_cfg = search_config.location
+    accept_patterns = location_cfg.accept_patterns
+    primary_city = personal.get("city", location_cfg.primary or "your city")
 
     # Build the list of acceptable cities for hybrid/onsite
     if accept_patterns:
