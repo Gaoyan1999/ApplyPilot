@@ -1205,6 +1205,31 @@ body.col-resizing {
   background: var(--border);
 }
 
+.job-detail-toolbar {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px 0;
+  flex-shrink: 0;
+}
+
+.job-detail-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.job-detail-close:hover {
+  background: var(--bg-subtle);
+  color: var(--text);
+}
+
 @keyframes job-detail-slide-in {
   from {
     transform: translateX(100%);

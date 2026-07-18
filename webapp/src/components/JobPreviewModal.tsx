@@ -110,6 +110,11 @@ export function JobPreviewModal({
   return (
     <div className="modal-panel job-detail-panel" style={{ width }}>
       <div className="job-detail-resize-handle" onMouseDown={startResize} />
+      <div className="job-detail-toolbar">
+        <button type="button" className="job-detail-close" onClick={onClose} aria-label="Close" title="Close">
+          ✕
+        </button>
+      </div>
       <div className="modal-header">
         <div>
           <h2 className="modal-title">{job.title || '(untitled)'}</h2>
@@ -125,9 +130,6 @@ export function JobPreviewModal({
             title={job.dismissed ? 'Show this job in the dashboard again' : 'Hide this job from the dashboard'}
           >
             {job.dismissed ? 'Restore' : 'Not for me'}
-          </button>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
-            ✕
           </button>
         </div>
       </div>
