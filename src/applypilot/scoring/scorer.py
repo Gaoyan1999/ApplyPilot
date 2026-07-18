@@ -55,7 +55,7 @@ def _build_score_prompt(template: str | None = None) -> str:
 RESPOND IN EXACTLY THIS FORMAT (no other text):
 SCORE: [1-10]
 KEYWORDS: [comma-separated ATS keywords from the job description that match or could match the candidate]
-REASONING: [2-3 sentences explaining the score]"""
+REASONING: [One concise sentence, no filler. If the score is low, name the specific gap causing it -- you may briefly credit a relevant strength first (e.g. with an em dash), but end on the actual disqualifying reason, not a vague summary. Example: "Strong full-stack engineering experience -- especially in TypeScript, Java, Vue/React, and AI-integrated document systems -- but lacks the 5+ years of professional Python experience on large distributed systems this role requires." If the score is high, just state why the candidate fits -- don't dwell on minor gaps.]"""
 
 
 def _parse_score_response(response: str) -> dict:
