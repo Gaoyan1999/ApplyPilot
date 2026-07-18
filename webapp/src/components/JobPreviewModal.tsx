@@ -3,16 +3,14 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { ApiError, generateCoverLetter, getCoverLetter } from '../api/client'
 import type { Job, UserAction } from '../api/types'
-import { useLocalStorageState } from '../hooks/useLocalStorageState'
 import { formatDate } from '../lib/format'
 import { ScorePill } from './ScorePill'
 import { StageBadge } from './StageBadge'
 import { SiteIcon } from './SiteIcon'
 import { UserActionSelect } from './UserActionSelect'
 
-const DEFAULT_PANEL_WIDTH = 480
-const MIN_PANEL_WIDTH = 360
-const MAX_PANEL_WIDTH = 900
+export const MIN_PANEL_WIDTH = 360
+export const MAX_PANEL_WIDTH = 900
 
 interface Props {
   job: Job
@@ -20,6 +18,8 @@ interface Props {
   onUserActionChange: (job: Job, value: UserAction | null) => void
   onDismissChange: (job: Job, dismissed: boolean) => void
   onCoverLetterGenerated: () => void
+  width: number
+  onWidthChange: (width: number) => void
 }
 
 function MetaRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -37,11 +37,12 @@ export function JobPreviewModal({
   onUserActionChange,
   onDismissChange,
   onCoverLetterGenerated,
+  width,
+  onWidthChange,
 }: Props) {
   const [coverLetterText, setCoverLetterText] = useState<string | null>(null)
   const [coverLetterLoading, setCoverLetterLoading] = useState(false)
   const [coverLetterError, setCoverLetterError] = useState<string | null>(null)
-  const [width, setWidth] = useLocalStorageState('applypilot-job-detail-width', DEFAULT_PANEL_WIDTH)
 
   function startResize(e: React.MouseEvent) {
     e.preventDefault()
@@ -53,7 +54,7 @@ export function JobPreviewModal({
       // Panel is docked to the right edge, so dragging left (shrinking
       // clientX) grows it.
       const delta = startX - ev.clientX
-      setWidth(Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, startWidth + delta)))
+      onWidthChange(Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, startWidth + delta)))
     }
     function onMouseUp() {
       document.body.classList.remove('col-resizing')
