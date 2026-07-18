@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ApiError, getPrompts, getSearchConfig, savePrompts, saveSearchConfig } from '../api/client'
 import type { SearchConfig } from '../api/types'
 import type { Theme } from '../hooks/useTheme'
+import { COLUMNS, type SortKey } from './JobsTable'
 import { SEARCHABLE_SITES, SITE_META } from './SiteIcon'
 import { TIME_RANGES } from './SearchPanel'
 import { ThemeToggle } from './ThemeToggle'
@@ -86,6 +87,8 @@ interface Props {
   onToggleTheme: () => void
   showDismissed: boolean
   onToggleShowDismissed: () => void
+  hiddenColumns: SortKey[]
+  onToggleColumn: (key: SortKey) => void
 }
 
 const EMPTY_DEFAULTS = { cover_letter: '', tailoring: '', scoring: '' }
@@ -100,7 +103,9 @@ const TABS: { key: SettingsTab; label: string }[] = [
   { key: 'tailoring', label: 'Tailoring' },
 ]
 
-export function SettingsModal({ theme, onToggleTheme, showDismissed, onToggleShowDismissed }: Props) {
+export function SettingsModal({
+  theme, onToggleTheme, showDismissed, onToggleShowDismissed, hiddenColumns, onToggleColumn,
+}: Props) {
   const [open, setOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<SettingsTab>('general')
 
@@ -269,6 +274,22 @@ export function SettingsModal({ theme, onToggleTheme, showDismissed, onToggleSho
                     <p className="prompt-field-description">
                       Jobs marked "Not for me" are hidden from the dashboard by default. Turn this on to see them again.
                     </p>
+
+                    <div className="config-section">
+                      <h3>Visible columns</h3>
+                      <div className="site-checks">
+                        {COLUMNS.map((col) => (
+                          <label key={col.key} className="toggle-check">
+                            <input
+                              type="checkbox"
+                              checked={!hiddenColumns.includes(col.key)}
+                              onChange={() => onToggleColumn(col.key)}
+                            />
+                            {col.label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                   </>
                 )}
 
