@@ -1207,17 +1207,19 @@ body.col-resizing {
 
 /* Overlaid rather than given its own toolbar row -- reserving a row for a
    single icon left an awkward empty strip above the title. Hidden until the
-   panel is hovered, like Notion's own collapse control. */
+   panel is hovered, like Notion's own collapse control. The header reserves
+   left space (below) so the icon has its own gutter instead of sitting on
+   top of the title text. */
 .job-detail-close {
   position: absolute;
-  top: 10px;
-  left: 10px;
+  top: 14px;
+  left: 12px;
   z-index: 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border: none;
   border-radius: 6px;
   background: transparent;
@@ -1226,6 +1228,10 @@ body.col-resizing {
   opacity: 0;
   transition: opacity 0.12s ease, background 0.12s ease;
   pointer-events: none;
+}
+
+.job-detail-panel .modal-header {
+  padding-left: 46px;
 }
 
 .job-detail-panel:hover .job-detail-close {
