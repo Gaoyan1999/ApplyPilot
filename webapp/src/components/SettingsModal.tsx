@@ -60,6 +60,9 @@ function PromptTabContent({
   return (
     <>
       <h3 className="settings-content-title">{title}</h3>
+      <p className="prompt-field-description">
+        Saved to <code>~/.applypilot/prompts.json</code> — only written once you customize a prompt; until then it falls back to the built-in default.
+      </p>
       {loadError && <p className="search-result search-error">{loadError}</p>}
       {!loaded && !loadError && <p className="search-result">Loading…</p>}
       {loaded && (
@@ -248,6 +251,9 @@ export function SettingsModal({ theme, onToggleTheme, showDismissed, onToggleSho
                 {activeTab === 'general' && (
                   <>
                     <h3 className="settings-content-title">General</h3>
+                    <p className="prompt-field-description">
+                      Saved in this browser's local storage — per-device, not synced or written to any file.
+                    </p>
                     <div className="config-row">
                       <span className="field-label-inline">Theme</span>
                       <ThemeToggle theme={theme} onToggle={onToggleTheme} />
@@ -269,6 +275,9 @@ export function SettingsModal({ theme, onToggleTheme, showDismissed, onToggleSho
                 {activeTab === 'search' && (
                   <>
                     <h3 className="settings-content-title">Search Defaults</h3>
+                    <p className="prompt-field-description">
+                      Saved to <code>~/.applypilot/searches.yaml</code> — the same file as the queries/locations in the Search modal, and also used by <code>applypilot run discover</code>.
+                    </p>
                     {searchConfigError && <p className="search-result search-error">{searchConfigError}</p>}
                     {!searchConfig && !searchConfigError && <p className="search-result">Loading…</p>}
                     {searchConfig && (
