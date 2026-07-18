@@ -469,12 +469,6 @@
   text-overflow: ellipsis;
 }
 
-.search-discover-log-tier {
-  flex-shrink: 0;
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
 .discover-log-badges {
   display: flex;
   flex-shrink: 0;
