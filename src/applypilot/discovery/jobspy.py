@@ -18,6 +18,7 @@ from jobspy import scrape_jobs
 from applypilot import config
 from applypilot.database import get_connection, init_db, store_jobs
 from applypilot.employment_type import classify_job_type
+from applypilot.search_config import SearchYamlConfig
 
 log = logging.getLogger(__name__)
 
@@ -78,15 +79,9 @@ def _scrape_with_retry(kwargs: dict, max_retries: int = 5, backoff: float = 5.0)
 
 # -- Location filtering ------------------------------------------------------
 
-def _load_location_config(search_cfg: dict) -> tuple[list[str], list[str]]:
-    """Extract accept/reject location lists from search config.
-
-    Falls back to sensible defaults if not defined in the YAML.
-    """
-    location_cfg = search_cfg.get("location", {})
-    accept = location_cfg.get("accept_patterns", [])
-    reject = location_cfg.get("reject_patterns", [])
-    return accept, reject
+def _load_location_config(search_cfg: SearchYamlConfig) -> tuple[list[str], list[str]]:
+    """Extract accept/reject location lists from search config."""
+    return search_cfg.location.accept_patterns, search_cfg.location.reject_patterns
 
 
 def _location_ok(location: str | None, accept: list[str], reject: list[str]) -> bool:
@@ -226,7 +221,7 @@ def _run_one_search(
     results_per_site: int,
     hours_old: int,
     proxy_config: dict | None,
-    defaults: dict,
+    country_indeed: str,
     max_retries: int,
     accept_locs: list[str],
     reject_locs: list[str],
@@ -260,7 +255,7 @@ def _run_one_search(
             "results_wanted": results_per_site,
             "hours_old": hours_old,
             "description_format": "markdown",
-            "country_indeed": defaults.get("country_indeed", "usa"),
+            "country_indeed": country_indeed,
             "verbose": 2,
         }
         if s.get("remote"):
@@ -437,7 +432,7 @@ def search_jobs(
 # -- Full crawl (all queries x all locations) --------------------------------
 
 def _full_crawl(
-    search_cfg: dict,
+    search_cfg: SearchYamlConfig,
     tiers: list[int] | None = None,
     locations: list[str] | None = None,
     sites: list[str] | None = None,
@@ -463,25 +458,25 @@ def _full_crawl(
         sites = ["indeed", "linkedin", "zip_recruiter"]
 
     # Build search combinations from config
-    queries = search_cfg.get("queries", [])
-    locs = search_cfg.get("locations", [])
-    defaults = search_cfg.get("defaults", {})
-    glassdoor_map = search_cfg.get("glassdoor_location_map", {})
+    queries = search_cfg.queries
+    locs = search_cfg.locations
+    glassdoor_map = search_cfg.glassdoor_location_map
+    country_indeed = search_cfg.resolved_country_indeed
     accept_locs, reject_locs = _load_location_config(search_cfg)
 
     if tiers:
-        queries = [q for q in queries if q.get("tier") in tiers]
+        queries = [q for q in queries if q.tier in tiers]
     if locations:
-        locs = [loc for loc in locs if loc.get("label") in locations]
+        locs = [loc for loc in locs if loc.location in locations]
 
     searches = []
     for q in queries:
         for loc in locs:
             searches.append({
-                "query": q["query"],
-                "location": loc["location"],
-                "remote": loc.get("remote", False),
-                "tier": q.get("tier", 0),
+                "query": q.query,
+                "location": loc.location,
+                "remote": loc.remote,
+                "tier": q.tier,
             })
 
     proxy_config = parse_proxy(proxy) if proxy else None
@@ -535,7 +530,7 @@ def _full_crawl(
 
         result = _run_one_search(
             s, sites, results_per_site, hours_old,
-            proxy_config, defaults, max_retries,
+            proxy_config, country_indeed, max_retries,
             accept_locs, reject_locs, glassdoor_map,
             on_warning=on_warning,
         )
@@ -598,7 +593,7 @@ def _full_crawl(
 # -- Public entry point ------------------------------------------------------
 
 def run_discovery(
-    cfg: dict | None = None,
+    cfg: SearchYamlConfig | None = None,
     on_progress: Callable[[dict], None] | None = None,
     on_warning: Callable[[str], None] | None = None,
 ) -> dict:
@@ -608,8 +603,8 @@ def run_discovery(
     then runs a full crawl across all configured job boards.
 
     Args:
-        cfg: Override the search configuration dict. If None, loads from
-             the user's searches.yaml file.
+        cfg: Override the search configuration. If None, loads from the
+             user's searches.yaml file.
         on_progress: Optional callback invoked after every query with a dict
              of running totals -- see `_full_crawl`.
         on_warning: Optional callback invoked for every query/site that
@@ -621,16 +616,12 @@ def run_discovery(
     if cfg is None:
         cfg = config.load_search_config()
 
-    if not cfg:
-        log.warning("No search configuration found. Run `applypilot init` to create one.")
-        return {"new": 0, "existing": 0, "errors": 0, "db_total": 0, "queries": 0, "by_site": {}}
-
-    proxy = cfg.get("proxy")
-    sites = cfg.get("boards")
-    results_per_site = cfg.get("defaults", {}).get("results_per_site", 100)
-    hours_old = cfg.get("defaults", {}).get("hours_old", 72)
-    tiers = cfg.get("tiers")
-    locations = cfg.get("location_labels")
+    proxy = cfg.proxy
+    sites = cfg.boards
+    results_per_site = cfg.defaults.results_per_site
+    hours_old = cfg.defaults.hours_old
+    tiers = cfg.tiers
+    locations = cfg.location_labels
 
     return _full_crawl(
         search_cfg=cfg,

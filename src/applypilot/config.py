@@ -102,14 +102,16 @@ def load_profile() -> dict:
     return json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
 
 
-def load_search_config() -> dict:
-    """Load search configuration from ~/.applypilot/searches.yaml."""
+def load_search_config() -> "SearchYamlConfig":
+    """Load and validate search configuration from ~/.applypilot/searches.yaml."""
     import yaml
+    from applypilot.search_config import SearchYamlConfig
     if not SEARCH_CONFIG_PATH.exists():
         raise FileNotFoundError(
             f"Search config not found at {SEARCH_CONFIG_PATH}. Run `applypilot init` first."
         )
-    return yaml.safe_load(SEARCH_CONFIG_PATH.read_text(encoding="utf-8"))
+    raw = yaml.safe_load(SEARCH_CONFIG_PATH.read_text(encoding="utf-8")) or {}
+    return SearchYamlConfig.model_validate(raw)
 
 
 # Top-level searches.yaml keys the web dashboard's config editor manages.
@@ -119,7 +121,7 @@ _WEB_MANAGED_KEYS = ("queries", "locations", "exclude_titles", "boards")
 _WEB_MANAGED_DEFAULTS = ("results_per_site", "hours_old")
 
 
-def save_search_config(data: dict) -> dict:
+def save_search_config(data: dict) -> "SearchYamlConfig":
     """Merge web-editable fields into searches.yaml and persist it.
 
     Only `queries`, `locations`, `exclude_titles`, `boards`, and
@@ -130,9 +132,13 @@ def save_search_config(data: dict) -> dict:
     so a hand-tuned file (with comments, which this rewrite cannot preserve)
     isn't lost the first time someone saves from the dashboard.
 
-    Returns the full merged config that was written.
+    The merged result is validated against `SearchYamlConfig` before being
+    written -- an unrecognized key already sitting in the file (e.g. from a
+    hand-edit) fails the save loudly instead of being silently persisted
+    forever. Returns the validated config that was written.
     """
     import yaml
+    from applypilot.search_config import SearchYamlConfig
 
     current: dict = {}
     if SEARCH_CONFIG_PATH.exists():
@@ -151,6 +157,8 @@ def save_search_config(data: dict) -> dict:
             defaults[key] = data["defaults"][key]
     current["defaults"] = defaults
 
+    validated = SearchYamlConfig.model_validate(current)
+
     APP_DIR.mkdir(parents=True, exist_ok=True)
     header = (
         "# ApplyPilot search configuration\n"
@@ -159,12 +167,14 @@ def save_search_config(data: dict) -> dict:
     )
     tmp_path = SEARCH_CONFIG_PATH.with_name(SEARCH_CONFIG_PATH.name + ".tmp")
     tmp_path.write_text(
-        header + yaml.safe_dump(current, sort_keys=False, default_flow_style=False),
+        header + yaml.safe_dump(
+            validated.model_dump(exclude_none=True), sort_keys=False, default_flow_style=False,
+        ),
         encoding="utf-8",
     )
     tmp_path.replace(SEARCH_CONFIG_PATH)
 
-    return current
+    return validated
 
 
 # Prompt keys the web dashboard's Settings page can override. Each maps to a
@@ -218,7 +228,7 @@ def save_prompt_overrides(data: dict[str, str]) -> dict[str, str]:
 
 def get_excluded_titles() -> list[str]:
     """Lowercased exclude_titles terms from searches.yaml, for title filtering at storage time."""
-    return [t.lower() for t in load_search_config().get("exclude_titles", [])]
+    return [t.lower() for t in load_search_config().exclude_titles]
 
 
 def load_sites_config() -> dict:
