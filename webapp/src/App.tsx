@@ -61,6 +61,7 @@ function App() {
     'is',
   )
   const [showDismissed, setShowDismissed] = useLocalStorageState('applypilot-show-dismissed', false)
+  const [hiddenColumns, setHiddenColumns] = useLocalStorageState<SortKey[]>('applypilot-hidden-columns', [])
   const [sortKey, setSortKey] = useState<SortKey>('discovered_at')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -115,6 +116,10 @@ function App() {
     }
   }
 
+  function toggleColumnVisibility(key: SortKey) {
+    setHiddenColumns((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
+  }
+
   function handleSort(key: SortKey) {
     if (key === sortKey) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
@@ -137,6 +142,8 @@ function App() {
             onToggleTheme={toggleTheme}
             showDismissed={showDismissed}
             onToggleShowDismissed={() => setShowDismissed((v) => !v)}
+            hiddenColumns={hiddenColumns}
+            onToggleColumn={toggleColumnVisibility}
           />
         </div>
       </div>
@@ -172,6 +179,7 @@ function App() {
         onSort={handleSort}
         onPreview={(job) => setPreviewUrl(job.url)}
         onUserActionChange={handleUserActionChange}
+        hiddenColumns={hiddenColumns}
       />
 
       {previewJob && (
