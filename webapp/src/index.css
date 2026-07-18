@@ -249,10 +249,22 @@ body {
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-#root {
+/* Centered independently of #root (rather than on #root itself) so the
+   job-detail side panel -- a fixed-position element outside this box's own
+   layout -- can push the right margin in via an inline style, re-centering
+   this content into the space actually left of the panel instead of
+   staying centered on the full viewport underneath it. */
+.app-container {
   max-width: 1100px;
   margin: 0 auto;
   padding: 32px 24px 64px;
+  transition: margin-right 0.15s ease;
+}
+
+/* No transition lag while actively dragging the panel's resize handle --
+   only animate the open/close snap. */
+body.col-resizing .app-container {
+  transition: none;
 }
 
 h1 {

@@ -19,6 +19,8 @@ function matchesMultiSelect<T extends string>(mode: FilterMode, selected: T[], v
   return mode === 'is' ? included : !included
 }
 
+const DEFAULT_PANEL_WIDTH = 480
+
 function sortJobs(jobs: Job[], key: SortKey, dir: SortDir): Job[] {
   const factor = dir === 'asc' ? 1 : -1
   return [...jobs].sort((a, b) => {
@@ -62,6 +64,7 @@ function App() {
   )
   const [showDismissed, setShowDismissed] = useLocalStorageState('applypilot-show-dismissed', false)
   const [hiddenColumns, setHiddenColumns] = useLocalStorageState<SortKey[]>('applypilot-hidden-columns', [])
+  const [panelWidth, setPanelWidth] = useLocalStorageState('applypilot-job-detail-width', DEFAULT_PANEL_WIDTH)
   const [sortKey, setSortKey] = useState<SortKey>('discovered_at')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -132,7 +135,7 @@ function App() {
   const error = statusError || jobsError
 
   return (
-    <>
+    <div className="app-container" style={{ marginRight: previewJob ? panelWidth : undefined }}>
       <div className="app-header">
         <h1>ApplyPilot Dashboard</h1>
         <div className="app-header-actions">
@@ -189,9 +192,11 @@ function App() {
           onUserActionChange={handleUserActionChange}
           onDismissChange={handleDismissChange}
           onCoverLetterGenerated={refresh}
+          width={panelWidth}
+          onWidthChange={setPanelWidth}
         />
       )}
-    </>
+    </div>
   )
 }
 
