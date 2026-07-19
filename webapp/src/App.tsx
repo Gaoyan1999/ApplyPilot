@@ -65,8 +65,8 @@ function App() {
   const [showDismissed, setShowDismissed] = useLocalStorageState('applypilot-show-dismissed', false)
   const [hiddenColumns, setHiddenColumns] = useLocalStorageState<SortKey[]>('applypilot-hidden-columns', [])
   const [panelWidth, setPanelWidth] = useLocalStorageState('applypilot-job-detail-width', DEFAULT_PANEL_WIDTH)
-  const [sortKey, setSortKey] = useState<SortKey>('discovered_at')
-  const [sortDir, setSortDir] = useState<SortDir>('desc')
+  const [sortKey, setSortKey] = useLocalStorageState<SortKey>('applypilot-sort-key', 'discovered_at')
+  const [sortDir, setSortDir] = useLocalStorageState<SortDir>('applypilot-sort-dir', 'desc')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const previewJob = jobs?.find((j) => j.url === previewUrl) ?? null
