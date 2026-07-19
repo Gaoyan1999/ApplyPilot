@@ -1159,7 +1159,7 @@ body.col-resizing {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  z-index: 100;
+  z-index: 200; /* above .job-detail-panel's z-index:100, so Settings stays on top */
 }
 
 .modal-panel {
