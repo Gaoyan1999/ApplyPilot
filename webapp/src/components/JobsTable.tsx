@@ -159,7 +159,7 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview, onUserAct
                 </tr>
                 {!collapsed &&
                   bucketJobs.map((job) => (
-                    <tr key={job.url}>
+                    <tr key={job.url} className={job.dismissed ? 'jobs-table-row-dismissed' : undefined}>
                       {isVisible('title') && (
                         <td className="title-cell">
                           <button type="button" className="title-button" onClick={() => onPreview(job)}>

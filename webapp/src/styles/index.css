@@ -1077,6 +1077,12 @@ body.col-resizing {
   background: var(--bg-subtle);
 }
 
+.jobs-table-row-dismissed td {
+  text-decoration: line-through;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
 .jobs-table td.title-cell {
   white-space: normal;
   max-width: 340px;
