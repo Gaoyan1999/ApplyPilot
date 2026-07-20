@@ -20,16 +20,14 @@ from pydantic import BaseModel
 from rich.console import Console
 
 from applypilot.config import (
+    get_prompt_seed,
     get_tier,
-    load_prompt_overrides,
+    load_prompts,
     load_search_config,
-    save_prompt_overrides,
+    save_prompts,
     save_search_config,
 )
 from applypilot.database import get_connection, get_stats, init_db
-from applypilot.scoring.cover_letter import DEFAULT_COVER_LETTER_TEMPLATE
-from applypilot.scoring.scorer import DEFAULT_SCORING_TEMPLATE
-from applypilot.scoring.tailor import DEFAULT_TAILOR_TEMPLATE
 from applypilot.search_config import SearchYamlConfig
 from applypilot.server import search_state
 from applypilot.server.stages import STAGE_ORDER, USER_ACTIONS, compute_stage
@@ -270,23 +268,16 @@ class PromptsBody(BaseModel):
     scoring: str = ""
 
 
-_PROMPT_DEFAULTS = {
-    "cover_letter": DEFAULT_COVER_LETTER_TEMPLATE,
-    "tailoring": DEFAULT_TAILOR_TEMPLATE,
-    "scoring": DEFAULT_SCORING_TEMPLATE,
-}
-
-
 def _effective_prompts() -> dict:
-    """Shape stored overrides + built-in defaults into the Settings-page payload."""
-    overrides = load_prompt_overrides()
+    """Shape the live prompts (~/.applypilot/prompts/*.md) into the Settings-page payload."""
+    prompts = load_prompts()
     return {
         key: {
-            "text": overrides.get(key, default),
-            "default": default,
-            "is_custom": key in overrides,
+            "text": text,
+            "default": get_prompt_seed(key),
+            "is_custom": text != get_prompt_seed(key),
         }
-        for key, default in _PROMPT_DEFAULTS.items()
+        for key, text in prompts.items()
     }
 
 
@@ -297,7 +288,7 @@ def get_prompts() -> dict:
 
 @app.put("/api/prompts")
 def put_prompts(body: PromptsBody) -> dict:
-    save_prompt_overrides(body.model_dump())
+    save_prompts(body.model_dump())
     return _effective_prompts()
 
 

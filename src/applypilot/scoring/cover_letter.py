@@ -11,13 +11,7 @@ import re
 import time
 from datetime import datetime, timezone
 
-from applypilot.config import (
-    COVER_LETTER_DIR,
-    RESUME_PATH,
-    load_default_prompt,
-    load_profile,
-    load_prompt_overrides,
-)
+from applypilot.config import COVER_LETTER_DIR, RESUME_PATH, load_profile, load_prompts
 from applypilot.database import get_connection, get_jobs_by_stage
 from applypilot.llm import get_client
 from applypilot.scoring.validator import (
@@ -34,25 +28,15 @@ MAX_ATTEMPTS = 5  # max cross-run retries before giving up
 
 # ── Prompt Builder (profile-driven) ──────────────────────────────────────
 
-# The user-editable part of the cover letter prompt (paragraph structure +
-# voice). Customizable from the Settings page; falls back to the
-# package-shipped default at config/prompts/cover_letter.md when no override
-# is stored. Placeholder tokens {{SCHOOL_HINT}}, {{PROJECTS_HINT}},
-# {{METRICS_HINT}} are substituted with real profile data via plain string
-# replacement (not str.format) so arbitrary user-edited text containing
-# literal braces can't break substitution.
-DEFAULT_COVER_LETTER_TEMPLATE = load_default_prompt("cover_letter")
-
-
-def _build_cover_letter_prompt(profile: dict, template: str | None = None) -> str:
+def _build_cover_letter_prompt(profile: dict, template: str) -> str:
     """Build the cover letter system prompt from the user's profile.
 
     All personal data, skills, and sign-off name come from the profile. The
-    paragraph-structure/voice portion comes from `template` (a Settings-page
-    override) if given, else DEFAULT_COVER_LETTER_TEMPLATE. Banned words,
-    the fabrication guard, and the output/sign-off contract are always
-    appended by code, regardless of the template, so they can't be edited
-    away.
+    paragraph-structure/voice portion comes from `template` -- the live text
+    in ~/.applypilot/prompts/cover_letter.md (see config.load_prompts).
+    Banned words, the fabrication guard, and the output/sign-off contract
+    are always appended by code, regardless of the template, so they can't
+    be edited away.
     """
     personal = profile.get("personal", {})
     boundary = profile.get("skills_boundary", {})
@@ -91,8 +75,11 @@ def _build_cover_letter_prompt(profile: dict, template: str | None = None) -> st
     preserved_school = resume_facts.get("preserved_school", "")
     school_hint = f"\nSchool to reference: {preserved_school}" if preserved_school else ""
 
+    # Placeholder tokens are substituted via plain string replacement (not
+    # str.format) so arbitrary user-edited text containing literal braces
+    # can't break substitution.
     structure_section = (
-        (template or DEFAULT_COVER_LETTER_TEMPLATE)
+        template
         .replace("{{SCHOOL_HINT}}", school_hint)
         .replace("{{PROJECTS_HINT}}", projects_hint)
         .replace("{{METRICS_HINT}}", metrics_hint)
@@ -187,8 +174,8 @@ def generate_cover_letter(
     avoid_notes: list[str] = []
     letter = ""
     client = get_client()
-    overrides = load_prompt_overrides()
-    cl_prompt_base = _build_cover_letter_prompt(profile, overrides.get("cover_letter"))
+    prompts = load_prompts()
+    cl_prompt_base = _build_cover_letter_prompt(profile, prompts["cover_letter"])
 
     for attempt in range(max_retries + 1):
         # Fresh conversation every attempt

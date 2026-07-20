@@ -16,13 +16,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from applypilot.config import (
-    RESUME_PATH,
-    TAILORED_DIR,
-    load_default_prompt,
-    load_profile,
-    load_prompt_overrides,
-)
+from applypilot.config import RESUME_PATH, TAILORED_DIR, load_profile, load_prompts
 from applypilot.database import get_connection, get_jobs_by_stage
 from applypilot.llm import get_client
 from applypilot.scoring.validator import (
@@ -39,24 +33,16 @@ MAX_ATTEMPTS = 5  # max cross-run retries before giving up
 
 # ── Prompt Builders (profile-driven) ──────────────────────────────────────
 
-# The user-editable part of the tailoring prompt (recruiter-scan framing,
-# tailoring rules, voice). Customizable from the Settings page; falls back
-# to the package-shipped default at config/prompts/tailoring.md when no
-# override is stored. The skills boundary, banned words, hard fabrication
-# rules, and JSON output schema are always appended by code (see
-# _build_tailor_prompt) since parsing/validation depend on them.
-DEFAULT_TAILOR_TEMPLATE = load_default_prompt("tailoring")
-
-
-def _build_tailor_prompt(profile: dict, template: str | None = None) -> str:
+def _build_tailor_prompt(profile: dict, template: str) -> str:
     """Build the resume tailoring system prompt from the user's profile.
 
     All skills boundaries, preserved entities, and formatting rules are
     derived from the profile -- nothing is hardcoded. The recruiter-scan/
-    tailoring-rules/voice portion comes from `template` (a Settings-page
-    override) if given, else DEFAULT_TAILOR_TEMPLATE. The skills boundary,
-    banned words, hard rules, and JSON output schema are always appended by
-    code, regardless of the template, so they can't be edited away.
+    tailoring-rules/voice portion comes from `template` -- the live text in
+    ~/.applypilot/prompts/tailoring.md (see config.load_prompts). The skills
+    boundary, banned words, hard rules, and JSON output schema are always
+    appended by code, regardless of the template, so they can't be edited
+    away.
     """
     boundary = profile.get("skills_boundary", {})
     resume_facts = profile.get("resume_facts", {})
@@ -84,7 +70,7 @@ def _build_tailor_prompt(profile: dict, template: str | None = None) -> str:
     education = profile.get("experience", {})
     education_level = education.get("education_level", "")
 
-    tailoring_section = template or DEFAULT_TAILOR_TEMPLATE
+    tailoring_section = template
 
     return f"""You are a senior technical recruiter rewriting a resume to get this person an interview.
 
@@ -378,8 +364,8 @@ def tailor_resume(
     avoid_notes: list[str] = []
     tailored = ""
     client = get_client()
-    overrides = load_prompt_overrides()
-    tailor_prompt_base = _build_tailor_prompt(profile, overrides.get("tailoring"))
+    prompts = load_prompts()
+    tailor_prompt_base = _build_tailor_prompt(profile, prompts["tailoring"])
 
     for attempt in range(max_retries + 1):
         report["attempts"] = attempt + 1
