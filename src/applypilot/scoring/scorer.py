@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable
 from datetime import datetime, timezone
 
-from applypilot.config import RESUME_PATH, load_profile, load_prompt_overrides
+from applypilot.config import RESUME_PATH, load_default_prompt, load_profile, load_prompt_overrides
 from applypilot.database import get_connection, get_jobs_by_stage
 from applypilot.llm import get_client
 
@@ -22,21 +22,11 @@ log = logging.getLogger(__name__)
 # ── Scoring Prompt ────────────────────────────────────────────────────────
 
 # The user-editable part of the scoring prompt (the fit rubric). Customizable
-# from the Settings page; falls back to this default when no override is
-# stored. The response-format contract is always appended by code (see
-# _build_score_prompt) since _parse_score_response depends on it exactly.
-DEFAULT_SCORING_TEMPLATE = """SCORING CRITERIA:
-- 9-10: Perfect match. Candidate has direct experience in nearly all required skills and qualifications.
-- 7-8: Strong match. Candidate has most required skills, minor gaps easily bridged.
-- 5-6: Moderate match. Candidate has some relevant skills but missing key requirements.
-- 3-4: Weak match. Significant skill gaps, would need substantial ramp-up.
-- 1-2: Poor match. Completely different field or experience level.
-
-IMPORTANT FACTORS:
-- Weight technical skills heavily (programming languages, frameworks, tools)
-- Consider transferable experience (automation, scripting, API work)
-- Factor in the candidate's project experience
-- Be realistic about experience level vs. job requirements (years of experience, seniority)"""
+# from the Settings page; falls back to the package-shipped default at
+# config/prompts/scoring.md when no override is stored. The response-format
+# contract is always appended by code (see _build_score_prompt) since
+# _parse_score_response depends on it exactly.
+DEFAULT_SCORING_TEMPLATE = load_default_prompt("scoring")
 
 
 def _build_score_prompt(template: str | None = None) -> str:

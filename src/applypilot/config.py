@@ -178,9 +178,21 @@ def save_search_config(data: dict) -> "SearchYamlConfig":
 
 
 # Prompt keys the web dashboard's Settings page can override. Each maps to a
-# module-level DEFAULT_*_TEMPLATE constant (in the corresponding scoring/*
-# module) that's used whenever no override is stored here.
+# package-shipped default at CONFIG_DIR/prompts/{key}.md (used whenever no
+# user override is stored in PROMPTS_DIR) and a user override at
+# PROMPTS_DIR/{key}.md.
 PROMPT_KEYS = ("cover_letter", "tailoring", "scoring")
+
+DEFAULT_PROMPTS_DIR = CONFIG_DIR / "prompts"
+
+
+def load_default_prompt(key: str) -> str:
+    """Load the package-shipped default prompt template for `key`.
+
+    These are the built-in fallbacks used whenever the user hasn't saved a
+    customized override via the Settings page (see `load_prompt_overrides`).
+    """
+    return (DEFAULT_PROMPTS_DIR / f"{key}.md").read_text(encoding="utf-8").strip()
 
 
 def load_prompt_overrides() -> dict[str, str]:
