@@ -114,6 +114,7 @@ def get_status() -> dict:
         ],
         "by_site": [{"site": s, "count": c} for s, c in stats["by_site"]],
         "by_job_type": [{"job_type": t, "count": c} for t, c in stats["by_job_type"]],
+        "by_user_action": [{"user_action": a, "count": c} for a, c in stats["by_user_action"]],
         "stage_counts": stage_counts,
     }
 
