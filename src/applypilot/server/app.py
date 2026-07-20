@@ -15,6 +15,7 @@ import webbrowser
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from rich.console import Console
@@ -244,6 +245,32 @@ def generate_job_cover_letter(url: str) -> dict:
     except ValueError as e:
         status_code = 404 if "not found" in str(e) else 400
         raise HTTPException(status_code=status_code, detail=str(e)) from e
+
+
+@app.get("/api/jobs/{url:path}/cover-letter/pdf")
+def download_job_cover_letter_pdf(url: str):
+    """Download the generated cover letter PDF (see scoring.cover_letter).
+
+    Registered before the general GET /api/jobs/{url:path} route below, for
+    the same reason as the other /cover-letter routes -- otherwise that
+    catch-all pattern would swallow this path too.
+    """
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT cover_letter_path FROM jobs WHERE url = ?", (url,)
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    txt_path = row["cover_letter_path"]
+    if not txt_path:
+        raise HTTPException(status_code=404, detail="No cover letter generated yet")
+
+    pdf_path = Path(txt_path).with_suffix(".pdf")
+    if not pdf_path.exists():
+        raise HTTPException(status_code=404, detail="Cover letter PDF not found")
+
+    return FileResponse(pdf_path, media_type="application/pdf", filename=pdf_path.name)
 
 
 @app.get("/api/jobs/{url:path}")

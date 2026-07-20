@@ -143,6 +143,53 @@ def _with_header_footer(letter: str, profile: dict) -> str:
     return letter
 
 
+def _clean_url_for_display(url: str) -> str:
+    """Strip the scheme (and leading www.) so a URL reads cleanly on a printed page."""
+    return re.sub(r"^https?://(www\.)?", "", url).rstrip("/")
+
+
+def _build_cover_letter_pdf_data(letter: str, job: dict, profile: dict) -> dict:
+    """Assemble structured data for build_cover_letter_html from the
+    header/footer-wrapped letter text plus the job and profile.
+
+    The wrapped letter (see _with_header_footer) has the shape:
+        {date}\\n\\nDear Hiring Manager,\\n\\n{para1}\\n\\n...\\n\\n{name}\\n{contact}
+    Splitting on blank lines cleanly separates the date, greeting, body
+    paragraphs, and a final chunk holding the sign-off name (its own
+    contact-info line is discarded here since the PDF header rebuilds a
+    fuller contact line directly from the profile).
+    """
+    chunks = [c.strip() for c in letter.strip().split("\n\n") if c.strip()]
+    greeting = chunks[1] if len(chunks) > 1 else "Dear Hiring Manager,"
+    paragraphs = chunks[2:-1]  # empty if there aren't enough chunks -- slicing handles that
+    sign_off_name = chunks[-1].split("\n")[0].strip() if len(chunks) > 2 else ""
+
+    personal = profile.get("personal", {})
+    name = personal.get("preferred_name") or personal.get("full_name", "")
+
+    location_parts = [p for p in (personal.get("city"), personal.get("province_state")) if p]
+    contact_fields = [
+        ", ".join(location_parts),
+        personal.get("phone"),
+        personal.get("email"),
+        _clean_url_for_display(personal["github_url"]) if personal.get("github_url") else None,
+        _clean_url_for_display(personal["website_url"]) if personal.get("website_url") else None,
+    ]
+    contact_line = " | ".join(p for p in contact_fields if p)
+
+    return {
+        "name": name,
+        "contact_line": contact_line,
+        "date_str": datetime.now(timezone.utc).strftime("%d %B %Y"),
+        "company": job.get("company"),
+        "location": job.get("location"),
+        "job_title": job.get("title"),
+        "greeting": greeting,
+        "paragraphs": paragraphs,
+        "sign_off_name": sign_off_name or name,
+    }
+
+
 # ── Core Generation ──────────────────────────────────────────────────────
 
 def generate_cover_letter(
@@ -214,12 +261,13 @@ def generate_cover_letter(
 
 # ── Save Helper (shared by batch + single-job paths) ──────────────────────
 
-def _save_cover_letter(letter: str, job: dict) -> dict:
+def _save_cover_letter(letter: str, job: dict, profile: dict) -> dict:
     """Write a generated letter to .txt + .pdf and return the paths.
 
     Args:
-        letter: Generated cover letter text.
-        job:    Job dict (needs "title" and "site" for the filename).
+        letter:  Generated cover letter text (header/footer-wrapped).
+        job:     Job dict (needs "title" and "site" for the filename).
+        profile: User profile dict, for the PDF's name/contact header.
 
     Returns:
         {"text": str, "path": str, "pdf_path": str | None}
@@ -234,8 +282,9 @@ def _save_cover_letter(letter: str, job: dict) -> dict:
 
     pdf_path = None
     try:
-        from applypilot.scoring.pdf import convert_to_pdf
-        pdf_path = str(convert_to_pdf(cl_path))
+        from applypilot.scoring.pdf import convert_cover_letter_to_pdf
+        pdf_data = _build_cover_letter_pdf_data(letter, job, profile)
+        pdf_path = str(convert_cover_letter_to_pdf(pdf_data, cl_path.with_suffix(".pdf")))
     except Exception:
         log.debug("PDF generation failed for %s", cl_path, exc_info=True)
 
@@ -273,7 +322,7 @@ def generate_cover_letter_for_job(url: str, validation_mode: str = "normal") -> 
     resume_text = RESUME_PATH.read_text(encoding="utf-8")
 
     letter = generate_cover_letter(resume_text, job, profile, validation_mode=validation_mode)
-    result = _save_cover_letter(letter, job)
+    result = _save_cover_letter(letter, job, profile)
 
     now = datetime.now(timezone.utc).isoformat()
     conn.execute(
@@ -340,7 +389,7 @@ def run_cover_letters(min_score: int = 7, limit: int = 20,
         try:
             letter = generate_cover_letter(resume_text, job, profile,
                                           validation_mode=validation_mode)
-            save_result = _save_cover_letter(letter, job)
+            save_result = _save_cover_letter(letter, job, profile)
 
             result = {
                 "url": job["url"],

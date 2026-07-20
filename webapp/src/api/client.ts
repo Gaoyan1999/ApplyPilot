@@ -109,3 +109,7 @@ export function getCoverLetter(url: string): Promise<CoverLetterText> {
 export function generateCoverLetter(url: string): Promise<CoverLetterText> {
   return sendJson<CoverLetterText>(`/api/jobs/${encodeURIComponent(url)}/cover-letter`, 'POST')
 }
+
+export function getCoverLetterPdfUrl(url: string): string {
+  return `/api/jobs/${encodeURIComponent(url)}/cover-letter/pdf`
+}

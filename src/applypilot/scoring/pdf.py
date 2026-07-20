@@ -331,6 +331,98 @@ li {{
 </html>"""
 
 
+# ── Cover Letter HTML Template ───────────────────────────────────────────
+
+def build_cover_letter_html(data: dict) -> str:
+    """Build a professional cover letter HTML: name header + contact line,
+    date, recipient block, subject line, greeting, body paragraphs, sign-off.
+
+    Args:
+        data: {
+            "name": str, "contact_line": str, "date_str": str,
+            "company": str, "location": str, "job_title": str,
+            "greeting": str, "paragraphs": list[str], "sign_off_name": str,
+        }
+
+    Returns:
+        Complete HTML string ready for PDF rendering.
+    """
+    paragraphs_html = "".join(f"<p>{p}</p>" for p in data["paragraphs"])
+
+    recipient_lines = [line for line in ("Hiring Team", data.get("company"), data.get("location")) if line]
+    recipient_html = "".join(f"<div>{line}</div>" for line in recipient_lines)
+
+    subject_html = f'<div class="subject">Re: {data["job_title"]}</div>' if data.get("job_title") else ""
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@page {{
+    size: letter;
+    margin: 0.6in 0.75in;
+}}
+* {{
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}}
+body {{
+    font-family: 'Calibri', 'Segoe UI', Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.5;
+    color: #1a1a1a;
+}}
+.header {{
+    padding-bottom: 8px;
+    margin-bottom: 16px;
+    border-bottom: 1.5px solid #1a1a1a;
+}}
+.name {{
+    font-size: 22pt;
+    font-weight: 700;
+}}
+.contact {{
+    font-size: 9.5pt;
+    color: #444;
+    margin-top: 2px;
+}}
+.date {{
+    margin-bottom: 16px;
+}}
+.recipient {{
+    margin-bottom: 16px;
+}}
+.subject {{
+    font-weight: 700;
+    margin-bottom: 16px;
+}}
+p {{
+    margin-bottom: 14px;
+}}
+.signoff-name {{
+    font-weight: 700;
+    margin-top: 4px;
+}}
+</style>
+</head>
+<body>
+<div class="header">
+    <div class="name">{data['name']}</div>
+    <div class="contact">{data['contact_line']}</div>
+</div>
+<div class="date">{data['date_str']}</div>
+<div class="recipient">{recipient_html}</div>
+{subject_html}
+<p>{data['greeting']}</p>
+{paragraphs_html}
+<div>Kind regards,</div>
+<div class="signoff-name">{data['sign_off_name']}</div>
+</body>
+</html>"""
+
+
 # ── PDF Renderer ─────────────────────────────────────────────────────────
 
 def render_pdf(html: str, output_path: str) -> None:
@@ -357,10 +449,35 @@ def render_pdf(html: str, output_path: str) -> None:
 
 # ── Public API ───────────────────────────────────────────────────────────
 
+def convert_cover_letter_to_pdf(data: dict, output_path: Path) -> Path:
+    """Render a cover letter to PDF from structured data (see build_cover_letter_html).
+
+    Unlike convert_to_pdf, this doesn't re-parse a saved .txt file -- cover
+    letters are plain prose, not the ALL-CAPS-section-header format
+    parse_resume expects, so parsing one as a resume produces garbage.
+
+    Args:
+        data: See build_cover_letter_html.
+        output_path: Path to write the PDF file.
+
+    Returns:
+        output_path, for chaining.
+    """
+    output_path = Path(output_path)
+    html = build_cover_letter_html(data)
+    render_pdf(html, str(output_path))
+    log.info("Cover letter PDF generated: %s", output_path)
+    return output_path
+
+
 def convert_to_pdf(
     text_path: Path, output_path: Path | None = None, html_only: bool = False
 ) -> Path:
-    """Convert a text resume/cover letter to PDF.
+    """Convert a text resume to PDF.
+
+    Only resumes are supported here -- parse_resume expects the structured
+    ALL-CAPS-section-header format tailored resumes are written in. For
+    cover letters (plain prose), use convert_cover_letter_to_pdf instead.
 
     Args:
         text_path: Path to the .txt file to convert.

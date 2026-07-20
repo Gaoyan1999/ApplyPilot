@@ -1599,6 +1599,29 @@ body.col-resizing {
   cursor: default;
 }
 
+.cover-letter-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cover-letter-download {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--bg-subtle);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.cover-letter-download:hover {
+  background: var(--border);
+}
+
 .cover-letter-text {
   white-space: pre-wrap;
   font-family: inherit;
