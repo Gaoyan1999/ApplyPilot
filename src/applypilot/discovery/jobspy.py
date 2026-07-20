@@ -147,11 +147,11 @@ def store_jobspy_results(
             continue
 
         title = str(row.get("title", "")) if str(row.get("title", "")) != "nan" else None
-        if title and any(term in title.lower() for term in exclude_titles):
+        company = str(row.get("company", "")) if str(row.get("company", "")) != "nan" else None
+        if any(term in (title or "").lower() or term in (company or "").lower() for term in exclude_titles):
             continue
         job_type_raw = str(row.get("job_type", "")) if str(row.get("job_type", "")) != "nan" else None
         job_type = classify_job_type(job_type_raw, title)
-        company = str(row.get("company", "")) if str(row.get("company", "")) != "nan" else None
         location_str = str(row.get("location", "")) if str(row.get("location", "")) != "nan" else None
 
         # Build salary string from min/max

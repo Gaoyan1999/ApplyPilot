@@ -312,7 +312,8 @@ def store_results(conn: sqlite3.Connection, jobs: list[dict], employers: dict) -
 
     for job in jobs:
         title = job.get("title") or ""
-        if any(term in title.lower() for term in exclude_titles):
+        company = job.get("employer_name") or ""
+        if any(term in title.lower() or term in company.lower() for term in exclude_titles):
             continue
         job_type = classify_job_type(job.get("time_type"), title)
 

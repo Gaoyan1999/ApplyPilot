@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { ApiError, generateCoverLetter, getCoverLetter } from '../api/client'
+import { ApiError, generateCoverLetter, getCoverLetter, getCoverLetterPdfUrl } from '../api/client'
 import type { Job, UserAction } from '../api/types'
 import { formatDate } from '../lib/format'
 import { ScorePill } from './ScorePill'
-import { StageBadge } from './StageBadge'
 import { SiteIcon } from './SiteIcon'
 import { UserActionSelect } from './UserActionSelect'
 
@@ -141,9 +140,6 @@ export function JobPreviewModal({
               onChange={(value) => onUserActionChange(job, value)}
             />
           </MetaRow>
-          <MetaRow label="Stage">
-            <StageBadge stage={job.stage} />
-          </MetaRow>
           <MetaRow label="Score">
             <ScorePill score={job.fit_score} />
             {job.score_reasoning && <span className="meta-note">{job.score_reasoning}</span>}
@@ -183,18 +179,29 @@ export function JobPreviewModal({
 
         <div className="section-heading-row">
           <h3 className="section-heading">Cover Letter</h3>
-          <button
-            type="button"
-            disabled={coverLetterLoading || !job.full_description}
-            title={!job.full_description ? 'Needs a job description first' : undefined}
-            onClick={handleGenerateCoverLetter}
-          >
-            {coverLetterLoading
-              ? 'Generating…'
-              : coverLetterText
-                ? 'Regenerate'
-                : 'Generate cover letter'}
-          </button>
+          <div className="cover-letter-actions">
+            {coverLetterText && (
+              <a
+                className="cover-letter-download"
+                href={getCoverLetterPdfUrl(job.url)}
+                download
+              >
+                Download PDF
+              </a>
+            )}
+            <button
+              type="button"
+              disabled={coverLetterLoading || !job.full_description}
+              title={!job.full_description ? 'Needs a job description first' : undefined}
+              onClick={handleGenerateCoverLetter}
+            >
+              {coverLetterLoading
+                ? 'Generating…'
+                : coverLetterText
+                  ? 'Regenerate'
+                  : 'Generate cover letter'}
+            </button>
+          </div>
         </div>
         {coverLetterError && <p className="cover-letter-error">{coverLetterError}</p>}
         {coverLetterText && <pre className="cover-letter-text">{coverLetterText}</pre>}
