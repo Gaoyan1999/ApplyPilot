@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable
 from datetime import datetime, timezone
 
-from applypilot.config import RESUME_PATH, load_profile, load_prompt_overrides
+from applypilot.config import RESUME_PATH, load_profile, load_prompts
 from applypilot.database import get_connection, get_jobs_by_stage
 from applypilot.llm import get_client
 
@@ -21,36 +21,18 @@ log = logging.getLogger(__name__)
 
 # ── Scoring Prompt ────────────────────────────────────────────────────────
 
-# The user-editable part of the scoring prompt (the fit rubric). Customizable
-# from the Settings page; falls back to this default when no override is
-# stored. The response-format contract is always appended by code (see
-# _build_score_prompt) since _parse_score_response depends on it exactly.
-DEFAULT_SCORING_TEMPLATE = """SCORING CRITERIA:
-- 9-10: Perfect match. Candidate has direct experience in nearly all required skills and qualifications.
-- 7-8: Strong match. Candidate has most required skills, minor gaps easily bridged.
-- 5-6: Moderate match. Candidate has some relevant skills but missing key requirements.
-- 3-4: Weak match. Significant skill gaps, would need substantial ramp-up.
-- 1-2: Poor match. Completely different field or experience level.
-
-IMPORTANT FACTORS:
-- Weight technical skills heavily (programming languages, frameworks, tools)
-- Consider transferable experience (automation, scripting, API work)
-- Factor in the candidate's project experience
-- Be realistic about experience level vs. job requirements (years of experience, seniority)"""
-
-
-def _build_score_prompt(template: str | None = None) -> str:
+def _build_score_prompt(template: str) -> str:
     """Build the job fit scoring prompt.
 
-    The rubric comes from `template` (a Settings-page override) if given,
-    else DEFAULT_SCORING_TEMPLATE. The response-format contract is always
-    appended by code, regardless of the template, since it can't be edited
-    away without breaking `_parse_score_response`.
+    The rubric comes from `template` -- the live text in
+    ~/.applypilot/prompts/scoring.md (see config.load_prompts). The
+    response-format contract is always appended by code, regardless of the
+    template, since it can't be edited away without breaking
+    `_parse_score_response`.
     """
-    rubric = template or DEFAULT_SCORING_TEMPLATE
     return f"""You are a job fit evaluator. Given a candidate's resume and a job description, score how well the candidate fits the role.
 
-{rubric}
+{template}
 
 RESPOND IN EXACTLY THIS FORMAT (no other text):
 SCORE: [1-10]
@@ -165,8 +147,8 @@ def run_scoring(
     completed = 0
     errors = 0
     results: list[dict] = []
-    overrides = load_prompt_overrides()
-    score_prompt = _build_score_prompt(overrides.get("scoring"))
+    prompts = load_prompts()
+    score_prompt = _build_score_prompt(prompts["scoring"])
 
     for job in jobs:
         result = score_job(resume_text, job, score_prompt)

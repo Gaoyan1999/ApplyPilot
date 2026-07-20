@@ -177,58 +177,61 @@ def save_search_config(data: dict) -> "SearchYamlConfig":
     return validated
 
 
-# Prompt keys the web dashboard's Settings page can override. Each maps to a
-# module-level DEFAULT_*_TEMPLATE constant (in the corresponding scoring/*
-# module) that's used whenever no override is stored here.
+# Prompt keys the web dashboard's Settings page can edit. Each is a single
+# file at PROMPTS_DIR/{key}.md -- that file is the one source of truth read
+# at generation time and shown in Settings, and it's directly editable by
+# hand. CONFIG_DIR/prompts/{key}.md (package-shipped) is only ever used to
+# seed a missing file on first run or to restore one via "Reset to default";
+# it is never read at generation time.
 PROMPT_KEYS = ("cover_letter", "tailoring", "scoring")
 
+_SEED_PROMPTS_DIR = CONFIG_DIR / "prompts"
 
-def load_prompt_overrides() -> dict[str, str]:
-    """Load user-customized prompt templates from ~/.applypilot/prompts/*.md.
 
-    Each prompt key is its own file (cover_letter.md, tailoring.md,
-    scoring.md) so overrides are easy to read/edit/diff individually.
-    Customization is opt-in, so a missing directory or file just means "use
-    the built-in default" rather than an error.
+def get_prompt_seed(key: str) -> str:
+    """Return the package-shipped seed text for `key` (used to seed/reset)."""
+    return (_SEED_PROMPTS_DIR / f"{key}.md").read_text(encoding="utf-8").strip()
+
+
+def load_prompts() -> dict[str, str]:
+    """Load the live prompt templates from ~/.applypilot/prompts/*.md.
+
+    Any file that doesn't exist yet is seeded from the package default first,
+    so every key is always present -- callers never need a separate
+    in-code fallback.
     """
-    overrides = {}
+    PROMPTS_DIR.mkdir(parents=True, exist_ok=True)
+    prompts = {}
     for key in PROMPT_KEYS:
         path = PROMPTS_DIR / f"{key}.md"
         if not path.exists():
-            continue
-        try:
-            text = path.read_text(encoding="utf-8").strip()
-        except OSError:
-            continue
-        if text:
-            overrides[key] = text
-    return overrides
+            path.write_text(get_prompt_seed(key), encoding="utf-8")
+        prompts[key] = path.read_text(encoding="utf-8").strip()
+    return prompts
 
 
-def save_prompt_overrides(data: dict[str, str]) -> dict[str, str]:
-    """Persist prompt template overrides, dropping any key left blank.
+def save_prompts(data: dict[str, str]) -> dict[str, str]:
+    """Persist prompt templates, writing each straight to its .md file.
 
-    A blank value for a known key means "reset to default" -- its .md file
-    is removed rather than being written out empty.
+    A blank value for a known key means "reset to default" -- the package
+    seed text is written in its place rather than leaving the file absent,
+    since PROMPTS_DIR is always the single source read at generation time.
 
-    Returns the overrides dict that was written.
+    Returns the prompts dict that was written.
     """
     PROMPTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    overrides = {}
+    prompts = {}
     for key in PROMPT_KEYS:
-        path = PROMPTS_DIR / f"{key}.md"
         value = data.get(key)
-        if isinstance(value, str) and value.strip():
-            text = value.strip()
-            overrides[key] = text
-            tmp_path = path.with_name(path.name + ".tmp")
-            tmp_path.write_text(text, encoding="utf-8")
-            tmp_path.replace(path)
-        else:
-            path.unlink(missing_ok=True)
+        text = value.strip() if isinstance(value, str) and value.strip() else get_prompt_seed(key)
+        prompts[key] = text
+        path = PROMPTS_DIR / f"{key}.md"
+        tmp_path = path.with_name(path.name + ".tmp")
+        tmp_path.write_text(text, encoding="utf-8")
+        tmp_path.replace(path)
 
-    return overrides
+    return prompts
 
 
 def get_excluded_titles() -> list[str]:

@@ -11,7 +11,7 @@ import re
 import time
 from datetime import datetime, timezone
 
-from applypilot.config import COVER_LETTER_DIR, RESUME_PATH, load_profile, load_prompt_overrides
+from applypilot.config import COVER_LETTER_DIR, RESUME_PATH, load_profile, load_prompts
 from applypilot.database import get_connection, get_jobs_by_stage
 from applypilot.llm import get_client
 from applypilot.scoring.validator import (
@@ -28,40 +28,15 @@ MAX_ATTEMPTS = 5  # max cross-run retries before giving up
 
 # ── Prompt Builder (profile-driven) ──────────────────────────────────────
 
-# The user-editable part of the cover letter prompt (paragraph structure +
-# voice). Customizable from the Settings page; falls back to this default
-# when no override is stored. Placeholder tokens {{SCHOOL_HINT}},
-# {{PROJECTS_HINT}}, {{METRICS_HINT}} are substituted with real profile data
-# via plain string replacement (not str.format) so arbitrary user-edited text
-# containing literal braces can't break substitution.
-DEFAULT_COVER_LETTER_TEMPLATE = """STRUCTURE: 4 paragraphs. Under 300 words total. Every sentence must earn its place.
-
-PARAGRAPH 1 — INTRO (2-3 sentences, reusable across applications): State who you are (school + field of study, from the resume), the exact role you're applying for, and one genuine reason this kind of work interests you. Keep this paragraph company-agnostic — it should read fine unchanged in a different application.{{SCHOOL_HINT}}
-
-PARAGRAPH 2 — WHY THIS COMPANY (2-3 sentences, THE MOST IMPORTANT PARAGRAPH — this is what makes it not a mass-produced letter): Reference ONE specific, real detail pulled from the job description below — a product, a technical challenge, a team, an engineering practice, a stated priority — and say why it pulls you in. Every claim here must be traceable to something actually stated in the job description. If you can't find a specific detail to anchor on, pick the most concrete thing available rather than writing something generic.
-NEVER use empty praise like "global impact," "prestigious," "industry leader," "great culture," or similar — these have no content and read as mass-produced.
-
-PARAGRAPH 3 — WHY YOU (3-4 sentences): Pick TWO strengths and back each with ONE concrete example from the resume, most relevant to this job. Use real numbers.{{PROJECTS_HINT}}{{METRICS_HINT}} Do not just restate the resume. For each example, say what it demonstrates: the transferable skill, the impact you made, how you approached the problem, or how you drove the outcome.
-
-PARAGRAPH 4 — CLOSING (1-2 sentences): Thank them for their time, state genuine interest in the role, and say you look forward to hearing from them. Confident and brief. Nothing else after this.
-
-VOICE:
-- Write like a real engineer emailing someone they respect. Not formal, not casual. Just direct.
-- NEVER narrate or explain what you're doing. BAD: "This demonstrates my commitment to X." GOOD: Just state the fact and move on.
-- NEVER hedge. BAD: "might address some of your challenges." GOOD: "solves the same problem your team is facing."
-- Every sentence should contain either a number, a tool name, a company/product detail, or a specific outcome. If it doesn't, cut it.
-- Read it out loud. If it sounds like a robot wrote it, rewrite it."""
-
-
-def _build_cover_letter_prompt(profile: dict, template: str | None = None) -> str:
+def _build_cover_letter_prompt(profile: dict, template: str) -> str:
     """Build the cover letter system prompt from the user's profile.
 
     All personal data, skills, and sign-off name come from the profile. The
-    paragraph-structure/voice portion comes from `template` (a Settings-page
-    override) if given, else DEFAULT_COVER_LETTER_TEMPLATE. Banned words,
-    the fabrication guard, and the output/sign-off contract are always
-    appended by code, regardless of the template, so they can't be edited
-    away.
+    paragraph-structure/voice portion comes from `template` -- the live text
+    in ~/.applypilot/prompts/cover_letter.md (see config.load_prompts).
+    Banned words, the fabrication guard, and the output/sign-off contract
+    are always appended by code, regardless of the template, so they can't
+    be edited away.
     """
     personal = profile.get("personal", {})
     boundary = profile.get("skills_boundary", {})
@@ -100,8 +75,11 @@ def _build_cover_letter_prompt(profile: dict, template: str | None = None) -> st
     preserved_school = resume_facts.get("preserved_school", "")
     school_hint = f"\nSchool to reference: {preserved_school}" if preserved_school else ""
 
+    # Placeholder tokens are substituted via plain string replacement (not
+    # str.format) so arbitrary user-edited text containing literal braces
+    # can't break substitution.
     structure_section = (
-        (template or DEFAULT_COVER_LETTER_TEMPLATE)
+        template
         .replace("{{SCHOOL_HINT}}", school_hint)
         .replace("{{PROJECTS_HINT}}", projects_hint)
         .replace("{{METRICS_HINT}}", metrics_hint)
@@ -196,8 +174,8 @@ def generate_cover_letter(
     avoid_notes: list[str] = []
     letter = ""
     client = get_client()
-    overrides = load_prompt_overrides()
-    cl_prompt_base = _build_cover_letter_prompt(profile, overrides.get("cover_letter"))
+    prompts = load_prompts()
+    cl_prompt_base = _build_cover_letter_prompt(profile, prompts["cover_letter"])
 
     for attempt in range(max_retries + 1):
         # Fresh conversation every attempt

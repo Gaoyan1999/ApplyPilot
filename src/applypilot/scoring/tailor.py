@@ -16,7 +16,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from applypilot.config import RESUME_PATH, TAILORED_DIR, load_profile, load_prompt_overrides
+from applypilot.config import RESUME_PATH, TAILORED_DIR, load_profile, load_prompts
 from applypilot.database import get_connection, get_jobs_by_stage
 from applypilot.llm import get_client
 from applypilot.scoring.validator import (
@@ -33,47 +33,16 @@ MAX_ATTEMPTS = 5  # max cross-run retries before giving up
 
 # ── Prompt Builders (profile-driven) ──────────────────────────────────────
 
-# The user-editable part of the tailoring prompt (recruiter-scan framing,
-# tailoring rules, voice). Customizable from the Settings page; falls back
-# to this default when no override is stored. The skills boundary, banned
-# words, hard fabrication rules, and JSON output schema are always appended
-# by code (see _build_tailor_prompt) since parsing/validation depend on them.
-DEFAULT_TAILOR_TEMPLATE = """## RECRUITER SCAN (6 seconds):
-1. Title -- matches what they're hiring?
-2. Summary -- 2 sentences proving you've done this work
-3. First 3 bullets of most recent role -- verbs and outcomes match?
-4. Skills -- must-haves visible immediately?
-
-## TAILORING RULES:
-
-TITLE: Match the target role. Keep seniority (Senior/Lead/Staff). Drop company suffixes and team names.
-
-SUMMARY: Rewrite from scratch. Lead with the 1-2 skills that matter most for THIS role. Sound like someone who's done this job.
-
-SKILLS: Reorder each category so the job's must-haves appear first.
-
-Reframe EVERY bullet for this role. Same real work, different angle. Every bullet must be reworded. Never copy verbatim.
-
-PROJECTS: Reorder by relevance. Drop irrelevant projects entirely.
-
-BULLETS: Strong verb + what you built + quantified impact. Vary verbs (Built, Designed, Implemented, Reduced, Automated, Deployed, Operated, Optimized). Most relevant first. Max 4 per section.
-
-## VOICE:
-- Write like a real engineer. Short, direct.
-- GOOD: "Automated financial reporting with Python + API integrations, cut processing time from 10 hours to 2"
-- BAD: "Leveraged cutting-edge AI technologies to drive transformative operational efficiencies"
-- No em dashes. Use commas, periods, or hyphens."""
-
-
-def _build_tailor_prompt(profile: dict, template: str | None = None) -> str:
+def _build_tailor_prompt(profile: dict, template: str) -> str:
     """Build the resume tailoring system prompt from the user's profile.
 
     All skills boundaries, preserved entities, and formatting rules are
     derived from the profile -- nothing is hardcoded. The recruiter-scan/
-    tailoring-rules/voice portion comes from `template` (a Settings-page
-    override) if given, else DEFAULT_TAILOR_TEMPLATE. The skills boundary,
-    banned words, hard rules, and JSON output schema are always appended by
-    code, regardless of the template, so they can't be edited away.
+    tailoring-rules/voice portion comes from `template` -- the live text in
+    ~/.applypilot/prompts/tailoring.md (see config.load_prompts). The skills
+    boundary, banned words, hard rules, and JSON output schema are always
+    appended by code, regardless of the template, so they can't be edited
+    away.
     """
     boundary = profile.get("skills_boundary", {})
     resume_facts = profile.get("resume_facts", {})
@@ -101,7 +70,7 @@ def _build_tailor_prompt(profile: dict, template: str | None = None) -> str:
     education = profile.get("experience", {})
     education_level = education.get("education_level", "")
 
-    tailoring_section = template or DEFAULT_TAILOR_TEMPLATE
+    tailoring_section = template
 
     return f"""You are a senior technical recruiter rewriting a resume to get this person an interview.
 
@@ -395,8 +364,8 @@ def tailor_resume(
     avoid_notes: list[str] = []
     tailored = ""
     client = get_client()
-    overrides = load_prompt_overrides()
-    tailor_prompt_base = _build_tailor_prompt(profile, overrides.get("tailoring"))
+    prompts = load_prompts()
+    tailor_prompt_base = _build_tailor_prompt(profile, prompts["tailoring"])
 
     for attempt in range(max_retries + 1):
         report["attempts"] = attempt + 1
