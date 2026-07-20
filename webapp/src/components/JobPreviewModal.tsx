@@ -5,7 +5,6 @@ import { ApiError, generateCoverLetter, getCoverLetter, getCoverLetterPdfUrl } f
 import type { Job, UserAction } from '../api/types'
 import { formatDate } from '../lib/format'
 import { ScorePill } from './ScorePill'
-import { StageBadge } from './StageBadge'
 import { SiteIcon } from './SiteIcon'
 import { UserActionSelect } from './UserActionSelect'
 
@@ -140,9 +139,6 @@ export function JobPreviewModal({
               value={job.user_action}
               onChange={(value) => onUserActionChange(job, value)}
             />
-          </MetaRow>
-          <MetaRow label="Stage">
-            <StageBadge stage={job.stage} />
           </MetaRow>
           <MetaRow label="Score">
             <ScorePill score={job.fit_score} />
