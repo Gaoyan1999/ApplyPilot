@@ -1779,10 +1779,6 @@ body.col-resizing {
 }
 
 .user-action-popover {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 20;
   min-width: 180px;
   display: flex;
   flex-direction: column;
@@ -1794,13 +1790,12 @@ body.col-resizing {
   padding: 6px;
 }
 
-/* Portaled to <body> so it escapes .jobs-table-wrap's overflow-x: auto
-   clipping -- position is computed in viewport coordinates via JS instead
-   of relying on a positioned ancestor. */
+/* Portaled to <body> (via FloatingPortal) so it escapes .jobs-table-wrap's
+   overflow-x: auto clipping. Floating UI sets position/top/left inline
+   (and flips above the trigger when there's no room below), so this class
+   only needs the z-index -- the base .user-action-popover rule above
+   supplies the visual styling regardless of portal placement. */
 .user-action-popover-portal {
-  position: fixed;
-  top: 0;
-  left: 0;
   z-index: 1000;
 }
 
