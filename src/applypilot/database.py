@@ -144,6 +144,7 @@ def init_db(db_path: Path | str | None = None) -> sqlite3.Connection:
 
     # Run migrations for any columns added after initial schema
     ensure_columns(conn)
+    ensure_indexes(conn)
 
     return conn
 
@@ -230,6 +231,25 @@ def ensure_columns(conn: sqlite3.Connection | None = None) -> list[str]:
         conn.commit()
 
     return added
+
+
+# Columns the dashboard's search/filter/sort endpoint filters or sorts on.
+# Indexed so GET /api/jobs/search stays fast as the table grows.
+_SEARCH_INDEX_COLUMNS = ("discovered_at", "fit_score", "job_type", "dismissed", "user_action")
+
+
+def ensure_indexes(conn: sqlite3.Connection | None = None) -> None:
+    """Create indexes for columns the search endpoint filters/sorts on.
+
+    Idempotent (CREATE INDEX IF NOT EXISTS) -- safe to call on every startup,
+    including against pre-existing databases.
+    """
+    if conn is None:
+        conn = get_connection()
+
+    for col in _SEARCH_INDEX_COLUMNS:
+        conn.execute(f"CREATE INDEX IF NOT EXISTS idx_jobs_{col} ON jobs ({col})")
+    conn.commit()
 
 
 def get_stats(conn: sqlite3.Connection | None = None) -> dict:
@@ -441,3 +461,95 @@ def get_jobs_by_stage(conn: sqlite3.Connection | None = None,
         columns = rows[0].keys()
         return [dict(zip(columns, row)) for row in rows]
     return []
+
+
+# Columns GET /api/jobs/search is allowed to sort by. Whitelisted so the
+# `sort_by` query param can never be interpolated into SQL unchecked.
+_SEARCH_SORT_COLUMNS = {"title", "company", "site", "location", "job_type", "fit_score", "discovered_at"}
+
+
+def search_jobs(
+    conn: sqlite3.Connection | None = None,
+    q: str = "",
+    job_type: list[str] | None = None,
+    job_type_mode: str = "is",
+    user_action: list[str] | None = None,
+    user_action_mode: str = "is",
+    include_dismissed: bool = False,
+    sort_by: str = "discovered_at",
+    sort_dir: str = "desc",
+    page: int = 1,
+    page_size: int = 50,
+) -> tuple[list[dict], int]:
+    """Filter, search, sort, and paginate the jobs table for the dashboard.
+
+    Mirrors the dashboard's previous client-side filtering semantics exactly:
+    - `job_type` defaults null values to "unknown" before matching (the
+      frontend does the same before this became server-side).
+    - `user_action` does no such default -- a null user_action always
+      satisfies an "is_not" filter, never an "is" filter, same as before.
+    - `include_dismissed=False` (the default view) excludes dismissed jobs;
+      `True` includes both, same as the old "show dismissed" toggle (there's
+      no "only dismissed" mode).
+    - Null values in the sort column always sort last, regardless of
+      `sort_dir`.
+
+    Returns:
+        (rows, total_count) -- `rows` is just the current page, `total_count`
+        is the count across all pages matching the filters.
+    """
+    if conn is None:
+        conn = get_connection()
+
+    where_clauses: list[str] = []
+    params: list = []
+
+    q = q.strip()
+    if q:
+        like = f"%{q.lower()}%"
+        where_clauses.append(
+            "(LOWER(title) LIKE ? OR LOWER(company) LIKE ? OR LOWER(site) LIKE ? OR LOWER(location) LIKE ?)"
+        )
+        params.extend([like, like, like, like])
+
+    if job_type:
+        placeholders = ", ".join("?" for _ in job_type)
+        op = "NOT IN" if job_type_mode == "is_not" else "IN"
+        where_clauses.append(f"COALESCE(job_type, 'unknown') {op} ({placeholders})")
+        params.extend(job_type)
+
+    if user_action:
+        placeholders = ", ".join("?" for _ in user_action)
+        if user_action_mode == "is_not":
+            where_clauses.append(f"(user_action IS NULL OR user_action NOT IN ({placeholders}))")
+        else:
+            where_clauses.append(f"user_action IN ({placeholders})")
+        params.extend(user_action)
+
+    if not include_dismissed:
+        where_clauses.append("(dismissed IS NULL OR dismissed = 0)")
+
+    where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+
+    total = conn.execute(f"SELECT COUNT(*) FROM jobs WHERE {where_sql}", params).fetchone()[0]
+
+    sort_column = sort_by if sort_by in _SEARCH_SORT_COLUMNS else "discovered_at"
+    sort_direction = "ASC" if sort_dir == "asc" else "DESC"
+    page = max(page, 1)
+    page_size = max(1, min(page_size, 200))
+    offset = (page - 1) * page_size
+
+    query = (
+        f"SELECT * FROM jobs WHERE {where_sql} "
+        f"ORDER BY {sort_column} IS NULL, {sort_column} {sort_direction} "
+        "LIMIT ? OFFSET ?"
+    )
+    rows = conn.execute(query, [*params, page_size, offset]).fetchall()
+
+    if rows:
+        columns = rows[0].keys()
+        jobs = [dict(zip(columns, row)) for row in rows]
+    else:
+        jobs = []
+
+    return jobs, total
