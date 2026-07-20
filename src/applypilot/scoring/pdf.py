@@ -369,41 +369,44 @@ def build_cover_letter_html(data: dict) -> str:
     box-sizing: border-box;
 }}
 body {{
-    font-family: 'Calibri', 'Segoe UI', Arial, sans-serif;
+    font-family: Arial, Helvetica, sans-serif;
     font-size: 11pt;
     line-height: 1.5;
     color: #1a1a1a;
 }}
 .header {{
-    padding-bottom: 8px;
-    margin-bottom: 16px;
-    border-bottom: 1.5px solid #1a1a1a;
+    padding-bottom: 10px;
+    margin-bottom: 22px;
+    border-bottom: 2px solid #1a1a1a;
 }}
 .name {{
-    font-size: 22pt;
+    font-size: 27pt;
     font-weight: 700;
 }}
 .contact {{
-    font-size: 9.5pt;
-    color: #444;
-    margin-top: 2px;
+    font-size: 10.5pt;
+    color: #555;
+    margin-top: 4px;
+    line-height: 1.4;
 }}
 .date {{
-    margin-bottom: 16px;
+    color: #555;
+    margin-bottom: 18px;
 }}
 .recipient {{
-    margin-bottom: 16px;
+    margin-bottom: 18px;
+    line-height: 1.4;
 }}
 .subject {{
     font-weight: 700;
-    margin-bottom: 16px;
+    margin-bottom: 18px;
 }}
 p {{
-    margin-bottom: 14px;
+    margin-bottom: 16px;
 }}
 .signoff-name {{
     font-weight: 700;
-    margin-top: 4px;
+    margin-top: 2px;
 }}
 </style>
 </head>
