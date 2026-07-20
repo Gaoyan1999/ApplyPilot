@@ -59,7 +59,11 @@ export function DateRangeFilter({ from, to, onChange }: Props) {
       : formatShort(from ?? to!)
 
   const days = monthGridDays(viewMonth)
-  const today = toDateKey(new Date())
+  const now = new Date()
+  const today = toDateKey(now)
+  const isCurrentOrFutureViewMonth =
+    viewMonth.getFullYear() > now.getFullYear() ||
+    (viewMonth.getFullYear() === now.getFullYear() && viewMonth.getMonth() >= now.getMonth())
 
   return (
     <div className="multi-select" ref={containerRef}>
@@ -112,6 +116,7 @@ export function DateRangeFilter({ from, to, onChange }: Props) {
                 <button
                   type="button"
                   className="date-range-nav-button"
+                  disabled={isCurrentOrFutureViewMonth}
                   onClick={() => setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
                   aria-label="Next month"
                 >
@@ -126,6 +131,7 @@ export function DateRangeFilter({ from, to, onChange }: Props) {
               <div className="date-range-days">
                 {days.map(({ date, inMonth }) => {
                   const key = toDateKey(date)
+                  const isFuture = key > today
                   const isFrom = key === from
                   const isTo = key === to
                   const inRange = Boolean(from && to && key > from && key < to)
@@ -135,11 +141,18 @@ export function DateRangeFilter({ from, to, onChange }: Props) {
                     key === today && 'date-range-day-today',
                     (isFrom || isTo) && 'date-range-day-endpoint',
                     inRange && 'date-range-day-inrange',
+                    isFuture && 'date-range-day-disabled',
                   ]
                     .filter(Boolean)
                     .join(' ')
                   return (
-                    <button type="button" key={key} className={classNames} onClick={() => pickDay(key)}>
+                    <button
+                      type="button"
+                      key={key}
+                      className={classNames}
+                      disabled={isFuture}
+                      onClick={() => pickDay(key)}
+                    >
                       {date.getDate()}
                     </button>
                   )

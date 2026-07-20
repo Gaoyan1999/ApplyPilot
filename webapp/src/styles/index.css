@@ -1078,9 +1078,14 @@
   border-radius: 6px;
 }
 
-.date-range-nav-button:hover {
+.date-range-nav-button:hover:not(:disabled) {
   background: var(--bg-subtle);
   color: var(--text);
+}
+
+.date-range-nav-button:disabled {
+  cursor: default;
+  opacity: 0.35;
 }
 
 .date-range-month-label {
@@ -1117,13 +1122,19 @@
    higher specificity) the plain single-class rules below -- otherwise
    hovering a selected/endpoint day would reset its background while leaving
    its (contrast-matched) text color untouched, making the digit unreadable. */
-.date-range-day:hover:not(.date-range-day-inrange):not(.date-range-day-endpoint) {
+.date-range-day:hover:not(.date-range-day-inrange):not(.date-range-day-endpoint):not(:disabled) {
   background: var(--bg-subtle);
 }
 
 .date-range-day-outside {
   color: var(--text-muted);
   opacity: 0.4;
+}
+
+.date-range-day-disabled {
+  color: var(--text-muted);
+  opacity: 0.3;
+  cursor: default;
 }
 
 .date-range-day-today {
