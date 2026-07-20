@@ -43,6 +43,8 @@ export function searchJobs(params: SearchJobsParams): Promise<SearchJobsResponse
   for (const ua of params.user_action) qs.append('user_action', ua)
   qs.set('user_action_mode', params.user_action_mode === 'is not' ? 'is_not' : 'is')
   qs.set('include_dismissed', String(params.include_dismissed))
+  if (params.discovered_after) qs.set('discovered_after', params.discovered_after)
+  if (params.discovered_before) qs.set('discovered_before', params.discovered_before)
   qs.set('sort_by', params.sort_by)
   qs.set('sort_dir', params.sort_dir)
   return getJson<SearchJobsResponse>(`/api/jobs/search?${qs.toString()}`)

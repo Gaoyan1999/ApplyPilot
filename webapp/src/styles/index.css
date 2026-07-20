@@ -1016,6 +1016,127 @@
   color: var(--text-muted);
 }
 
+/* Date range filter popover */
+.date-range-popover {
+  width: auto;
+  padding: 10px;
+}
+
+.date-range-body {
+  display: flex;
+  gap: 12px;
+}
+
+.date-range-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 110px;
+  border-right: 1px solid var(--border);
+  padding-right: 10px;
+}
+
+.date-range-preset {
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.date-range-preset:hover:not(:disabled) {
+  background: var(--bg-subtle);
+}
+
+.date-range-preset:disabled {
+  color: var(--text-muted);
+  cursor: default;
+  opacity: 0.5;
+}
+
+.date-range-calendar {
+  width: 220px;
+}
+
+.date-range-calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.date-range-nav-button {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.date-range-nav-button:hover {
+  background: var(--bg-subtle);
+  color: var(--text);
+}
+
+.date-range-month-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.date-range-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.date-range-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.date-range-day {
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 12px;
+  padding: 6px 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.date-range-day:hover {
+  background: var(--bg-subtle);
+}
+
+.date-range-day-outside {
+  color: var(--text-muted);
+  opacity: 0.4;
+}
+
+.date-range-day-today {
+  font-weight: 700;
+}
+
+.date-range-day-inrange {
+  background: var(--stage-enriched-bg);
+  border-radius: 0;
+}
+
+.date-range-day-endpoint {
+  background: var(--stage-enriched-fg);
+  color: var(--bg);
+  font-weight: 600;
+}
+
 /* Jobs table */
 .jobs-table-wrap {
   overflow-x: auto;
@@ -1106,42 +1227,6 @@ body.col-resizing {
 
 .jobs-table td.site-cell {
   text-align: center;
-}
-
-.jobs-table-group-row {
-  cursor: pointer;
-  user-select: none;
-}
-
-.jobs-table-group-row:hover .jobs-table-group-header {
-  filter: brightness(0.97);
-}
-
-.jobs-table-group-header {
-  background: var(--stage-enriched-bg);
-  color: var(--stage-enriched-fg);
-  font-weight: 600;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-}
-
-.group-chevron {
-  display: inline-block;
-  margin-right: 6px;
-  transition: transform 0.15s ease;
-}
-
-.group-chevron-collapsed {
-  transform: rotate(-90deg);
-}
-
-.group-count {
-  margin-left: 8px;
-  opacity: 0.75;
-  font-weight: 400;
-  text-transform: none;
 }
 
 .empty-state {

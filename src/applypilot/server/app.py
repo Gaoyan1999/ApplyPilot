@@ -128,6 +128,8 @@ def api_search_jobs(
     user_action: list[str] = Query([]),
     user_action_mode: str = Query("is", pattern="^(is|is_not)$"),
     include_dismissed: bool = False,
+    discovered_after: str | None = Query(None, pattern="^\\d{4}-\\d{2}-\\d{2}$"),
+    discovered_before: str | None = Query(None, pattern="^\\d{4}-\\d{2}-\\d{2}$"),
     sort_by: str = Query(
         "discovered_at",
         pattern="^(title|company|site|location|job_type|fit_score|discovered_at)$",
@@ -143,6 +145,8 @@ def api_search_jobs(
         user_action=user_action,
         user_action_mode=user_action_mode,
         include_dismissed=include_dismissed,
+        discovered_after=discovered_after,
+        discovered_before=discovered_before,
         sort_by=sort_by,
         sort_dir=sort_dir,
         page=page,

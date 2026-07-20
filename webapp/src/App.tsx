@@ -7,6 +7,7 @@ import { useLocalStorageState } from './hooks/useLocalStorageState'
 import { StatPills } from './components/StatPills'
 import { SearchFilterBar } from './components/SearchFilterBar'
 import type { FilterMode } from './components/MultiSelectFilter'
+import type { DateKey } from './lib/dateRange'
 import { JobsTable, type SortDir, type SortKey } from './components/JobsTable'
 import { JobPreviewModal } from './components/JobPreviewModal'
 import { SearchPanel } from './components/SearchPanel'
@@ -42,6 +43,8 @@ function App() {
     'applypilot-filter-user-action-mode',
     'is',
   )
+  const [dateFrom, setDateFrom] = useState<DateKey | null>(null)
+  const [dateTo, setDateTo] = useState<DateKey | null>(null)
   const [showDismissed, setShowDismissed] = useLocalStorageState('applypilot-show-dismissed', false)
   const [hiddenColumns, setHiddenColumns] = useLocalStorageState<SortKey[]>('applypilot-hidden-columns', [])
   const [panelWidth, setPanelWidth] = useLocalStorageState('applypilot-job-detail-width', DEFAULT_PANEL_WIDTH)
@@ -63,7 +66,19 @@ function App() {
   // jump back to page 1 rather than showing an out-of-range page.
   useEffect(() => {
     setPage(1)
-  }, [debouncedSearch, jobTypeFilter, jobTypeFilterMode, userActionFilter, userActionFilterMode, showDismissed, sortKey, sortDir, pageSize])
+  }, [
+    debouncedSearch,
+    jobTypeFilter,
+    jobTypeFilterMode,
+    userActionFilter,
+    userActionFilterMode,
+    dateFrom,
+    dateTo,
+    showDismissed,
+    sortKey,
+    sortDir,
+    pageSize,
+  ])
 
   const {
     data: searchResult,
@@ -80,10 +95,25 @@ function App() {
         user_action: userActionFilter,
         user_action_mode: userActionFilterMode,
         include_dismissed: showDismissed,
+        discovered_after: dateFrom,
+        discovered_before: dateTo,
         sort_by: toApiSortKey(sortKey),
         sort_dir: sortDir,
       }),
-    [page, pageSize, debouncedSearch, jobTypeFilter, jobTypeFilterMode, userActionFilter, userActionFilterMode, showDismissed, sortKey, sortDir],
+    [
+      page,
+      pageSize,
+      debouncedSearch,
+      jobTypeFilter,
+      jobTypeFilterMode,
+      userActionFilter,
+      userActionFilterMode,
+      dateFrom,
+      dateTo,
+      showDismissed,
+      sortKey,
+      sortDir,
+    ],
   )
 
   const jobs = searchResult?.items ?? []
@@ -207,6 +237,12 @@ function App() {
         onUserActionFilterChange={setUserActionFilter}
         userActionFilterMode={userActionFilterMode}
         onUserActionFilterModeChange={setUserActionFilterMode}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        onDateRangeChange={(from, to) => {
+          setDateFrom(from)
+          setDateTo(to)
+        }}
       />
 
       <JobsTable

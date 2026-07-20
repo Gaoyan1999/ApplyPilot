@@ -7,7 +7,7 @@ without migration ordering issues.
 
 import sqlite3
 import threading
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from applypilot.config import DB_PATH
@@ -476,6 +476,8 @@ def search_jobs(
     user_action: list[str] | None = None,
     user_action_mode: str = "is",
     include_dismissed: bool = False,
+    discovered_after: str | None = None,
+    discovered_before: str | None = None,
     sort_by: str = "discovered_at",
     sort_dir: str = "desc",
     page: int = 1,
@@ -493,6 +495,9 @@ def search_jobs(
       no "only dismissed" mode).
     - Null values in the sort column always sort last, regardless of
       `sort_dir`.
+    - `discovered_after`/`discovered_before` are 'YYYY-MM-DD' calendar dates,
+      inclusive on both ends (the whole `discovered_before` day is included,
+      not just up to midnight).
 
     Returns:
         (rows, total_count) -- `rows` is just the current page, `total_count`
@@ -528,6 +533,15 @@ def search_jobs(
 
     if not include_dismissed:
         where_clauses.append("(dismissed IS NULL OR dismissed = 0)")
+
+    if discovered_after:
+        where_clauses.append("discovered_at >= ?")
+        params.append(f"{discovered_after}T00:00:00")
+
+    if discovered_before:
+        next_day = date.fromisoformat(discovered_before) + timedelta(days=1)
+        where_clauses.append("discovered_at < ?")
+        params.append(f"{next_day.isoformat()}T00:00:00")
 
     where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 

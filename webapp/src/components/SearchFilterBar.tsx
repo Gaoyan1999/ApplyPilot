@@ -1,4 +1,6 @@
 import type { JobType, UserAction } from '../api/types'
+import { DateRangeFilter } from './DateRangeFilter'
+import type { DateKey } from '../lib/dateRange'
 import { CLASS_BY_JOB_TYPE, LABEL_BY_JOB_TYPE } from './JobTypeBadge'
 import { JOB_TYPE_ORDER } from './jobTypeOrder'
 import { MultiSelectFilter, type FilterMode } from './MultiSelectFilter'
@@ -16,6 +18,9 @@ interface Props {
   onUserActionFilterChange: (value: UserAction[]) => void
   userActionFilterMode: FilterMode
   onUserActionFilterModeChange: (mode: FilterMode) => void
+  dateFrom: DateKey | null
+  dateTo: DateKey | null
+  onDateRangeChange: (from: DateKey | null, to: DateKey | null) => void
 }
 
 const JOB_TYPE_OPTIONS = JOB_TYPE_ORDER.map((jobType) => ({
@@ -41,6 +46,9 @@ export function SearchFilterBar({
   onUserActionFilterChange,
   userActionFilterMode,
   onUserActionFilterModeChange,
+  dateFrom,
+  dateTo,
+  onDateRangeChange,
 }: Props) {
   return (
     <div className="filter-bar">
@@ -70,6 +78,7 @@ export function SearchFilterBar({
           mode={userActionFilterMode}
           onModeChange={onUserActionFilterModeChange}
         />
+        <DateRangeFilter from={dateFrom} to={dateTo} onChange={onDateRangeChange} />
       </div>
     </div>
   )

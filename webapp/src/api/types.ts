@@ -62,6 +62,9 @@ export interface SearchJobsParams {
   user_action: UserAction[]
   user_action_mode: 'is' | 'is not'
   include_dismissed: boolean
+  // 'YYYY-MM-DD', inclusive on both ends. Either/both may be null (open-ended).
+  discovered_after: string | null
+  discovered_before: string | null
   // Excludes 'stage' -- JobsTable.SortKey's dead, unused sort option (no
   // column wires it up) that the server doesn't support sorting by.
   sort_by: 'title' | 'company' | 'site' | 'location' | 'job_type' | 'fit_score' | 'discovered_at'
