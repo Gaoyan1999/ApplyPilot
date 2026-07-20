@@ -362,6 +362,14 @@ def get_stats(conn: sqlite3.Connection | None = None) -> dict:
         "AND application_url IS NOT NULL"
     ).fetchone()[0]
 
+    # Manual application tracking (user_action), independent of applied_at --
+    # covers jobs applied to outside the auto-apply pipeline.
+    rows = conn.execute(
+        "SELECT user_action, COUNT(*) as cnt FROM jobs "
+        "WHERE user_action IS NOT NULL GROUP BY user_action ORDER BY cnt DESC"
+    ).fetchall()
+    stats["by_user_action"] = [(row[0], row[1]) for row in rows]
+
     return stats
 
 

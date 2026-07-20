@@ -94,6 +94,11 @@ export interface JobTypeStat {
   count: number
 }
 
+export interface UserActionStat {
+  user_action: UserAction
+  count: number
+}
+
 export interface SearchQuery {
   query: string
   tier: number
@@ -184,5 +189,6 @@ export interface Status {
   score_distribution: ScoreDistItem[]
   by_site: SiteStat[]
   by_job_type: JobTypeStat[]
+  by_user_action: UserActionStat[]
   stage_counts: Record<Stage, number>
 }

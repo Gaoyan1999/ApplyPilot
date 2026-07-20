@@ -1,5 +1,16 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useEffect, useState } from 'react'
+import {
+  FloatingPortal,
+  autoUpdate,
+  flip,
+  offset,
+  shift,
+  useClick,
+  useDismiss,
+  useFloating,
+  useInteractions,
+  useRole,
+} from '@floating-ui/react'
 import type { UserAction } from '../api/types'
 import { CLASS_BY_USER_ACTION, LABEL_BY_USER_ACTION } from './UserActionBadge'
 import { APPLICATION_STATUS_ACTIONS, USER_ACTION_ORDER } from './userActionOrder'
@@ -14,56 +25,30 @@ export function UserActionSelect({ value, onChange }: Props) {
   // Local state gives immediate visual feedback on select; re-synced whenever
   // the server value changes (e.g. the next poll confirms or reverts it).
   const [localValue, setLocalValue] = useState(value)
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const buttonRef = useRef<HTMLButtonElement>(null)
-  const popoverRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setLocalValue(value)
   }, [value])
 
-  // Popover is portaled to <body> to escape .jobs-table-wrap's overflow-x:
-  // auto clipping, so its position has to be computed in viewport
-  // coordinates instead of relying on CSS position: absolute.
-  useLayoutEffect(() => {
-    if (!open || !buttonRef.current) return
-    function updatePosition() {
-      const rect = buttonRef.current!.getBoundingClientRect()
-      const popoverWidth = popoverRef.current?.offsetWidth ?? 180
-      const left = Math.min(rect.left, window.innerWidth - popoverWidth - 8)
-      setPosition({ top: rect.bottom + 6, left: Math.max(8, left) })
-    }
-    updatePosition()
-    window.addEventListener('scroll', updatePosition, true)
-    window.addEventListener('resize', updatePosition)
-    return () => {
-      window.removeEventListener('scroll', updatePosition, true)
-      window.removeEventListener('resize', updatePosition)
-    }
-  }, [open])
+  // Floating UI handles the parts that used to be hand-rolled here: it flips
+  // the popover above the trigger when there's no room below (previously it
+  // always opened downward and could render clipped off the bottom of the
+  // viewport), shifts it to stay within the horizontal viewport, and keeps
+  // position in sync on scroll/resize via autoUpdate -- all while staying
+  // portaled to <body> to escape .jobs-table-wrap's overflow-x: auto.
+  const { refs, floatingStyles, context } = useFloating({
+    open,
+    onOpenChange: setOpen,
+    placement: 'bottom-start',
+    middleware: [offset(6), flip(), shift({ padding: 8 })],
+    whileElementsMounted: autoUpdate,
+  })
 
-  useEffect(() => {
-    if (!open) return
-    function handlePointerDown(e: PointerEvent) {
-      const target = e.target as Node
-      if (
-        containerRef.current && !containerRef.current.contains(target) &&
-        popoverRef.current && !popoverRef.current.contains(target)
-      ) {
-        setOpen(false)
-      }
-    }
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('pointerdown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [open])
+  const { getReferenceProps, getFloatingProps } = useInteractions([
+    useClick(context),
+    useDismiss(context),
+    useRole(context, { role: 'listbox' }),
+  ])
 
   function select(next: UserAction | null) {
     setLocalValue(next)
@@ -72,21 +57,22 @@ export function UserActionSelect({ value, onChange }: Props) {
   }
 
   return (
-    <div className="user-action-selector" ref={containerRef}>
+    <div className="user-action-selector">
       <button
-        ref={buttonRef}
+        ref={refs.setReference}
         type="button"
         className={`user-action-select${localValue ? ` ${CLASS_BY_USER_ACTION[localValue]}` : ' user-action-select-empty'}`}
-        onClick={() => setOpen((v) => !v)}
+        {...getReferenceProps()}
       >
         {localValue ? LABEL_BY_USER_ACTION[localValue] : 'Mark as…'}
       </button>
-      {open &&
-        createPortal(
+      {open && (
+        <FloatingPortal>
           <div
+            ref={refs.setFloating}
+            style={floatingStyles}
             className="user-action-popover user-action-popover-portal"
-            ref={popoverRef}
-            style={position ? { top: position.top, left: position.left } : { visibility: 'hidden' }}
+            {...getFloatingProps()}
           >
             <button
               type="button"
@@ -111,9 +97,9 @@ export function UserActionSelect({ value, onChange }: Props) {
                 </button>
               </div>
             ))}
-          </div>,
-          document.body,
-        )}
+          </div>
+        </FloatingPortal>
+      )}
     </div>
   )
 }
