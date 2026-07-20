@@ -1,12 +1,5 @@
-import { Fragment, useMemo } from 'react'
 import type { Job, UserAction } from '../api/types'
-import {
-  compareDateGroupKeysDesc,
-  formatDateGroupLabel,
-  getDateGroupKey,
-  type DateGroupKey,
-} from '../lib/dateBuckets'
-import { formatTime } from '../lib/format'
+import { formatDate } from '../lib/format'
 import { useLocalStorageState } from '../hooks/useLocalStorageState'
 import { JobTypeBadge } from './JobTypeBadge'
 import { ScorePill } from './ScorePill'
@@ -35,7 +28,7 @@ export const COLUMNS: { key: SortKey; label: string; defaultWidth: number }[] = 
   { key: 'location', label: 'Location', defaultWidth: 160 },
   { key: 'job_type', label: 'Job Type', defaultWidth: 120 },
   { key: 'fit_score', label: 'Score', defaultWidth: 90 },
-  { key: 'discovered_at', label: 'Discovered', defaultWidth: 90 },
+  { key: 'discovered_at', label: 'Discovered', defaultWidth: 160 },
 ]
 
 const ACTION_COLUMN_KEY: ColumnKey = 'action'
@@ -48,15 +41,7 @@ const DEFAULT_COLUMN_WIDTHS: Record<ColumnKey, number> = {
 } as Record<ColumnKey, number>
 
 export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview, onUserActionChange, hiddenColumns }: Props) {
-  const [collapsedBuckets, setCollapsedBuckets] = useLocalStorageState<DateGroupKey[]>(
-    'applypilot-collapsed-date-buckets',
-    [],
-  )
-
-  const visibleColumns = useMemo(
-    () => COLUMNS.filter((col) => !hiddenColumns.includes(col.key)),
-    [hiddenColumns],
-  )
+  const visibleColumns = COLUMNS.filter((col) => !hiddenColumns.includes(col.key))
   const isVisible = (key: SortKey) => !hiddenColumns.includes(key)
 
   const [columnWidths, setColumnWidths] = useLocalStorageState<Record<ColumnKey, number>>(
@@ -84,27 +69,6 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview, onUserAct
 
     document.addEventListener('mousemove', onMouseMove)
     document.addEventListener('mouseup', onMouseUp)
-  }
-
-  const jobsByBucket = useMemo(() => {
-    const map = new Map<DateGroupKey, Job[]>()
-    for (const job of jobs) {
-      const key = getDateGroupKey(job.discovered_at)
-      if (!map.has(key)) map.set(key, [])
-      map.get(key)!.push(job)
-    }
-    return map
-  }, [jobs])
-
-  const bucketOrder = useMemo(
-    () => Array.from(jobsByBucket.keys()).sort(compareDateGroupKeysDesc),
-    [jobsByBucket],
-  )
-
-  function toggleBucket(bucket: DateGroupKey) {
-    setCollapsedBuckets((prev) =>
-      prev.includes(bucket) ? prev.filter((b) => b !== bucket) : [...prev, bucket],
-    )
   }
 
   if (jobs.length === 0) {
@@ -144,65 +108,48 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview, onUserAct
           </tr>
         </thead>
         <tbody>
-          {bucketOrder.map((bucket) => {
-            const bucketJobs = jobsByBucket.get(bucket) ?? []
-            if (bucketJobs.length === 0) return null
-            const collapsed = collapsedBuckets.includes(bucket)
-            return (
-              <Fragment key={bucket}>
-                <tr className="jobs-table-group-row" onClick={() => toggleBucket(bucket)}>
-                  <td colSpan={visibleColumns.length + 1} className="jobs-table-group-header">
-                    <span className={`group-chevron${collapsed ? ' group-chevron-collapsed' : ''}`}>▾</span>
-                    {formatDateGroupLabel(bucket)}
-                    <span className="group-count">{bucketJobs.length}</span>
-                  </td>
-                </tr>
-                {!collapsed &&
-                  bucketJobs.map((job) => (
-                    <tr key={job.url} className={job.dismissed ? 'jobs-table-row-dismissed' : undefined}>
-                      {isVisible('title') && (
-                        <td className="title-cell">
-                          <button type="button" className="title-button" onClick={() => onPreview(job)}>
-                            {job.title || '(untitled)'}
-                          </button>
-                        </td>
-                      )}
-                      {isVisible('company') && <td>{job.company || '—'}</td>}
-                      {isVisible('site') && (
-                        <td className="site-cell">
-                          <a
-                            href={job.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            aria-label={`Open ${job.title || 'job'} listing`}
-                          >
-                            <SiteIcon site={job.site} />
-                          </a>
-                        </td>
-                      )}
-                      {isVisible('location') && <td>{job.location || '—'}</td>}
-                      {isVisible('job_type') && (
-                        <td>
-                          <JobTypeBadge jobType={job.job_type} />
-                        </td>
-                      )}
-                      {isVisible('fit_score') && (
-                        <td>
-                          <ScorePill score={job.fit_score} />
-                        </td>
-                      )}
-                      {isVisible('discovered_at') && <td>{formatTime(job.discovered_at)}</td>}
-                      <td>
-                        <UserActionSelect
-                          value={job.user_action}
-                          onChange={(value) => onUserActionChange(job, value)}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-              </Fragment>
-            )
-          })}
+          {jobs.map((job) => (
+            <tr key={job.url} className={job.dismissed ? 'jobs-table-row-dismissed' : undefined}>
+              {isVisible('title') && (
+                <td className="title-cell">
+                  <button type="button" className="title-button" onClick={() => onPreview(job)}>
+                    {job.title || '(untitled)'}
+                  </button>
+                </td>
+              )}
+              {isVisible('company') && <td>{job.company || '—'}</td>}
+              {isVisible('site') && (
+                <td className="site-cell">
+                  <a
+                    href={job.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`Open ${job.title || 'job'} listing`}
+                  >
+                    <SiteIcon site={job.site} />
+                  </a>
+                </td>
+              )}
+              {isVisible('location') && <td>{job.location || '—'}</td>}
+              {isVisible('job_type') && (
+                <td>
+                  <JobTypeBadge jobType={job.job_type} />
+                </td>
+              )}
+              {isVisible('fit_score') && (
+                <td>
+                  <ScorePill score={job.fit_score} />
+                </td>
+              )}
+              {isVisible('discovered_at') && <td>{formatDate(job.discovered_at)}</td>}
+              <td>
+                <UserActionSelect
+                  value={job.user_action}
+                  onChange={(value) => onUserActionChange(job, value)}
+                />
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>

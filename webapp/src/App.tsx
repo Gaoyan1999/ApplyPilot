@@ -1,54 +1,35 @@
-import { useCallback, useMemo, useState } from 'react'
-import { ApiError, getJobs, getStatus, setJobDismissed, setJobUserAction } from './api/client'
-import type { Job, JobType, UserAction } from './api/types'
+import { useCallback, useEffect, useState } from 'react'
+import { ApiError, getJob, getStatus, searchJobs, setJobDismissed, setJobUserAction } from './api/client'
+import type { Job, JobType, SearchJobsParams, UserAction } from './api/types'
 import { useRefreshable } from './hooks/useRefreshable'
 import { useTheme } from './hooks/useTheme'
 import { useLocalStorageState } from './hooks/useLocalStorageState'
 import { StatPills } from './components/StatPills'
 import { SearchFilterBar } from './components/SearchFilterBar'
 import type { FilterMode } from './components/MultiSelectFilter'
+import type { DateKey } from './lib/dateRange'
 import { JobsTable, type SortDir, type SortKey } from './components/JobsTable'
 import { JobPreviewModal } from './components/JobPreviewModal'
 import { SearchPanel } from './components/SearchPanel'
 import { SettingsModal } from './components/SettingsModal'
 import './styles/index.css'
 
-function matchesMultiSelect<T extends string>(mode: FilterMode, selected: T[], value: T | null): boolean {
-  if (selected.length === 0) return true
-  const included = value !== null && selected.includes(value)
-  return mode === 'is' ? included : !included
-}
-
 const DEFAULT_PANEL_WIDTH = 480
+const DEFAULT_PAGE_SIZE = 50
 
-function sortJobs(jobs: Job[], key: SortKey, dir: SortDir): Job[] {
-  const factor = dir === 'asc' ? 1 : -1
-  return [...jobs].sort((a, b) => {
-    const av = a[key]
-    const bv = b[key]
-    if (av === null && bv === null) return 0
-    if (av === null) return 1
-    if (bv === null) return -1
-    if (av < bv) return -1 * factor
-    if (av > bv) return 1 * factor
-    return 0
-  })
+// JobsTable.SortKey includes 'stage' as a dead, never-selected option (no
+// column wires it up) -- the server doesn't support sorting by it, so fall
+// back to the default rather than sending it.
+function toApiSortKey(key: SortKey): SearchJobsParams['sort_by'] {
+  return key === 'stage' ? 'discovered_at' : key
 }
 
 function App() {
   const { theme, toggleTheme } = useTheme()
   const { data: status, error: statusError, refresh: refreshStatus } = useRefreshable(getStatus)
-  const { data: jobs, error: jobsError, refresh: refreshJobs } = useRefreshable(getJobs)
-
-  // Refetches status + jobs on-demand -- passed down to whatever just
-  // changed the DB (a local mutation, or SearchPanel while a run is
-  // actively writing rows) instead of polling blindly on a timer.
-  const refresh = useCallback(() => {
-    refreshStatus()
-    refreshJobs()
-  }, [refreshStatus, refreshJobs])
 
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [jobTypeFilter, setJobTypeFilter] = useLocalStorageState<JobType[]>('applypilot-filter-job-type', [])
   const [jobTypeFilterMode, setJobTypeFilterMode] = useLocalStorageState<FilterMode>(
     'applypilot-filter-job-type-mode',
@@ -62,48 +43,125 @@ function App() {
     'applypilot-filter-user-action-mode',
     'is',
   )
+  const [dateFrom, setDateFrom] = useState<DateKey | null>(null)
+  const [dateTo, setDateTo] = useState<DateKey | null>(null)
   const [showDismissed, setShowDismissed] = useLocalStorageState('applypilot-show-dismissed', false)
   const [hiddenColumns, setHiddenColumns] = useLocalStorageState<SortKey[]>('applypilot-hidden-columns', [])
   const [panelWidth, setPanelWidth] = useLocalStorageState('applypilot-job-detail-width', DEFAULT_PANEL_WIDTH)
   const [sortKey, setSortKey] = useLocalStorageState<SortKey>('applypilot-sort-key', 'discovered_at')
   const [sortDir, setSortDir] = useLocalStorageState<SortDir>('applypilot-sort-dir', 'desc')
+  const [pageSize, setPageSize] = useLocalStorageState('applypilot-page-size', DEFAULT_PAGE_SIZE)
+  const [page, setPage] = useState(1)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewJob, setPreviewJob] = useState<Job | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
-  const previewJob = jobs?.find((j) => j.url === previewUrl) ?? null
 
-  const visibleJobs = useMemo(() => {
-    if (!jobs) return []
-    const q = search.trim().toLowerCase()
-    const filtered = jobs.filter((job) => {
-      if (job.dismissed && !showDismissed) return false
-      if (!matchesMultiSelect(jobTypeFilterMode, jobTypeFilter, job.job_type ?? 'unknown')) return false
-      if (!matchesMultiSelect(userActionFilterMode, userActionFilter, job.user_action)) return false
-      if (!q) return true
-      return (
-        (job.title || '').toLowerCase().includes(q) ||
-        (job.company || '').toLowerCase().includes(q) ||
-        (job.site || '').toLowerCase().includes(q) ||
-        (job.location || '').toLowerCase().includes(q)
-      )
-    })
-    return sortJobs(filtered, sortKey, sortDir)
+  // Debounce free-text search so it doesn't fire a request per keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(t)
+  }, [search])
+
+  // Any filter/search/sort/page-size change invalidates the current page --
+  // jump back to page 1 rather than showing an out-of-range page.
+  useEffect(() => {
+    setPage(1)
   }, [
-    jobs,
-    search,
-    showDismissed,
+    debouncedSearch,
     jobTypeFilter,
     jobTypeFilterMode,
     userActionFilter,
     userActionFilterMode,
+    dateFrom,
+    dateTo,
+    showDismissed,
     sortKey,
     sortDir,
+    pageSize,
   ])
+
+  const {
+    data: searchResult,
+    error: jobsError,
+    refresh: refreshJobs,
+  } = useRefreshable(
+    () =>
+      searchJobs({
+        page,
+        page_size: pageSize,
+        q: debouncedSearch,
+        job_type: jobTypeFilter,
+        job_type_mode: jobTypeFilterMode,
+        user_action: userActionFilter,
+        user_action_mode: userActionFilterMode,
+        include_dismissed: showDismissed,
+        discovered_after: dateFrom,
+        discovered_before: dateTo,
+        sort_by: toApiSortKey(sortKey),
+        sort_dir: sortDir,
+      }),
+    [
+      page,
+      pageSize,
+      debouncedSearch,
+      jobTypeFilter,
+      jobTypeFilterMode,
+      userActionFilter,
+      userActionFilterMode,
+      dateFrom,
+      dateTo,
+      showDismissed,
+      sortKey,
+      sortDir,
+    ],
+  )
+
+  const jobs = searchResult?.items ?? []
+  const totalJobs = searchResult?.total ?? 0
+  const totalPages = searchResult?.total_pages ?? 0
+
+  // Refetches status + the current page on-demand -- passed down to whatever
+  // just changed the DB (a local mutation, or SearchPanel while a run is
+  // actively writing rows) instead of polling blindly on a timer.
+  const refresh = useCallback(() => {
+    refreshStatus()
+    refreshJobs()
+  }, [refreshStatus, refreshJobs])
+
+  // The preview panel needs full_description, which list/search results omit
+  // to keep page payloads small -- fetch the full record whenever the
+  // preview target changes.
+  useEffect(() => {
+    if (!previewUrl) {
+      setPreviewJob(null)
+      return
+    }
+    let cancelled = false
+    getJob(previewUrl)
+      .then((detail) => {
+        if (!cancelled) setPreviewJob(detail)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [previewUrl])
+
+  async function refreshPreviewIfOpen(url: string) {
+    if (url !== previewUrl) return
+    try {
+      setPreviewJob(await getJob(url))
+    } catch {
+      // ignore -- the list refresh triggered alongside this still reflects the mutation
+    }
+  }
 
   async function handleUserActionChange(job: Job, value: UserAction | null) {
     try {
       await setJobUserAction(job.url, value)
       setActionError(null)
       refresh()
+      refreshPreviewIfOpen(job.url)
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : 'Failed to update action')
     }
@@ -114,9 +172,15 @@ function App() {
       await setJobDismissed(job.url, dismissed)
       setActionError(null)
       refresh()
+      refreshPreviewIfOpen(job.url)
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : 'Failed to update dismissed state')
     }
+  }
+
+  function handleCoverLetterGenerated() {
+    refresh()
+    if (previewUrl) refreshPreviewIfOpen(previewUrl)
   }
 
   function toggleColumnVisibility(key: SortKey) {
@@ -173,10 +237,16 @@ function App() {
         onUserActionFilterChange={setUserActionFilter}
         userActionFilterMode={userActionFilterMode}
         onUserActionFilterModeChange={setUserActionFilterMode}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        onDateRangeChange={(from, to) => {
+          setDateFrom(from)
+          setDateTo(to)
+        }}
       />
 
       <JobsTable
-        jobs={visibleJobs}
+        jobs={jobs}
         sortKey={sortKey}
         sortDir={sortDir}
         onSort={handleSort}
@@ -185,13 +255,50 @@ function App() {
         hiddenColumns={hiddenColumns}
       />
 
+      {totalJobs > 0 && (
+        <div className="pagination-bar">
+          <span className="pagination-summary">
+            {totalJobs} job{totalJobs === 1 ? '' : 's'} · page {page} of {totalPages}
+          </span>
+          <div className="pagination-controls">
+            <button
+              type="button"
+              className="pagination-button"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              ← Prev
+            </button>
+            <button
+              type="button"
+              className="pagination-button"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Next →
+            </button>
+            <select
+              className="pagination-page-size"
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+            >
+              {[25, 50, 100, 200].map((size) => (
+                <option key={size} value={size}>
+                  {size} / page
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
       {previewJob && (
         <JobPreviewModal
           job={previewJob}
           onClose={() => setPreviewUrl(null)}
           onUserActionChange={handleUserActionChange}
           onDismissChange={handleDismissChange}
-          onCoverLetterGenerated={refresh}
+          onCoverLetterGenerated={handleCoverLetterGenerated}
           width={panelWidth}
           onWidthChange={setPanelWidth}
         />

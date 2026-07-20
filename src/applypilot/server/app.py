@@ -14,7 +14,7 @@ import threading
 import webbrowser
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from rich.console import Console
@@ -27,7 +27,7 @@ from applypilot.config import (
     save_prompts,
     save_search_config,
 )
-from applypilot.database import get_connection, get_stats, init_db
+from applypilot.database import get_connection, get_stats, init_db, search_jobs
 from applypilot.search_config import SearchYamlConfig
 from applypilot.server import search_state
 from applypilot.server.stages import STAGE_ORDER, USER_ACTIONS, compute_stage
@@ -61,8 +61,10 @@ init_db()
 
 # Curated job fields returned to the frontend — excludes internal/unused
 # columns (strategy, agent_id, last_attempted_at, apply_duration_ms,
-# apply_task_id, verification_confidence).
-_JOB_FIELDS = [
+# apply_task_id, verification_confidence). Detail fetches (single job) get
+# the full set including full_description; list/search results omit it --
+# it's not needed for table rows and keeping it out shrinks page payloads.
+_JOB_DETAIL_FIELDS = [
     "url", "title", "company", "site", "job_type", "location", "salary",
     "fit_score", "score_reasoning",
     "application_url", "full_description",
@@ -72,6 +74,7 @@ _JOB_FIELDS = [
     "applied_at", "apply_status", "apply_error", "apply_attempts",
     "detail_error", "user_action", "dismissed",
 ]
+_JOB_LIST_FIELDS = [f for f in _JOB_DETAIL_FIELDS if f != "full_description"]
 
 
 @app.get("/api/status")
@@ -115,23 +118,55 @@ def get_status() -> dict:
     }
 
 
-@app.get("/api/jobs")
-def get_jobs() -> list[dict]:
+@app.get("/api/jobs/search")
+def api_search_jobs(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    q: str = "",
+    job_type: list[str] = Query([]),
+    job_type_mode: str = Query("is", pattern="^(is|is_not)$"),
+    user_action: list[str] = Query([]),
+    user_action_mode: str = Query("is", pattern="^(is|is_not)$"),
+    include_dismissed: bool = False,
+    discovered_after: str | None = Query(None, pattern="^\\d{4}-\\d{2}-\\d{2}$"),
+    discovered_before: str | None = Query(None, pattern="^\\d{4}-\\d{2}-\\d{2}$"),
+    sort_by: str = Query(
+        "discovered_at",
+        pattern="^(title|company|site|location|job_type|fit_score|discovered_at)$",
+    ),
+    sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
+) -> dict:
     conn = get_connection()
-    rows = conn.execute("SELECT * FROM jobs ORDER BY discovered_at DESC").fetchall()
-    if not rows:
-        return []
+    jobs, total = search_jobs(
+        conn,
+        q=q,
+        job_type=job_type,
+        job_type_mode=job_type_mode,
+        user_action=user_action,
+        user_action_mode=user_action_mode,
+        include_dismissed=include_dismissed,
+        discovered_after=discovered_after,
+        discovered_before=discovered_before,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        page=page,
+        page_size=page_size,
+    )
 
-    columns = rows[0].keys()
-    jobs = [dict(zip(columns, row)) for row in rows]
-
-    result = []
+    items = []
     for job in jobs:
-        out = {field: job.get(field) for field in _JOB_FIELDS}
+        out = {field: job.get(field) for field in _JOB_LIST_FIELDS}
         out["dismissed"] = bool(out.get("dismissed"))
         out["stage"] = compute_stage(job)
-        result.append(out)
-    return result
+        items.append(out)
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size if total else 0,
+    }
 
 
 class UserActionBody(BaseModel):
@@ -208,6 +243,27 @@ def generate_job_cover_letter(url: str) -> dict:
     except ValueError as e:
         status_code = 404 if "not found" in str(e) else 400
         raise HTTPException(status_code=status_code, detail=str(e)) from e
+
+
+@app.get("/api/jobs/{url:path}")
+def get_job(url: str) -> dict:
+    """Fetch one job's full detail, including full_description.
+
+    Used by the preview panel -- list/search results omit full_description
+    to keep page payloads small, so the panel fetches it here on open.
+    Registered after the more specific /cover-letter routes above so those
+    match first (this path pattern would otherwise swallow them too).
+    """
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM jobs WHERE url = ?", (url,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    job = dict(zip(row.keys(), row))
+    out = {field: job.get(field) for field in _JOB_DETAIL_FIELDS}
+    out["dismissed"] = bool(out.get("dismissed"))
+    out["stage"] = compute_stage(job)
+    return out
 
 
 class SearchQuery(BaseModel):
@@ -339,7 +395,8 @@ def get_search_new_jobs() -> list[dict]:
 
     result = []
     for job in jobs:
-        out = {field: job.get(field) for field in _JOB_FIELDS}
+        out = {field: job.get(field) for field in _JOB_LIST_FIELDS}
+        out["dismissed"] = bool(out.get("dismissed"))
         out["stage"] = compute_stage(job)
         result.append(out)
     return result

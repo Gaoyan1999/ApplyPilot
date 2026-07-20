@@ -1,4 +1,4 @@
-import type { Job, PromptsConfig, SearchConfig, SearchStatus, Status, UserAction } from './types'
+import type { Job, PromptsConfig, SearchConfig, SearchJobsParams, SearchJobsResponse, SearchStatus, Status, UserAction } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -33,8 +33,25 @@ export function getStatus(): Promise<Status> {
   return getJson<Status>('/api/status')
 }
 
-export function getJobs(): Promise<Job[]> {
-  return getJson<Job[]>('/api/jobs')
+export function searchJobs(params: SearchJobsParams): Promise<SearchJobsResponse> {
+  const qs = new URLSearchParams()
+  qs.set('page', String(params.page))
+  qs.set('page_size', String(params.page_size))
+  if (params.q) qs.set('q', params.q)
+  for (const jt of params.job_type) qs.append('job_type', jt)
+  qs.set('job_type_mode', params.job_type_mode === 'is not' ? 'is_not' : 'is')
+  for (const ua of params.user_action) qs.append('user_action', ua)
+  qs.set('user_action_mode', params.user_action_mode === 'is not' ? 'is_not' : 'is')
+  qs.set('include_dismissed', String(params.include_dismissed))
+  if (params.discovered_after) qs.set('discovered_after', params.discovered_after)
+  if (params.discovered_before) qs.set('discovered_before', params.discovered_before)
+  qs.set('sort_by', params.sort_by)
+  qs.set('sort_dir', params.sort_dir)
+  return getJson<SearchJobsResponse>(`/api/jobs/search?${qs.toString()}`)
+}
+
+export function getJob(url: string): Promise<Job> {
+  return getJson<Job>(`/api/jobs/${encodeURIComponent(url)}`)
 }
 
 export function getSearchConfig(): Promise<SearchConfig> {

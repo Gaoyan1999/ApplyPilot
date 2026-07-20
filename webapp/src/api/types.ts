@@ -30,7 +30,9 @@ export interface Job {
   fit_score: number | null
   score_reasoning: string | null
   application_url: string | null
-  full_description: string | null
+  // Omitted from GET /api/jobs/search list items (keeps page payloads small);
+  // only present on a single-job detail fetch (GET /api/jobs/{url}).
+  full_description?: string | null
   discovered_at: string | null
   scored_at: string | null
   tailored_at: string | null
@@ -46,6 +48,35 @@ export interface Job {
   stage: Stage
   user_action: UserAction | null
   dismissed: boolean
+}
+
+export interface SearchJobsParams {
+  page: number
+  page_size: number
+  q: string
+  job_type: JobType[]
+  // 'is' | 'is not' -- the app-wide FilterMode from components/MultiSelectFilter.
+  // Not imported here to avoid the api layer depending on components; the
+  // client.ts request builder translates it to the API's `is`/`is_not`.
+  job_type_mode: 'is' | 'is not'
+  user_action: UserAction[]
+  user_action_mode: 'is' | 'is not'
+  include_dismissed: boolean
+  // 'YYYY-MM-DD', inclusive on both ends. Either/both may be null (open-ended).
+  discovered_after: string | null
+  discovered_before: string | null
+  // Excludes 'stage' -- JobsTable.SortKey's dead, unused sort option (no
+  // column wires it up) that the server doesn't support sorting by.
+  sort_by: 'title' | 'company' | 'site' | 'location' | 'job_type' | 'fit_score' | 'discovered_at'
+  sort_dir: 'asc' | 'desc'
+}
+
+export interface SearchJobsResponse {
+  items: Job[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
 }
 
 export interface ScoreDistItem {
