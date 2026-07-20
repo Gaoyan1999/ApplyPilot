@@ -1113,7 +1113,11 @@
   cursor: pointer;
 }
 
-.date-range-day:hover {
+/* :not() exclusions keep this from outranking (via the :hover pseudo-class's
+   higher specificity) the plain single-class rules below -- otherwise
+   hovering a selected/endpoint day would reset its background while leaving
+   its (contrast-matched) text color untouched, making the digit unreadable. */
+.date-range-day:hover:not(.date-range-day-inrange):not(.date-range-day-endpoint) {
   background: var(--bg-subtle);
 }
 
@@ -1131,10 +1135,18 @@
   border-radius: 0;
 }
 
+.date-range-day-inrange:hover {
+  filter: brightness(0.95);
+}
+
 .date-range-day-endpoint {
   background: var(--stage-enriched-fg);
   color: var(--bg);
   font-weight: 600;
+}
+
+.date-range-day-endpoint:hover {
+  filter: brightness(1.1);
 }
 
 /* Jobs table */
