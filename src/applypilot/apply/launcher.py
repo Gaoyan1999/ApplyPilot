@@ -50,6 +50,14 @@ POLL_INTERVAL = config.DEFAULTS["poll_interval"]
 # Thread-safe shutdown coordination
 _stop_event = threading.Event()
 
+# Set by apply_state.cancel() (the web "Cancel" button) right before it
+# kills the claude process, so worker_loop's cleanup knows to leave the
+# now-abandoned Chrome window open for the user to inspect instead of
+# tearing it down like it does after every other job outcome. Not set by
+# the CLI's Ctrl+C handling, which intentionally does tear Chrome down --
+# in continuous/batch mode a fresh Chrome opens for the next job anyway.
+_keep_chrome_on_cancel = threading.Event()
+
 # Track active Claude Code processes for skip (Ctrl+C) handling
 _claude_procs: dict[int, subprocess.Popen] = {}
 _claude_lock = threading.Lock()
@@ -690,7 +698,11 @@ def worker_loop(worker_id: int = 0, limit: int = 1,
             update_state(worker_id, jobs_failed=failed)
         finally:
             if chrome_proc:
-                cleanup_worker(worker_id, chrome_proc)
+                if _keep_chrome_on_cancel.is_set():
+                    _keep_chrome_on_cancel.clear()
+                    add_event(f"[W{worker_id}] Cancelled -- leaving Chrome open for review")
+                else:
+                    cleanup_worker(worker_id, chrome_proc)
 
         jobs_done += 1
         if target_url:

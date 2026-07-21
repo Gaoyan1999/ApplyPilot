@@ -99,6 +99,7 @@ def _run(url: str, model: str) -> None:
     # A previous run's second-Ctrl+C-equivalent (cancel()) may have left this
     # set; main() clears it for the same reason on every CLI invocation.
     launcher._stop_event.clear()
+    launcher._keep_chrome_on_cancel.clear()
     try:
         applied, failed = launcher.worker_loop(
             worker_id=_WORKER_ID,
@@ -123,13 +124,16 @@ def _run(url: str, model: str) -> None:
 
 
 def cancel() -> bool:
-    """Best-effort cancel of the in-flight run -- mirrors launcher.py's
-    second-Ctrl+C handling: kill the tracked claude subprocess, which makes
-    run_job() return "skipped" and worker_loop()'s own cleanup tear down
-    Chrome for this worker. Returns whether a run was actually in progress."""
+    """Best-effort cancel of the in-flight run -- kills the tracked claude
+    subprocess, which makes run_job() return "skipped". Unlike the CLI's
+    Ctrl+C handling, the Chrome window is deliberately left open (see
+    launcher._keep_chrome_on_cancel) so the user can see what state the
+    application was in when they cancelled. Returns whether a run was
+    actually in progress."""
     with _lock:
         was_running = _state["running"]
 
+    launcher._keep_chrome_on_cancel.set()
     launcher._stop_event.set()
     with launcher._claude_lock:
         for _wid, proc in list(launcher._claude_procs.items()):
