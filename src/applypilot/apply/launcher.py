@@ -111,17 +111,18 @@ def acquire_job(target_url: str | None = None, min_score: int = 7,
             # the CV library, and worker_loop fails clearly if neither is
             # available.
             #
-            # Exact match first, as its own query -- the web UI and most
-            # CLI callers pass the literal jobs.url/application_url value,
-            # which should always win outright. Only fall back to a fuzzy
-            # LIKE search (for a URL pasted with tracking params/trailing
-            # slash stripped) if no exact match exists. These used to be
-            # OR'd together in one query with LIMIT 1 and no ORDER BY --
-            # for job boards like Indeed, whose URLs are otherwise-identical
+            # Exact match only -- url is the jobs table's primary key, so
+            # this is already a unique-id lookup, never ambiguous. This
+            # used to also fall back to a fuzzy LIKE search (for a URL
+            # pasted with tracking params/trailing slash stripped), but for
+            # job boards like Indeed, whose URLs are otherwise-identical
             # except for a `?jk=...` query-string key, stripping the query
-            # string for the LIKE pattern made it match *every* Indeed job
-            # in the DB, so SQLite could return a completely different job
-            # than the one actually requested.
+            # string for the LIKE pattern matched *every* Indeed job in the
+            # DB -- meaning a caller could get back a completely different
+            # job than the one actually requested. Removed rather than
+            # made safer: callers (the web UI, `applypilot apply --url`)
+            # should always have the exact stored url/application_url on
+            # hand from the dashboard/status output.
             row = conn.execute("""
                 SELECT url, title, site, application_url, tailored_resume_path,
                        fit_score, location, full_description, cover_letter_path
@@ -130,17 +131,6 @@ def acquire_job(target_url: str | None = None, min_score: int = 7,
                   AND (apply_status IS NULL OR apply_status != 'in_progress')
                 LIMIT 1
             """, (target_url, target_url)).fetchone()
-
-            if not row:
-                like = f"%{target_url.split('?')[0].rstrip('/')}%"
-                row = conn.execute("""
-                    SELECT url, title, site, application_url, tailored_resume_path,
-                           fit_score, location, full_description, cover_letter_path
-                    FROM jobs
-                    WHERE (application_url LIKE ? OR url LIKE ?)
-                      AND (apply_status IS NULL OR apply_status != 'in_progress')
-                    LIMIT 1
-                """, (like, like)).fetchone()
         else:
             blocked_sites, blocked_patterns = _load_blocked()
             # Build parameterized filters to avoid SQL injection
