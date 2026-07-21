@@ -394,6 +394,17 @@ def run_job(job: dict, port: int, resume_pdf_path: Path, worker_id: int = 0,
     stats: dict = {}
     proc = None
 
+    # On Unix, start in a new process group so cancel()/_kill_process_tree()
+    # can kill just this subprocess's tree via os.killpg(). Without this the
+    # claude process inherits its parent's process group -- harmless for the
+    # CLI (its own terminal session), but when triggered from the web server
+    # (apply_state -> worker_loop -> run_job), the parent *is* the FastAPI
+    # server process itself, so killing "the group" kills the server too.
+    # Mirrors chrome.py's launch_chrome(), which already does this correctly.
+    popen_kwargs: dict = {}
+    if platform.system() != "Windows":
+        popen_kwargs["preexec_fn"] = os.setsid
+
     try:
         proc = subprocess.Popen(
             cmd,
@@ -402,6 +413,7 @@ def run_job(job: dict, port: int, resume_pdf_path: Path, worker_id: int = 0,
             stderr=subprocess.STDOUT,
             text=True,
             encoding="utf-8",
+            **popen_kwargs,
             errors="replace",
             env=env,
             cwd=str(worker_dir),
