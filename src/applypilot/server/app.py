@@ -14,17 +14,23 @@ import threading
 import webbrowser
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from rich.console import Console
 
 from applypilot.config import (
+    CV_DIR,
+    delete_cv,
+    ensure_dirs,
     get_prompt_seed,
     get_tier,
+    list_cvs,
     load_prompts,
     load_search_config,
+    safe_cv_name,
+    save_cv,
     save_prompts,
     save_search_config,
 )
@@ -316,10 +322,10 @@ def start_job_auto_submit(url: str) -> dict:
     ).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    if not row["tailored_resume_path"]:
+    if not row["tailored_resume_path"] and not list_cvs():
         raise HTTPException(
             status_code=400,
-            detail="This job needs a tailored resume before it can be auto-submitted.",
+            detail="No resume available -- add a CV in the CV library or tailor a resume for this job first.",
         )
     if row["applied_at"]:
         raise HTTPException(status_code=400, detail="This job has already been applied to.")
@@ -338,6 +344,57 @@ def get_job_auto_submit_status(url: str) -> dict:
 @app.post("/api/jobs/{url:path}/auto-submit/cancel")
 def cancel_job_auto_submit(url: str) -> dict:
     return {"cancelled": apply_state.cancel()}
+
+
+_MAX_CV_BYTES = 10 * 1024 * 1024  # 10MB
+
+
+@app.get("/api/cvs")
+def api_list_cvs() -> list[dict]:
+    return list_cvs()
+
+
+@app.post("/api/cvs", status_code=201)
+async def api_upload_cv(file: UploadFile = File(...), name: str = Form("")) -> dict:
+    if file.content_type != "application/pdf" and not (file.filename or "").lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+
+    data = await file.read()
+    if len(data) > _MAX_CV_BYTES:
+        raise HTTPException(status_code=400, detail="File too large (10MB limit).")
+    if not data:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    cv_name = name.strip() or Path(file.filename or "resume").stem
+    ensure_dirs()
+    try:
+        return save_cv(cv_name, data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@app.delete("/api/cvs/{name}")
+def api_delete_cv(name: str) -> dict:
+    try:
+        deleted = delete_cv(name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    if not deleted:
+        raise HTTPException(status_code=404, detail="CV not found")
+    return {"deleted": True}
+
+
+@app.get("/api/cvs/{name}/file")
+def api_get_cv_file(name: str):
+    try:
+        safe_name = safe_cv_name(name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    pdf_path = CV_DIR / f"{safe_name}.pdf"
+    if not pdf_path.exists():
+        raise HTTPException(status_code=404, detail="CV not found")
+    return FileResponse(pdf_path, media_type="application/pdf", filename=pdf_path.name)
 
 
 @app.get("/api/jobs/{url:path}")

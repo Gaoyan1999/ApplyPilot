@@ -418,7 +418,7 @@ If CapSolver genuinely failed (errorId > 0):
 4. All else fails -> Output RESULT:CAPTCHA."""
 
 
-def build_prompt(job: dict, tailored_resume: str,
+def build_prompt(job: dict, tailored_resume: str, resume_pdf_path: Path,
                  cover_letter: str | None = None,
                  dry_run: bool = False) -> str:
     """Build the full instruction prompt for the apply agent.
@@ -428,8 +428,11 @@ def build_prompt(job: dict, tailored_resume: str,
 
     Args:
         job: Job dict from the database (must have url, title, site,
-             application_url, fit_score, tailored_resume_path).
-        tailored_resume: Plain-text content of the tailored resume.
+             application_url, fit_score).
+        tailored_resume: Plain-text content of the resume being used
+            (tailored or from the CV library -- caller has already decided).
+        resume_pdf_path: Path to the resume PDF to upload -- already
+            resolved by the caller (see apply.resume_source.resolve_resume).
         cover_letter: Optional plain-text cover letter content.
         dry_run: If True, tell the agent not to click Submit.
 
@@ -440,12 +443,7 @@ def build_prompt(job: dict, tailored_resume: str,
     search_config = config.load_search_config()
     personal = profile["personal"]
 
-    # --- Resolve resume PDF path ---
-    resume_path = job.get("tailored_resume_path")
-    if not resume_path:
-        raise ValueError(f"No tailored resume for job: {job.get('title', 'unknown')}")
-
-    src_pdf = Path(resume_path).with_suffix(".pdf").resolve()
+    src_pdf = Path(resume_pdf_path).resolve()
     if not src_pdf.exists():
         raise ValueError(f"Resume PDF not found: {src_pdf}")
 

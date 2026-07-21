@@ -27,6 +27,7 @@ interface Props {
   onDismissChange: (job: Job, dismissed: boolean) => void
   onCoverLetterGenerated: () => void
   onAutoSubmitComplete: () => void
+  cvCount: number
   width: number
   onWidthChange: (width: number) => void
 }
@@ -35,6 +36,7 @@ interface Props {
 // writes into apply_error -- anything not in this map just shows the raw
 // reason text, which is still useful, just untranslated.
 const FAILURE_LABELS: Record<string, string> = {
+  no_resume: 'No matching resume found — add a CV or tailor one for this job first.',
   captcha: 'Blocked by a CAPTCHA the agent could not solve.',
   login_issue: 'The site required a login the agent could not complete.',
   expired: 'The job posting appears to have expired.',
@@ -72,6 +74,7 @@ export function JobPreviewModal({
   onDismissChange,
   onCoverLetterGenerated,
   onAutoSubmitComplete,
+  cvCount,
   width,
   onWidthChange,
 }: Props) {
@@ -310,10 +313,10 @@ export function JobPreviewModal({
             !job.applied_at && (
               <button
                 type="button"
-                disabled={autoSubmitStarting || !job.tailored_at || autoSubmitRunningElsewhere}
+                disabled={autoSubmitStarting || (!job.tailored_at && cvCount === 0) || autoSubmitRunningElsewhere}
                 title={
-                  !job.tailored_at
-                    ? 'Needs a tailored resume first'
+                  !job.tailored_at && cvCount === 0
+                    ? 'Add a CV in the CV library or tailor a resume for this job first'
                     : autoSubmitRunningElsewhere
                       ? 'Another auto-submit is already running'
                       : undefined

@@ -185,6 +185,13 @@ export interface AutoSubmitStatus {
   actions: number
 }
 
+export interface Cv {
+  name: string
+  filename: string
+  uploaded_at: string
+  size: number
+}
+
 export interface Status {
   total: number
   with_description: number

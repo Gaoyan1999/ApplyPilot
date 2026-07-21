@@ -1,4 +1,4 @@
-import type { AutoSubmitStatus, Job, PromptsConfig, SearchConfig, SearchJobsParams, SearchJobsResponse, SearchStatus, Status, UserAction } from './types'
+import type { AutoSubmitStatus, Cv, Job, PromptsConfig, SearchConfig, SearchJobsParams, SearchJobsResponse, SearchStatus, Status, UserAction } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -16,12 +16,25 @@ async function getJson<T>(path: string): Promise<T> {
   return res.json() as Promise<T>
 }
 
-async function sendJson<T>(path: string, method: 'POST' | 'PUT' | 'PATCH', body?: unknown): Promise<T> {
+async function sendJson<T>(path: string, method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null)
+    throw new ApiError(res.status, detail?.detail || `${path} responded ${res.status}`)
+  }
+  return res.json() as Promise<T>
+}
+
+// No Content-Type header here -- the browser sets the multipart boundary
+// itself when the body is FormData. sendJson can't be reused for this: it
+// hardcodes JSON.stringify + an application/json header, which would break
+// a file upload.
+async function sendFormData<T>(path: string, body: FormData): Promise<T> {
+  const res = await fetch(path, { method: 'POST', body })
   if (!res.ok) {
     const detail = await res.json().catch(() => null)
     throw new ApiError(res.status, detail?.detail || `${path} responded ${res.status}`)
@@ -124,4 +137,23 @@ export function getAutoSubmitStatus(url: string): Promise<AutoSubmitStatus> {
 
 export function cancelAutoSubmit(url: string): Promise<{ cancelled: boolean }> {
   return sendJson<{ cancelled: boolean }>(`/api/jobs/${encodeURIComponent(url)}/auto-submit/cancel`, 'POST')
+}
+
+export function listCvs(): Promise<Cv[]> {
+  return getJson<Cv[]>('/api/cvs')
+}
+
+export function uploadCv(file: File, name: string): Promise<Cv> {
+  const formData = new FormData()
+  formData.append('file', file)
+  if (name) formData.append('name', name)
+  return sendFormData<Cv>('/api/cvs', formData)
+}
+
+export function deleteCv(name: string): Promise<{ deleted: boolean }> {
+  return sendJson<{ deleted: boolean }>(`/api/cvs/${encodeURIComponent(name)}`, 'DELETE')
+}
+
+export function getCvFileUrl(name: string): string {
+  return `/api/cvs/${encodeURIComponent(name)}/file`
 }

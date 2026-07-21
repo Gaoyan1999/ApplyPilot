@@ -35,6 +35,7 @@ from applypilot.apply.dashboard import (
     init_worker, update_state, add_event, get_state,
     render_full, get_totals,
 )
+from applypilot.apply.resume_source import resolve_resume
 
 logger = logging.getLogger(__name__)
 
@@ -104,13 +105,17 @@ def acquire_job(target_url: str | None = None, min_score: int = 7,
         conn.execute("BEGIN IMMEDIATE")
 
         if target_url:
+            # No tailored_resume_path requirement here (unlike the queue
+            # branch below) -- a specific job the caller explicitly named
+            # is eligible even without one; resolve_resume() falls back to
+            # the CV library, and worker_loop fails clearly if neither is
+            # available.
             like = f"%{target_url.split('?')[0].rstrip('/')}%"
             row = conn.execute("""
                 SELECT url, title, site, application_url, tailored_resume_path,
                        fit_score, location, full_description, cover_letter_path
                 FROM jobs
                 WHERE (url = ? OR application_url = ? OR application_url LIKE ? OR url LIKE ?)
-                  AND tailored_resume_path IS NOT NULL
                   AND (apply_status IS NULL OR apply_status != 'in_progress')
                 LIMIT 1
             """, (target_url, target_url, like, like)).fetchone()
@@ -221,14 +226,19 @@ def gen_prompt(target_url: str, min_score: int = 7,
     if not job:
         return None
 
-    # Read resume text
-    resume_path = job.get("tailored_resume_path")
-    txt_path = Path(resume_path).with_suffix(".txt") if resume_path else None
-    resume_text = ""
-    if txt_path and txt_path.exists():
-        resume_text = txt_path.read_text(encoding="utf-8")
+    resolved = resolve_resume(job)
+    if not resolved:
+        release_lock(job["url"])
+        raise ValueError(
+            f"No resume available for job: {job.get('title', 'unknown')} "
+            "(no tailored resume, and no CV in the library matched)"
+        )
 
-    prompt = prompt_mod.build_prompt(job=job, tailored_resume=resume_text)
+    # Read resume text (sibling .txt of whatever PDF was resolved)
+    txt_path = Path(resolved).with_suffix(".txt")
+    resume_text = txt_path.read_text(encoding="utf-8") if txt_path.exists() else ""
+
+    prompt = prompt_mod.build_prompt(job=job, tailored_resume=resume_text, resume_pdf_path=resolved)
 
     # Release the lock so the job stays available
     release_lock(job["url"])
@@ -294,26 +304,30 @@ def reset_failed() -> int:
 # Per-job execution
 # ---------------------------------------------------------------------------
 
-def run_job(job: dict, port: int, worker_id: int = 0,
+def run_job(job: dict, port: int, resume_pdf_path: Path, worker_id: int = 0,
             model: str = "sonnet", dry_run: bool = False) -> tuple[str, int]:
     """Spawn a Claude Code session for one job application.
+
+    Args:
+        resume_pdf_path: Already-resolved resume PDF for this job (see
+            apply.resume_source.resolve_resume) -- resolved once by the
+            caller, not re-derived here, since resolution may involve an
+            LLM call (CV-library matching).
 
     Returns:
         Tuple of (status_string, duration_ms). Status is one of:
         'applied', 'expired', 'captcha', 'login_issue',
         'failed:reason', or 'skipped'.
     """
-    # Read tailored resume text
-    resume_path = job.get("tailored_resume_path")
-    txt_path = Path(resume_path).with_suffix(".txt") if resume_path else None
-    resume_text = ""
-    if txt_path and txt_path.exists():
-        resume_text = txt_path.read_text(encoding="utf-8")
+    # Read resume text (sibling .txt of whatever PDF was resolved)
+    txt_path = Path(resume_pdf_path).with_suffix(".txt")
+    resume_text = txt_path.read_text(encoding="utf-8") if txt_path.exists() else ""
 
     # Build the prompt
     agent_prompt = prompt_mod.build_prompt(
         job=job,
         tailored_resume=resume_text,
+        resume_pdf_path=resume_pdf_path,
         dry_run=dry_run,
     )
 
@@ -596,13 +610,27 @@ def worker_loop(worker_id: int = 0, limit: int = 1,
 
         empty_polls = 0
 
+        # Resolve the resume before launching Chrome -- avoids popping a
+        # visible Chrome window for a job that's already known to fail.
+        resolved_resume = resolve_resume(job)
+        if resolved_resume is None:
+            add_event(f"[W{worker_id}] No resume available: {job['title'][:30]}")
+            mark_result(job["url"], "failed", "no_resume")
+            failed += 1
+            update_state(worker_id, jobs_failed=failed, jobs_done=applied + failed,
+                         status="failed", last_action="no resume available")
+            jobs_done += 1
+            if target_url:
+                break
+            continue
+
         chrome_proc = None
         try:
             add_event(f"[W{worker_id}] Launching Chrome...")
             chrome_proc = launch_chrome(worker_id, port=port, headless=headless)
 
-            result, duration_ms = run_job(job, port=port, worker_id=worker_id,
-                                            model=model, dry_run=dry_run)
+            result, duration_ms = run_job(job, port=port, resume_pdf_path=resolved_resume,
+                                            worker_id=worker_id, model=model, dry_run=dry_run)
 
             if result == "skipped":
                 release_lock(job["url"])
