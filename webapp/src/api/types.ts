@@ -183,6 +183,9 @@ export interface AutoSubmitStatus {
   status: string | null
   last_action: string | null
   actions: number
+  // The agent's own narrated reasoning + tool-use action descriptions, in
+  // order -- mirrors the CLI's --verbose terminal output.
+  transcript: string[]
 }
 
 export interface Cv {

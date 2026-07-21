@@ -33,7 +33,7 @@ from applypilot.apply.chrome import (
 )
 from applypilot.apply.dashboard import (
     init_worker, update_state, add_event, get_state,
-    render_full, get_totals,
+    render_full, get_totals, append_transcript,
 )
 from applypilot.apply.resume_source import resolve_resume
 
@@ -417,6 +417,7 @@ def run_job(job: dict, port: int, resume_pdf_path: Path, worker_id: int = 0,
                             if bt == "text":
                                 text_parts.append(block["text"])
                                 lf.write(block["text"] + "\n")
+                                append_transcript(worker_id, block["text"])
                             elif bt == "tool_use":
                                 name = (
                                     block.get("name", "")
@@ -436,6 +437,7 @@ def run_job(job: dict, port: int, resume_pdf_path: Path, worker_id: int = 0,
                                     desc = name
 
                                 lf.write(f"  >> {desc}\n")
+                                append_transcript(worker_id, f">> {desc}")
                                 ws = get_state(worker_id)
                                 cur_actions = ws.actions if ws else 0
                                 update_state(worker_id,

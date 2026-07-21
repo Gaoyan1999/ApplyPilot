@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
@@ -56,6 +56,33 @@ const FAILURE_LABELS: Record<string, string> = {
 function describeFailure(reason: string | null): string {
   if (!reason) return 'Auto-submit failed.'
   return FAILURE_LABELS[reason] ?? reason
+}
+
+// Scrolling transcript of the agent's narrated reasoning + tool-use
+// actions -- mirrors the CLI's --verbose terminal output. Pinned to the
+// bottom so the newest line is always visible as more stream in.
+function AutoSubmitTranscript({ lines }: { lines: string[] }) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [lines])
+
+  if (lines.length === 0) return null
+
+  return (
+    <div className="auto-submit-transcript" ref={ref}>
+      {lines.map((line, i) => (
+        <div
+          key={i}
+          className={`auto-submit-transcript-line${line.startsWith('>> ') ? ' auto-submit-transcript-action' : ''}`}
+        >
+          {line}
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function MetaRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -337,6 +364,7 @@ export function JobPreviewModal({
             {autoSubmitStatus && autoSubmitStatus.actions > 0 && ` (${autoSubmitStatus.actions} actions)`}
           </div>
         )}
+        <AutoSubmitTranscript lines={autoSubmitStatus?.transcript ?? []} />
         {!autoSubmitRunning && autoSubmitStatus?.error && (
           <div className="auto-submit-block auto-submit-blocked">{autoSubmitStatus.error}</div>
         )}

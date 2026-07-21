@@ -47,6 +47,7 @@ def get_status() -> dict:
     state["status"] = ws.status if ws else None
     state["last_action"] = ws.last_action if ws else None
     state["actions"] = ws.actions if ws else 0
+    state["transcript"] = list(ws.transcript) if ws else []
     return state
 
 
