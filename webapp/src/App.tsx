@@ -183,6 +183,11 @@ function App() {
     if (previewUrl) refreshPreviewIfOpen(previewUrl)
   }
 
+  function handleAutoSubmitComplete() {
+    refresh()
+    if (previewUrl) refreshPreviewIfOpen(previewUrl)
+  }
+
   function toggleColumnVisibility(key: SortKey) {
     setHiddenColumns((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
   }
@@ -299,6 +304,7 @@ function App() {
           onUserActionChange={handleUserActionChange}
           onDismissChange={handleDismissChange}
           onCoverLetterGenerated={handleCoverLetterGenerated}
+          onAutoSubmitComplete={handleAutoSubmitComplete}
           width={panelWidth}
           onWidthChange={setPanelWidth}
         />

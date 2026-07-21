@@ -1639,6 +1639,65 @@ body.col-resizing {
   margin: 0 0 12px;
 }
 
+.auto-submit-cancel {
+  border: 1px solid var(--error-border);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--error-bg);
+  color: var(--error-fg);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.auto-submit-block {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 0 0 20px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.auto-submit-running {
+  background: var(--stage-applying-bg);
+  color: var(--stage-applying-fg);
+}
+
+.auto-submit-success {
+  background: var(--stage-applied-bg);
+  color: var(--stage-applied-fg);
+}
+
+.auto-submit-failed {
+  background: var(--stage-failed-bg);
+  color: var(--stage-failed-fg);
+}
+
+.auto-submit-blocked {
+  background: var(--stage-discovered-bg);
+  color: var(--stage-discovered-fg);
+}
+
+.auto-submit-spinner {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: auto-submit-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes auto-submit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .modal-body p {
   margin: 0 0 12px;
 }

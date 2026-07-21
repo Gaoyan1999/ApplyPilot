@@ -30,7 +30,7 @@ from applypilot.config import (
 )
 from applypilot.database import get_connection, get_stats, init_db, search_jobs
 from applypilot.search_config import SearchYamlConfig
-from applypilot.server import search_state
+from applypilot.server import apply_state, search_state
 from applypilot.server.stages import STAGE_ORDER, USER_ACTIONS, compute_stage
 
 # Configures the root logger so applypilot.* loggers (e.g. discovery.jobspy)
@@ -271,6 +271,73 @@ def download_job_cover_letter_pdf(url: str):
         raise HTTPException(status_code=404, detail="Cover letter PDF not found")
 
     return FileResponse(pdf_path, media_type="application/pdf", filename=pdf_path.name)
+
+
+def _require_tier3() -> None:
+    """Inline tier-3 check for the API path -- config.check_tier() prints to
+    the console and raises SystemExit, which isn't appropriate for a request
+    handler, so this builds the same "what's missing" message as an
+    HTTPException instead."""
+    if get_tier() >= 3:
+        return
+
+    import shutil
+
+    from applypilot.config import get_chrome_path
+
+    missing = []
+    if get_tier() < 2:
+        missing.append(
+            "an LLM API key -- run 'applypilot init' or set GEMINI_API_KEY / OPENAI_API_KEY / LLM_URL"
+        )
+    if not shutil.which("claude"):
+        missing.append("Claude Code CLI -- install from https://claude.ai/code")
+    try:
+        get_chrome_path()
+    except FileNotFoundError:
+        missing.append("Chrome/Chromium -- install or set CHROME_PATH")
+
+    detail = "Auto-submit requires Full Auto-Apply (Tier 3)."
+    if missing:
+        detail += " Missing: " + "; ".join(missing)
+    raise HTTPException(status_code=400, detail=detail)
+
+
+@app.post("/api/jobs/{url:path}/auto-submit", status_code=202)
+def start_job_auto_submit(url: str) -> dict:
+    """Kick off a background Claude Code session that fills and submits this
+    one job's application in a visible Chrome window. Single-flight -- only
+    one auto-submit run at a time (see server/apply_state.py)."""
+    _require_tier3()
+
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT tailored_resume_path, applied_at FROM jobs WHERE url = ?", (url,)
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if not row["tailored_resume_path"]:
+        raise HTTPException(
+            status_code=400,
+            detail="This job needs a tailored resume before it can be auto-submitted.",
+        )
+    if row["applied_at"]:
+        raise HTTPException(status_code=400, detail="This job has already been applied to.")
+
+    if not apply_state.start_apply(url):
+        raise HTTPException(status_code=409, detail="An auto-submit run is already in progress")
+
+    return apply_state.get_status()
+
+
+@app.get("/api/jobs/{url:path}/auto-submit/status")
+def get_job_auto_submit_status(url: str) -> dict:
+    return apply_state.get_status()
+
+
+@app.post("/api/jobs/{url:path}/auto-submit/cancel")
+def cancel_job_auto_submit(url: str) -> dict:
+    return {"cancelled": apply_state.cancel()}
 
 
 @app.get("/api/jobs/{url:path}")

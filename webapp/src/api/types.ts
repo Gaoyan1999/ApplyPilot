@@ -170,6 +170,21 @@ export interface SearchStatus {
   error_stage: SearchRunStage
 }
 
+export interface AutoSubmitStatus {
+  running: boolean
+  url: string | null
+  started_at: string | null
+  finished_at: string | null
+  // Launcher-level failure -- couldn't start at all (tier check, job
+  // already locked/applied/manual-only, an unhandled exception). Distinct
+  // from a normal failed *application* outcome, which is reported via the
+  // job's own apply_status/apply_error once running flips back to false.
+  error: string | null
+  status: string | null
+  last_action: string | null
+  actions: number
+}
+
 export interface Status {
   total: number
   with_description: number

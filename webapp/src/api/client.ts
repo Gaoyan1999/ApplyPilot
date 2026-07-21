@@ -1,4 +1,4 @@
-import type { Job, PromptsConfig, SearchConfig, SearchJobsParams, SearchJobsResponse, SearchStatus, Status, UserAction } from './types'
+import type { AutoSubmitStatus, Job, PromptsConfig, SearchConfig, SearchJobsParams, SearchJobsResponse, SearchStatus, Status, UserAction } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -112,4 +112,16 @@ export function generateCoverLetter(url: string): Promise<CoverLetterText> {
 
 export function getCoverLetterPdfUrl(url: string): string {
   return `/api/jobs/${encodeURIComponent(url)}/cover-letter/pdf`
+}
+
+export function triggerAutoSubmit(url: string): Promise<AutoSubmitStatus> {
+  return sendJson<AutoSubmitStatus>(`/api/jobs/${encodeURIComponent(url)}/auto-submit`, 'POST')
+}
+
+export function getAutoSubmitStatus(url: string): Promise<AutoSubmitStatus> {
+  return getJson<AutoSubmitStatus>(`/api/jobs/${encodeURIComponent(url)}/auto-submit/status`)
+}
+
+export function cancelAutoSubmit(url: string): Promise<{ cancelled: boolean }> {
+  return sendJson<{ cancelled: boolean }>(`/api/jobs/${encodeURIComponent(url)}/auto-submit/cancel`, 'POST')
 }
