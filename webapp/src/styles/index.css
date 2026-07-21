@@ -438,6 +438,91 @@
   padding-top: 12px;
 }
 
+.cv-upload-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cv-name-input {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  width: 100%;
+}
+
+.cv-name-input:focus-visible {
+  outline: 2px solid var(--stage-enriched-fg);
+  outline-offset: 1px;
+}
+
+.cv-file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cv-file-picker {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--bg-subtle);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cv-file-picker:hover {
+  background: var(--border);
+}
+
+.cv-file-picker input[type='file'] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  cursor: pointer;
+}
+
+.cv-file-name {
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.cv-file-name-empty {
+  color: var(--text-muted);
+}
+
+.cv-upload-btn {
+  align-self: flex-start;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--text);
+  color: var(--bg);
+  cursor: pointer;
+}
+
+.cv-upload-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .cv-library-modal .add-btn,
 .cv-library-modal .remove-btn {
   border: none;

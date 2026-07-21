@@ -139,23 +139,30 @@ export function CvLibraryModal({ onActivity }: Props) {
 
               <div className="config-section cv-upload-section">
                 <h3>Add a CV</h3>
-                <div className="config-row">
+                <div className="cv-upload-form">
                   <input
                     type="text"
+                    className="cv-name-input"
                     placeholder="Name (e.g. Backend Engineer) — defaults to filename"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                   />
-                </div>
-                <div className="config-row">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="application/pdf"
-                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                  />
-                  <button type="button" disabled={!file || uploading} onClick={handleUpload}>
-                    {uploading ? 'Uploading…' : 'Upload'}
+                  <div className="cv-file-row">
+                    <label className="cv-file-picker">
+                      Choose PDF
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="application/pdf"
+                        onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                      />
+                    </label>
+                    <span className={`cv-file-name${file ? '' : ' cv-file-name-empty'}`}>
+                      {file ? file.name : 'No file selected'}
+                    </span>
+                  </div>
+                  <button type="button" className="cv-upload-btn" disabled={!file || uploading} onClick={handleUpload}>
+                    {uploading ? 'Uploading…' : 'Upload CV'}
                   </button>
                 </div>
                 {uploadError && <p className="cover-letter-error">{uploadError}</p>}
