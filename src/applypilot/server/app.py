@@ -138,6 +138,8 @@ def api_search_jobs(
     include_dismissed: bool = False,
     discovered_after: str | None = Query(None, pattern="^\\d{4}-\\d{2}-\\d{2}$"),
     discovered_before: str | None = Query(None, pattern="^\\d{4}-\\d{2}-\\d{2}$"),
+    score_min: int | None = Query(None),
+    score_max: int | None = Query(None),
     sort_by: str = Query(
         "discovered_at",
         pattern="^(title|company|site|location|job_type|fit_score|discovered_at)$",
@@ -155,6 +157,8 @@ def api_search_jobs(
         include_dismissed=include_dismissed,
         discovered_after=discovered_after,
         discovered_before=discovered_before,
+        score_min=score_min,
+        score_max=score_max,
         sort_by=sort_by,
         sort_dir=sort_dir,
         page=page,

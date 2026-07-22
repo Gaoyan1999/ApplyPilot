@@ -1344,6 +1344,42 @@
   filter: brightness(1.1);
 }
 
+/* Score range filter popover */
+.score-range-popover {
+  width: 200px;
+}
+
+.score-range-body {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.score-range-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.score-range-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.score-range-input:focus {
+  outline: none;
+  border-color: var(--stage-enriched-fg);
+  box-shadow: 0 0 0 2px var(--stage-enriched-bg);
+}
+
 /* Jobs table */
 .jobs-table-wrap {
   overflow-x: auto;

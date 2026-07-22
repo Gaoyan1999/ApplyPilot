@@ -486,6 +486,8 @@ def search_jobs(
     include_dismissed: bool = False,
     discovered_after: str | None = None,
     discovered_before: str | None = None,
+    score_min: int | None = None,
+    score_max: int | None = None,
     sort_by: str = "discovered_at",
     sort_dir: str = "desc",
     page: int = 1,
@@ -506,6 +508,8 @@ def search_jobs(
     - `discovered_after`/`discovered_before` are 'YYYY-MM-DD' calendar dates,
       inclusive on both ends (the whole `discovered_before` day is included,
       not just up to midnight).
+    - `score_min`/`score_max` filter on `fit_score`, inclusive on both ends.
+      Jobs with a null `fit_score` (not yet scored) never match either bound.
 
     Returns:
         (rows, total_count) -- `rows` is just the current page, `total_count`
@@ -550,6 +554,14 @@ def search_jobs(
         next_day = date.fromisoformat(discovered_before) + timedelta(days=1)
         where_clauses.append("discovered_at < ?")
         params.append(f"{next_day.isoformat()}T00:00:00")
+
+    if score_min is not None:
+        where_clauses.append("fit_score >= ?")
+        params.append(score_min)
+
+    if score_max is not None:
+        where_clauses.append("fit_score <= ?")
+        params.append(score_max)
 
     where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 

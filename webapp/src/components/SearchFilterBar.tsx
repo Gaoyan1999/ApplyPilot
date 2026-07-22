@@ -4,6 +4,7 @@ import type { DateKey } from '../lib/dateRange'
 import { CLASS_BY_JOB_TYPE, LABEL_BY_JOB_TYPE } from './JobTypeBadge'
 import { JOB_TYPE_ORDER } from './jobTypeOrder'
 import { MultiSelectFilter, type FilterMode } from './MultiSelectFilter'
+import { ScoreFilter } from './ScoreFilter'
 import { CLASS_BY_USER_ACTION, LABEL_BY_USER_ACTION } from './UserActionBadge'
 import { USER_ACTION_ORDER } from './userActionOrder'
 
@@ -21,6 +22,9 @@ interface Props {
   dateFrom: DateKey | null
   dateTo: DateKey | null
   onDateRangeChange: (from: DateKey | null, to: DateKey | null) => void
+  scoreMin: number | null
+  scoreMax: number | null
+  onScoreRangeChange: (min: number | null, max: number | null) => void
 }
 
 const JOB_TYPE_OPTIONS = JOB_TYPE_ORDER.map((jobType) => ({
@@ -49,6 +53,9 @@ export function SearchFilterBar({
   dateFrom,
   dateTo,
   onDateRangeChange,
+  scoreMin,
+  scoreMax,
+  onScoreRangeChange,
 }: Props) {
   return (
     <div className="filter-bar">
@@ -79,6 +86,7 @@ export function SearchFilterBar({
           onModeChange={onUserActionFilterModeChange}
         />
         <DateRangeFilter from={dateFrom} to={dateTo} onChange={onDateRangeChange} />
+        <ScoreFilter min={scoreMin} max={scoreMax} onChange={onScoreRangeChange} />
       </div>
     </div>
   )
