@@ -47,6 +47,8 @@ function App() {
   )
   const [dateFrom, setDateFrom] = useState<DateKey | null>(null)
   const [dateTo, setDateTo] = useState<DateKey | null>(null)
+  const [scoreMin, setScoreMin] = useState<number | null>(null)
+  const [scoreMax, setScoreMax] = useState<number | null>(null)
   const [showDismissed, setShowDismissed] = useLocalStorageState('applypilot-show-dismissed', false)
   const [hiddenColumns, setHiddenColumns] = useLocalStorageState<SortKey[]>('applypilot-hidden-columns', [])
   const [panelWidth, setPanelWidth] = useLocalStorageState('applypilot-job-detail-width', DEFAULT_PANEL_WIDTH)
@@ -76,6 +78,8 @@ function App() {
     userActionFilterMode,
     dateFrom,
     dateTo,
+    scoreMin,
+    scoreMax,
     showDismissed,
     sortKey,
     sortDir,
@@ -99,6 +103,8 @@ function App() {
         include_dismissed: showDismissed,
         discovered_after: dateFrom,
         discovered_before: dateTo,
+        score_min: scoreMin,
+        score_max: scoreMax,
         sort_by: toApiSortKey(sortKey),
         sort_dir: sortDir,
       }),
@@ -112,6 +118,8 @@ function App() {
       userActionFilterMode,
       dateFrom,
       dateTo,
+      scoreMin,
+      scoreMax,
       showDismissed,
       sortKey,
       sortDir,
@@ -250,6 +258,12 @@ function App() {
         onDateRangeChange={(from, to) => {
           setDateFrom(from)
           setDateTo(to)
+        }}
+        scoreMin={scoreMin}
+        scoreMax={scoreMax}
+        onScoreRangeChange={(min, max) => {
+          setScoreMin(min)
+          setScoreMax(max)
         }}
       />
 

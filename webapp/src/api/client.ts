@@ -58,6 +58,8 @@ export function searchJobs(params: SearchJobsParams): Promise<SearchJobsResponse
   qs.set('include_dismissed', String(params.include_dismissed))
   if (params.discovered_after) qs.set('discovered_after', params.discovered_after)
   if (params.discovered_before) qs.set('discovered_before', params.discovered_before)
+  if (params.score_min !== null) qs.set('score_min', String(params.score_min))
+  if (params.score_max !== null) qs.set('score_max', String(params.score_max))
   qs.set('sort_by', params.sort_by)
   qs.set('sort_dir', params.sort_dir)
   return getJson<SearchJobsResponse>(`/api/jobs/search?${qs.toString()}`)

@@ -65,6 +65,9 @@ export interface SearchJobsParams {
   // 'YYYY-MM-DD', inclusive on both ends. Either/both may be null (open-ended).
   discovered_after: string | null
   discovered_before: string | null
+  // fit_score bounds, inclusive on both ends. Either/both may be null (open-ended).
+  score_min: number | null
+  score_max: number | null
   // Excludes 'stage' -- JobsTable.SortKey's dead, unused sort option (no
   // column wires it up) that the server doesn't support sorting by.
   sort_by: 'title' | 'company' | 'site' | 'location' | 'job_type' | 'fit_score' | 'discovered_at'
