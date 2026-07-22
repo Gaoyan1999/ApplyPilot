@@ -33,8 +33,9 @@ from applypilot.apply.chrome import (
 )
 from applypilot.apply.dashboard import (
     init_worker, update_state, add_event, get_state,
-    render_full, get_totals,
+    render_full, get_totals, append_transcript,
 )
+from applypilot.apply.resume_source import resolve_resume
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,14 @@ POLL_INTERVAL = config.DEFAULTS["poll_interval"]
 
 # Thread-safe shutdown coordination
 _stop_event = threading.Event()
+
+# Set by apply_state.cancel() (the web "Cancel" button) right before it
+# kills the claude process, so worker_loop's cleanup knows to leave the
+# now-abandoned Chrome window open for the user to inspect instead of
+# tearing it down like it does after every other job outcome. Not set by
+# the CLI's Ctrl+C handling, which intentionally does tear Chrome down --
+# in continuous/batch mode a fresh Chrome opens for the next job anyway.
+_keep_chrome_on_cancel = threading.Event()
 
 # Track active Claude Code processes for skip (Ctrl+C) handling
 _claude_procs: dict[int, subprocess.Popen] = {}
@@ -104,16 +113,32 @@ def acquire_job(target_url: str | None = None, min_score: int = 7,
         conn.execute("BEGIN IMMEDIATE")
 
         if target_url:
-            like = f"%{target_url.split('?')[0].rstrip('/')}%"
+            # No tailored_resume_path requirement here (unlike the queue
+            # branch below) -- a specific job the caller explicitly named
+            # is eligible even without one; resolve_resume() falls back to
+            # the CV library, and worker_loop fails clearly if neither is
+            # available.
+            #
+            # Exact match only -- url is the jobs table's primary key, so
+            # this is already a unique-id lookup, never ambiguous. This
+            # used to also fall back to a fuzzy LIKE search (for a URL
+            # pasted with tracking params/trailing slash stripped), but for
+            # job boards like Indeed, whose URLs are otherwise-identical
+            # except for a `?jk=...` query-string key, stripping the query
+            # string for the LIKE pattern matched *every* Indeed job in the
+            # DB -- meaning a caller could get back a completely different
+            # job than the one actually requested. Removed rather than
+            # made safer: callers (the web UI, `applypilot apply --url`)
+            # should always have the exact stored url/application_url on
+            # hand from the dashboard/status output.
             row = conn.execute("""
                 SELECT url, title, site, application_url, tailored_resume_path,
                        fit_score, location, full_description, cover_letter_path
                 FROM jobs
-                WHERE (url = ? OR application_url = ? OR application_url LIKE ? OR url LIKE ?)
-                  AND tailored_resume_path IS NOT NULL
+                WHERE (url = ? OR application_url = ?)
                   AND (apply_status IS NULL OR apply_status != 'in_progress')
                 LIMIT 1
-            """, (target_url, target_url, like, like)).fetchone()
+            """, (target_url, target_url)).fetchone()
         else:
             blocked_sites, blocked_patterns = _load_blocked()
             # Build parameterized filters to avoid SQL injection
@@ -221,14 +246,19 @@ def gen_prompt(target_url: str, min_score: int = 7,
     if not job:
         return None
 
-    # Read resume text
-    resume_path = job.get("tailored_resume_path")
-    txt_path = Path(resume_path).with_suffix(".txt") if resume_path else None
-    resume_text = ""
-    if txt_path and txt_path.exists():
-        resume_text = txt_path.read_text(encoding="utf-8")
+    resolved = resolve_resume(job)
+    if not resolved:
+        release_lock(job["url"])
+        raise ValueError(
+            f"No resume available for job: {job.get('title', 'unknown')} "
+            "(no tailored resume, and no CV in the library matched)"
+        )
 
-    prompt = prompt_mod.build_prompt(job=job, tailored_resume=resume_text)
+    # Read resume text (sibling .txt of whatever PDF was resolved)
+    txt_path = Path(resolved).with_suffix(".txt")
+    resume_text = txt_path.read_text(encoding="utf-8") if txt_path.exists() else ""
+
+    prompt = prompt_mod.build_prompt(job=job, tailored_resume=resume_text, resume_pdf_path=resolved)
 
     # Release the lock so the job stays available
     release_lock(job["url"])
@@ -294,26 +324,30 @@ def reset_failed() -> int:
 # Per-job execution
 # ---------------------------------------------------------------------------
 
-def run_job(job: dict, port: int, worker_id: int = 0,
+def run_job(job: dict, port: int, resume_pdf_path: Path, worker_id: int = 0,
             model: str = "sonnet", dry_run: bool = False) -> tuple[str, int]:
     """Spawn a Claude Code session for one job application.
+
+    Args:
+        resume_pdf_path: Already-resolved resume PDF for this job (see
+            apply.resume_source.resolve_resume) -- resolved once by the
+            caller, not re-derived here, since resolution may involve an
+            LLM call (CV-library matching).
 
     Returns:
         Tuple of (status_string, duration_ms). Status is one of:
         'applied', 'expired', 'captcha', 'login_issue',
         'failed:reason', or 'skipped'.
     """
-    # Read tailored resume text
-    resume_path = job.get("tailored_resume_path")
-    txt_path = Path(resume_path).with_suffix(".txt") if resume_path else None
-    resume_text = ""
-    if txt_path and txt_path.exists():
-        resume_text = txt_path.read_text(encoding="utf-8")
+    # Read resume text (sibling .txt of whatever PDF was resolved)
+    txt_path = Path(resume_pdf_path).with_suffix(".txt")
+    resume_text = txt_path.read_text(encoding="utf-8") if txt_path.exists() else ""
 
     # Build the prompt
     agent_prompt = prompt_mod.build_prompt(
         job=job,
         tailored_resume=resume_text,
+        resume_pdf_path=resume_pdf_path,
         dry_run=dry_run,
     )
 
@@ -368,6 +402,17 @@ def run_job(job: dict, port: int, worker_id: int = 0,
     stats: dict = {}
     proc = None
 
+    # On Unix, start in a new process group so cancel()/_kill_process_tree()
+    # can kill just this subprocess's tree via os.killpg(). Without this the
+    # claude process inherits its parent's process group -- harmless for the
+    # CLI (its own terminal session), but when triggered from the web server
+    # (apply_state -> worker_loop -> run_job), the parent *is* the FastAPI
+    # server process itself, so killing "the group" kills the server too.
+    # Mirrors chrome.py's launch_chrome(), which already does this correctly.
+    popen_kwargs: dict = {}
+    if platform.system() != "Windows":
+        popen_kwargs["preexec_fn"] = os.setsid
+
     try:
         proc = subprocess.Popen(
             cmd,
@@ -376,6 +421,7 @@ def run_job(job: dict, port: int, worker_id: int = 0,
             stderr=subprocess.STDOUT,
             text=True,
             encoding="utf-8",
+            **popen_kwargs,
             errors="replace",
             env=env,
             cwd=str(worker_dir),
@@ -403,6 +449,7 @@ def run_job(job: dict, port: int, worker_id: int = 0,
                             if bt == "text":
                                 text_parts.append(block["text"])
                                 lf.write(block["text"] + "\n")
+                                append_transcript(worker_id, block["text"])
                             elif bt == "tool_use":
                                 name = (
                                     block.get("name", "")
@@ -422,6 +469,7 @@ def run_job(job: dict, port: int, worker_id: int = 0,
                                     desc = name
 
                                 lf.write(f"  >> {desc}\n")
+                                append_transcript(worker_id, f">> {desc}")
                                 ws = get_state(worker_id)
                                 cur_actions = ws.actions if ws else 0
                                 update_state(worker_id,
@@ -596,13 +644,27 @@ def worker_loop(worker_id: int = 0, limit: int = 1,
 
         empty_polls = 0
 
+        # Resolve the resume before launching Chrome -- avoids popping a
+        # visible Chrome window for a job that's already known to fail.
+        resolved_resume = resolve_resume(job)
+        if resolved_resume is None:
+            add_event(f"[W{worker_id}] No resume available: {job['title'][:30]}")
+            mark_result(job["url"], "failed", "no_resume")
+            failed += 1
+            update_state(worker_id, jobs_failed=failed, jobs_done=applied + failed,
+                         status="failed", last_action="no resume available")
+            jobs_done += 1
+            if target_url:
+                break
+            continue
+
         chrome_proc = None
         try:
             add_event(f"[W{worker_id}] Launching Chrome...")
             chrome_proc = launch_chrome(worker_id, port=port, headless=headless)
 
-            result, duration_ms = run_job(job, port=port, worker_id=worker_id,
-                                            model=model, dry_run=dry_run)
+            result, duration_ms = run_job(job, port=port, resume_pdf_path=resolved_resume,
+                                            worker_id=worker_id, model=model, dry_run=dry_run)
 
             if result == "skipped":
                 release_lock(job["url"])
@@ -636,7 +698,11 @@ def worker_loop(worker_id: int = 0, limit: int = 1,
             update_state(worker_id, jobs_failed=failed)
         finally:
             if chrome_proc:
-                cleanup_worker(worker_id, chrome_proc)
+                if _keep_chrome_on_cancel.is_set():
+                    _keep_chrome_on_cancel.clear()
+                    add_event(f"[W{worker_id}] Cancelled -- leaving Chrome open for review")
+                else:
+                    cleanup_worker(worker_id, chrome_proc)
 
         jobs_done += 1
         if target_url:

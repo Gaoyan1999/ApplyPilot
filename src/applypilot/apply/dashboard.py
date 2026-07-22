@@ -36,6 +36,11 @@ class WorkerState:
     jobs_done: int = 0
     total_cost: float = 0.0
     log_file: Path | None = None
+    # Running transcript of the agent's own text (its narrated reasoning)
+    # and tool-use action descriptions, in order -- lets the web dashboard
+    # show something like the CLI's --verbose terminal output instead of
+    # just the terse last_action string. Reset per-job via init_worker().
+    transcript: list[str] = field(default_factory=list)
 
 
 # Module-level state (thread-safe via _lock)
@@ -43,6 +48,7 @@ _worker_states: dict[int, WorkerState] = {}
 _events: list[str] = []
 _lock = threading.Lock()
 MAX_EVENTS = 8
+MAX_TRANSCRIPT_LINES = 300
 
 
 # ---------------------------------------------------------------------------
@@ -73,6 +79,17 @@ def get_state(worker_id: int = 0) -> WorkerState | None:
     """Read the worker's current state."""
     with _lock:
         return _worker_states.get(worker_id)
+
+
+def append_transcript(worker_id: int, line: str) -> None:
+    """Append one line (agent narration or a tool-use action description)
+    to the worker's transcript, capped at MAX_TRANSCRIPT_LINES."""
+    with _lock:
+        state = _worker_states.get(worker_id)
+        if state is not None:
+            state.transcript.append(line)
+            if len(state.transcript) > MAX_TRANSCRIPT_LINES:
+                del state.transcript[: len(state.transcript) - MAX_TRANSCRIPT_LINES]
 
 
 def add_event(msg: str) -> None:

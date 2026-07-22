@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ApiError, getJob, getStatus, searchJobs, setJobDismissed, setJobUserAction } from './api/client'
+import { ApiError, getJob, getStatus, listCvs, searchJobs, setJobDismissed, setJobUserAction } from './api/client'
 import type { Job, JobType, SearchJobsParams, UserAction } from './api/types'
 import { useRefreshable } from './hooks/useRefreshable'
 import { useTheme } from './hooks/useTheme'
@@ -12,6 +12,7 @@ import { JobsTable, type SortDir, type SortKey } from './components/JobsTable'
 import { JobPreviewModal } from './components/JobPreviewModal'
 import { SearchPanel } from './components/SearchPanel'
 import { SettingsModal } from './components/SettingsModal'
+import { CvLibraryModal } from './components/CvLibraryModal'
 import './styles/index.css'
 
 const DEFAULT_PANEL_WIDTH = 480
@@ -27,6 +28,7 @@ function toApiSortKey(key: SortKey): SearchJobsParams['sort_by'] {
 function App() {
   const { theme, toggleTheme } = useTheme()
   const { data: status, error: statusError, refresh: refreshStatus } = useRefreshable(getStatus)
+  const { data: cvs, refresh: refreshCvs } = useRefreshable(listCvs)
 
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -183,6 +185,11 @@ function App() {
     if (previewUrl) refreshPreviewIfOpen(previewUrl)
   }
 
+  function handleAutoSubmitComplete() {
+    refresh()
+    if (previewUrl) refreshPreviewIfOpen(previewUrl)
+  }
+
   function toggleColumnVisibility(key: SortKey) {
     setHiddenColumns((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
   }
@@ -204,6 +211,7 @@ function App() {
         <h1>ApplyPilot Dashboard</h1>
         <div className="app-header-actions">
           <SearchPanel onActivity={refresh} />
+          <CvLibraryModal onActivity={refreshCvs} />
           <SettingsModal
             theme={theme}
             onToggleTheme={toggleTheme}
@@ -299,6 +307,8 @@ function App() {
           onUserActionChange={handleUserActionChange}
           onDismissChange={handleDismissChange}
           onCoverLetterGenerated={handleCoverLetterGenerated}
+          onAutoSubmitComplete={handleAutoSubmitComplete}
+          cvCount={cvs?.length ?? 0}
           width={panelWidth}
           onWidthChange={setPanelWidth}
         />

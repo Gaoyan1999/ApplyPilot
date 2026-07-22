@@ -2,7 +2,9 @@
 
 import os
 import platform
+import re
 import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 
 # User data directory — all user-specific files live here
@@ -21,6 +23,10 @@ ENV_PATH = APP_DIR / ".env"
 TAILORED_DIR = APP_DIR / "tailored_resumes"
 COVER_LETTER_DIR = APP_DIR / "cover_letters"
 LOG_DIR = APP_DIR / "logs"
+
+# User-maintained CV library (master resumes the user manages themselves,
+# distinct from the per-job LLM-tailored resumes above)
+CV_DIR = APP_DIR / "cvs"
 
 # Chrome worker isolation
 CHROME_WORKER_DIR = APP_DIR / "chrome-workers"
@@ -88,7 +94,7 @@ def get_chrome_user_data() -> Path:
 
 def ensure_dirs():
     """Create all required directories."""
-    for d in [APP_DIR, TAILORED_DIR, COVER_LETTER_DIR, LOG_DIR, CHROME_WORKER_DIR, APPLY_WORKER_DIR]:
+    for d in [APP_DIR, TAILORED_DIR, COVER_LETTER_DIR, LOG_DIR, CHROME_WORKER_DIR, APPLY_WORKER_DIR, CV_DIR]:
         d.mkdir(parents=True, exist_ok=True)
 
 
@@ -230,6 +236,111 @@ def save_prompts(data: dict[str, str]) -> dict[str, str]:
         tmp_path = path.with_name(path.name + ".tmp")
         tmp_path.write_text(text, encoding="utf-8")
         tmp_path.replace(path)
+
+
+# ---------------------------------------------------------------------------
+# CV library -- user-maintained master resumes, distinct from the per-job
+# LLM-tailored resumes in TAILORED_DIR. CV_DIR is the single source of
+# truth (no DB row): each CV is a {safe_name}.pdf + {safe_name}.txt pair,
+# named after the user-given label. Mirrors the PROMPTS_DIR convention
+# above -- a directory of files the web dashboard lists/edits directly.
+# ---------------------------------------------------------------------------
+
+def safe_cv_name(name: str) -> str:
+    """Sanitize a user-given CV name into a filesystem-safe stem.
+
+    Same approach as tailor.py's filename-prefix sanitization.
+    """
+    cleaned = re.sub(r"[^\w\s-]", "", name)[:50].strip().replace(" ", "_")
+    if not cleaned:
+        raise ValueError("CV name must contain at least one letter, digit, space, or hyphen.")
+    return cleaned
+
+
+def list_cvs() -> list[dict]:
+    """List CVs from CV_DIR, sorted by name.
+
+    Returns [{"name", "filename", "uploaded_at", "size"}] -- all derived
+    straight from the filesystem, no separate metadata store. Sorted so a
+    "pick the first CV" fallback (e.g. cv_match's failure policy) is
+    stable and predictable.
+    """
+    if not CV_DIR.exists():
+        return []
+
+    entries = []
+    for pdf_path in CV_DIR.glob("*.pdf"):
+        stat = pdf_path.stat()
+        entries.append({
+            "name": pdf_path.stem,
+            "filename": pdf_path.name,
+            "uploaded_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+            "size": stat.st_size,
+        })
+    entries.sort(key=lambda e: e["name"].lower())
+    return entries
+
+
+def read_cv_text(name: str) -> str:
+    """Read the extracted-text sibling for a CV; "" if missing/empty."""
+    txt_path = CV_DIR / f"{safe_cv_name(name)}.txt"
+    if not txt_path.exists():
+        return ""
+    return txt_path.read_text(encoding="utf-8").strip()
+
+
+def save_cv(name: str, pdf_bytes: bytes) -> dict:
+    """Save a new CV: write {safe_name}.pdf, extract text to {safe_name}.txt.
+
+    Raises ValueError if a CV with this name already exists -- collisions
+    are rejected rather than silently overwritten, since a re-upload with
+    the same name is more likely a mistake than an intended replace.
+    """
+    CV_DIR.mkdir(parents=True, exist_ok=True)
+    safe_name = safe_cv_name(name)
+    pdf_path = CV_DIR / f"{safe_name}.pdf"
+    txt_path = CV_DIR / f"{safe_name}.txt"
+
+    if pdf_path.exists():
+        raise ValueError(f"A CV named '{safe_name}' already exists -- delete it first or choose a different name.")
+
+    tmp_pdf = pdf_path.with_name(pdf_path.name + ".tmp")
+    tmp_pdf.write_bytes(pdf_bytes)
+    tmp_pdf.replace(pdf_path)
+
+    # Best-effort text extraction -- a scanned/image PDF yields "", which is
+    # fine: the CV is still usable, matching just falls back to its name.
+    text = ""
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(str(pdf_path))
+        text = "\n".join(page.extract_text() or "" for page in reader.pages).strip()
+    except Exception:
+        pass
+
+    tmp_txt = txt_path.with_name(txt_path.name + ".tmp")
+    tmp_txt.write_text(text, encoding="utf-8")
+    tmp_txt.replace(txt_path)
+
+    stat = pdf_path.stat()
+    return {
+        "name": safe_name,
+        "filename": pdf_path.name,
+        "uploaded_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+        "size": stat.st_size,
+    }
+
+
+def delete_cv(name: str) -> bool:
+    """Remove a CV's .pdf and .txt files. Returns whether anything existed."""
+    safe_name = safe_cv_name(name)
+    pdf_path = CV_DIR / f"{safe_name}.pdf"
+    txt_path = CV_DIR / f"{safe_name}.txt"
+
+    existed = pdf_path.exists()
+    pdf_path.unlink(missing_ok=True)
+    txt_path.unlink(missing_ok=True)
+    return existed
 
     return prompts
 

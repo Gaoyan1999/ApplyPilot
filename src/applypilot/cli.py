@@ -197,8 +197,10 @@ def apply(
         )
         raise typer.Exit(code=1)
 
-    # Check 3: Tailored resumes exist (skip for --gen with --url)
-    if not (gen and url):
+    # Check 3: Tailored resumes exist (skip when a specific --url is given --
+    # that path no longer requires tailoring, it can fall back to the CV
+    # library; see apply.resume_source.resolve_resume)
+    if not url:
         conn = get_connection()
         ready = conn.execute(
             "SELECT COUNT(*) FROM jobs WHERE tailored_resume_path IS NOT NULL AND applied_at IS NULL"
