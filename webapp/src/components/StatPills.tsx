@@ -1,12 +1,12 @@
 import type { Status } from '../api/types'
 import { CLASS_BY_USER_ACTION, LABEL_BY_USER_ACTION } from './UserActionBadge'
-import { APPLICATION_STATUS_ACTIONS } from './userActionOrder'
+import { USER_ACTION_ORDER } from './userActionOrder'
 
 export function StatPills({ status }: { status: Status }) {
   const countByAction = Object.fromEntries(
     status.by_user_action.map((entry) => [entry.user_action, entry.count]),
   )
-  const inProgressBreakdown = APPLICATION_STATUS_ACTIONS.map((action) => ({
+  const inProgressBreakdown = USER_ACTION_ORDER.map((action) => ({
     action,
     count: countByAction[action] ?? 0,
   })).filter((entry) => entry.count > 0)

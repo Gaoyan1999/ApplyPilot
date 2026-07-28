@@ -42,10 +42,6 @@
   --jobtype-unknown-bg: var(--stage-discovered-bg);
   --jobtype-unknown-fg: var(--stage-discovered-fg);
 
-  --useraction-needtailor-bg: var(--stage-scored-bg);
-  --useraction-needtailor-fg: var(--stage-scored-fg);
-  --useraction-needautoapply-bg: var(--stage-applying-bg);
-  --useraction-needautoapply-fg: var(--stage-applying-fg);
   --useraction-applied-bg: var(--stage-applied-bg);
   --useraction-applied-fg: var(--stage-applied-fg);
   --useraction-interviewing-bg: var(--stage-tailored-bg);
@@ -155,10 +151,6 @@
   --jobtype-unknown-bg: var(--stage-discovered-bg);
   --jobtype-unknown-fg: var(--stage-discovered-fg);
 
-  --useraction-needtailor-bg: var(--stage-scored-bg);
-  --useraction-needtailor-fg: var(--stage-scored-fg);
-  --useraction-needautoapply-bg: var(--stage-applying-bg);
-  --useraction-needautoapply-fg: var(--stage-applying-fg);
   --useraction-applied-bg: var(--stage-applied-bg);
   --useraction-applied-fg: var(--stage-applied-fg);
   --useraction-interviewing-bg: var(--stage-tailored-bg);
@@ -217,10 +209,6 @@
   --jobtype-unknown-bg: var(--stage-discovered-bg);
   --jobtype-unknown-fg: var(--stage-discovered-fg);
 
-  --useraction-needtailor-bg: var(--stage-scored-bg);
-  --useraction-needtailor-fg: var(--stage-scored-fg);
-  --useraction-needautoapply-bg: var(--stage-applying-bg);
-  --useraction-needautoapply-fg: var(--stage-applying-fg);
   --useraction-applied-bg: var(--stage-applied-bg);
   --useraction-applied-fg: var(--stage-applied-fg);
   --useraction-interviewing-bg: var(--stage-tailored-bg);

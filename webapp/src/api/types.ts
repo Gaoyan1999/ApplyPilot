@@ -11,8 +11,6 @@ export type Stage =
 export type JobType = 'full_time' | 'intern' | 'contract' | 'unknown'
 
 export type UserAction =
-  | 'need_tailor'
-  | 'need_auto_apply'
   | 'applied'
   | 'interviewing'
   | 'offer'

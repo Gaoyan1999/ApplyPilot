@@ -16,6 +16,7 @@ interface Props {
   onSort: (key: SortKey) => void
   onPreview: (job: Job) => void
   onUserActionChange: (job: Job, value: UserAction | null) => void
+  onDismissChange: (job: Job, dismissed: boolean) => void
   hiddenColumns: SortKey[]
 }
 
@@ -40,7 +41,16 @@ const DEFAULT_COLUMN_WIDTHS: Record<ColumnKey, number> = {
   [ACTION_COLUMN_KEY]: DEFAULT_ACTION_WIDTH,
 } as Record<ColumnKey, number>
 
-export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview, onUserActionChange, hiddenColumns }: Props) {
+export function JobsTable({
+  jobs,
+  sortKey,
+  sortDir,
+  onSort,
+  onPreview,
+  onUserActionChange,
+  onDismissChange,
+  hiddenColumns,
+}: Props) {
   const visibleColumns = COLUMNS.filter((col) => !hiddenColumns.includes(col.key))
   const isVisible = (key: SortKey) => !hiddenColumns.includes(key)
 
@@ -146,6 +156,8 @@ export function JobsTable({ jobs, sortKey, sortDir, onSort, onPreview, onUserAct
                 <UserActionSelect
                   value={job.user_action}
                   onChange={(value) => onUserActionChange(job, value)}
+                  dismissed={job.dismissed}
+                  onDismissChange={(dismissed) => onDismissChange(job, dismissed)}
                 />
               </td>
             </tr>
