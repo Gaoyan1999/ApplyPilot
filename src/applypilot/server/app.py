@@ -79,7 +79,7 @@ _JOB_DETAIL_FIELDS = [
     "tailored_at", "tailor_attempts",
     "cover_letter_path", "cover_letter_at", "cover_attempts",
     "applied_at", "apply_status", "apply_error", "apply_attempts",
-    "detail_error", "user_action", "dismissed",
+    "detail_error", "user_action", "dismissed", "starred",
 ]
 _JOB_LIST_FIELDS = [f for f in _JOB_DETAIL_FIELDS if f != "full_description"]
 
@@ -136,6 +136,7 @@ def api_search_jobs(
     user_action: list[str] = Query([]),
     user_action_mode: str = Query("is", pattern="^(is|is_not)$"),
     include_dismissed: bool = False,
+    starred_only: bool = False,
     discovered_after: str | None = Query(None, pattern="^\\d{4}-\\d{2}-\\d{2}$"),
     discovered_before: str | None = Query(None, pattern="^\\d{4}-\\d{2}-\\d{2}$"),
     score_min: int | None = Query(None),
@@ -155,6 +156,7 @@ def api_search_jobs(
         user_action=user_action,
         user_action_mode=user_action_mode,
         include_dismissed=include_dismissed,
+        starred_only=starred_only,
         discovered_after=discovered_after,
         discovered_before=discovered_before,
         score_min=score_min,
@@ -169,6 +171,7 @@ def api_search_jobs(
     for job in jobs:
         out = {field: job.get(field) for field in _JOB_LIST_FIELDS}
         out["dismissed"] = bool(out.get("dismissed"))
+        out["starred"] = bool(out.get("starred"))
         out["stage"] = compute_stage(job)
         items.append(out)
 
@@ -184,6 +187,7 @@ def api_search_jobs(
 class UserActionBody(BaseModel):
     user_action: str | None = None
     dismissed: bool | None = None
+    starred: bool | None = None
 
 
 @app.patch("/api/jobs/{url:path}")
@@ -192,8 +196,9 @@ def update_job_user_action(url: str, body: UserActionBody) -> dict:
 
     Only fields actually present in the request body are touched -- e.g. a
     request with just `{"dismissed": true}` leaves `user_action` untouched,
-    and vice versa. `user_action` and `dismissed` are independent: a job can
-    be dismissed regardless of whatever user_action it also has, or none.
+    and vice versa. `user_action`, `dismissed`, and `starred` are independent:
+    a job can be dismissed and/or starred regardless of whatever user_action
+    it also has, or none.
     """
     fields_set = body.model_fields_set
     if "user_action" in fields_set and body.user_action is not None and body.user_action not in USER_ACTIONS:
@@ -209,6 +214,8 @@ def update_job_user_action(url: str, body: UserActionBody) -> dict:
         updates["user_action"] = body.user_action
     if "dismissed" in fields_set:
         updates["dismissed"] = 1 if body.dismissed else 0
+    if "starred" in fields_set:
+        updates["starred"] = 1 if body.starred else 0
 
     set_clause = ", ".join(f"{col} = ?" for col in updates)
     conn = get_connection()
@@ -224,6 +231,8 @@ def update_job_user_action(url: str, body: UserActionBody) -> dict:
         response["user_action"] = updates["user_action"]
     if "dismissed" in updates:
         response["dismissed"] = bool(updates["dismissed"])
+    if "starred" in updates:
+        response["starred"] = bool(updates["starred"])
     return response
 
 
@@ -418,6 +427,7 @@ def get_job(url: str) -> dict:
     job = dict(zip(row.keys(), row))
     out = {field: job.get(field) for field in _JOB_DETAIL_FIELDS}
     out["dismissed"] = bool(out.get("dismissed"))
+    out["starred"] = bool(out.get("starred"))
     out["stage"] = compute_stage(job)
     return out
 
@@ -553,6 +563,7 @@ def get_search_new_jobs() -> list[dict]:
     for job in jobs:
         out = {field: job.get(field) for field in _JOB_LIST_FIELDS}
         out["dismissed"] = bool(out.get("dismissed"))
+        out["starred"] = bool(out.get("starred"))
         out["stage"] = compute_stage(job)
         result.append(out)
     return result

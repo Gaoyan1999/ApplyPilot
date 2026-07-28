@@ -75,7 +75,8 @@ def init_db(db_path: Path | str | None = None) -> sqlite3.Connection:
                    agent_id, last_attempted_at, apply_duration_ms, apply_task_id,
                    verification_confidence
       - User:       user_action (manual label, see applypilot.server.stages.USER_ACTIONS),
-                   dismissed (boolean "not for me" flag, hides the job from the dashboard)
+                   dismissed (boolean "not for me" flag, hides the job from the dashboard),
+                   starred (boolean pin flag, pins the job to the top of the list)
 
     Args:
         db_path: Override the default DB_PATH.
@@ -137,7 +138,8 @@ def init_db(db_path: Path | str | None = None) -> sqlite3.Connection:
 
             -- Manual user annotation
             user_action           TEXT,
-            dismissed             INTEGER DEFAULT 0
+            dismissed             INTEGER DEFAULT 0,
+            starred               INTEGER DEFAULT 0
         )
     """)
     conn.commit()
@@ -194,6 +196,7 @@ _ALL_COLUMNS: dict[str, str] = {
     # Manual user annotation
     "user_action": "TEXT",
     "dismissed": "INTEGER DEFAULT 0",
+    "starred": "INTEGER DEFAULT 0",
 }
 
 
@@ -235,7 +238,7 @@ def ensure_columns(conn: sqlite3.Connection | None = None) -> list[str]:
 
 # Columns the dashboard's search/filter/sort endpoint filters or sorts on.
 # Indexed so GET /api/jobs/search stays fast as the table grows.
-_SEARCH_INDEX_COLUMNS = ("discovered_at", "fit_score", "job_type", "dismissed", "user_action")
+_SEARCH_INDEX_COLUMNS = ("discovered_at", "fit_score", "job_type", "dismissed", "user_action", "starred")
 
 
 def ensure_indexes(conn: sqlite3.Connection | None = None) -> None:
@@ -484,6 +487,7 @@ def search_jobs(
     user_action: list[str] | None = None,
     user_action_mode: str = "is",
     include_dismissed: bool = False,
+    starred_only: bool = False,
     discovered_after: str | None = None,
     discovered_before: str | None = None,
     score_min: int | None = None,
@@ -503,6 +507,10 @@ def search_jobs(
     - `include_dismissed=False` (the default view) excludes dismissed jobs;
       `True` includes both, same as the old "show dismissed" toggle (there's
       no "only dismissed" mode).
+    - `starred_only=True` restricts results to starred jobs. Regardless of
+      this flag, starred jobs are always pinned above unstarred ones -- the
+      requested `sort_by`/`sort_dir` only orders within each of those two
+      groups.
     - Null values in the sort column always sort last, regardless of
       `sort_dir`.
     - `discovered_after`/`discovered_before` are 'YYYY-MM-DD' calendar dates,
@@ -546,6 +554,9 @@ def search_jobs(
     if not include_dismissed:
         where_clauses.append("(dismissed IS NULL OR dismissed = 0)")
 
+    if starred_only:
+        where_clauses.append("starred = 1")
+
     if discovered_after:
         where_clauses.append("discovered_at >= ?")
         params.append(f"{discovered_after}T00:00:00")
@@ -575,7 +586,7 @@ def search_jobs(
 
     query = (
         f"SELECT * FROM jobs WHERE {where_sql} "
-        f"ORDER BY {sort_column} IS NULL, {sort_column} {sort_direction} "
+        f"ORDER BY starred DESC, {sort_column} IS NULL, {sort_column} {sort_direction} "
         "LIMIT ? OFFSET ?"
     )
     rows = conn.execute(query, [*params, page_size, offset]).fetchall()

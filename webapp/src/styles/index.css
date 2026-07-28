@@ -1093,6 +1093,35 @@
   filter: brightness(0.97);
 }
 
+.starred-only-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.starred-only-toggle:hover {
+  background: var(--border);
+}
+
+.starred-only-toggle-active {
+  background: var(--star-bg);
+  color: var(--star-fg);
+}
+
+.starred-only-toggle-active:hover {
+  filter: brightness(0.97);
+}
+
 /* Multi-select filter popover */
 .multi-select {
   position: relative;
@@ -1520,6 +1549,43 @@ body.col-resizing {
 
 .jobs-table td.site-cell {
   text-align: center;
+}
+
+.star-header-cell {
+  cursor: default;
+}
+
+.jobs-table td.star-cell {
+  text-align: center;
+  padding-left: 8px;
+  padding-right: 0;
+}
+
+.star-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  padding: 2px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0.5;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.jobs-table tbody tr:hover .star-toggle {
+  opacity: 1;
+}
+
+.star-toggle:hover {
+  color: var(--star-fg);
+}
+
+.star-toggle-active {
+  color: var(--star-fg);
+  opacity: 1;
 }
 
 .empty-state {
