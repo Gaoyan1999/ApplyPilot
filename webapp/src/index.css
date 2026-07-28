@@ -53,6 +53,9 @@
   --useraction-closed-bg: var(--stage-discovered-bg);
   --useraction-closed-fg: var(--stage-discovered-fg);
 
+  --star-bg: #fdf1c7;
+  --star-fg: #cc9a00;
+
   color-scheme: light;
 }
 
@@ -162,6 +165,9 @@
   --useraction-closed-bg: var(--stage-discovered-bg);
   --useraction-closed-fg: var(--stage-discovered-fg);
 
+  --star-bg: #fdf1c7;
+  --star-fg: #cc9a00;
+
   color-scheme: light;
 }
 
@@ -219,6 +225,9 @@
   --useraction-rejected-fg: var(--error-fg);
   --useraction-closed-bg: var(--stage-discovered-bg);
   --useraction-closed-fg: var(--stage-discovered-fg);
+
+  --star-bg: #3a2f0e;
+  --star-fg: #f5c518;
 
   color-scheme: dark;
 }

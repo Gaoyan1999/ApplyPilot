@@ -4,6 +4,7 @@ import { useLocalStorageState } from '../hooks/useLocalStorageState'
 import { JobTypeBadge } from './JobTypeBadge'
 import { ScorePill } from './ScorePill'
 import { SiteIcon } from './SiteIcon'
+import { StarIcon } from './StarIcon'
 import { UserActionSelect } from './UserActionSelect'
 
 export type SortKey = 'title' | 'company' | 'site' | 'location' | 'job_type' | 'fit_score' | 'stage' | 'discovered_at'
@@ -17,6 +18,7 @@ interface Props {
   onPreview: (job: Job) => void
   onUserActionChange: (job: Job, value: UserAction | null) => void
   onDismissChange: (job: Job, dismissed: boolean) => void
+  onStarredChange: (job: Job, starred: boolean) => void
   hiddenColumns: SortKey[]
 }
 
@@ -34,6 +36,7 @@ export const COLUMNS: { key: SortKey; label: string; defaultWidth: number }[] = 
 
 const ACTION_COLUMN_KEY: ColumnKey = 'action'
 const DEFAULT_ACTION_WIDTH = 140
+const STAR_COLUMN_WIDTH = 36
 const MIN_COLUMN_WIDTH = 48
 
 const DEFAULT_COLUMN_WIDTHS: Record<ColumnKey, number> = {
@@ -49,6 +52,7 @@ export function JobsTable({
   onPreview,
   onUserActionChange,
   onDismissChange,
+  onStarredChange,
   hiddenColumns,
 }: Props) {
   const visibleColumns = COLUMNS.filter((col) => !hiddenColumns.includes(col.key))
@@ -89,6 +93,7 @@ export function JobsTable({
     <div className="jobs-table-wrap">
       <table className="jobs-table" style={{ tableLayout: 'fixed' }}>
         <colgroup>
+          <col style={{ width: STAR_COLUMN_WIDTH }} />
           {visibleColumns.map((col) => (
             <col key={col.key} style={{ width: columnWidths[col.key] ?? col.defaultWidth }} />
           ))}
@@ -96,6 +101,7 @@ export function JobsTable({
         </colgroup>
         <thead>
           <tr>
+            <th className="star-header-cell" aria-label="Starred" />
             {visibleColumns.map((col) => (
               <th key={col.key} onClick={() => onSort(col.key)}>
                 {col.label}
@@ -120,6 +126,18 @@ export function JobsTable({
         <tbody>
           {jobs.map((job) => (
             <tr key={job.url} className={job.dismissed ? 'jobs-table-row-dismissed' : undefined}>
+              <td className="star-cell">
+                <button
+                  type="button"
+                  className={`star-toggle${job.starred ? ' star-toggle-active' : ''}`}
+                  onClick={() => onStarredChange(job, !job.starred)}
+                  aria-label={job.starred ? 'Unpin job' : 'Pin job'}
+                  aria-pressed={job.starred}
+                  title={job.starred ? 'Unpin job' : 'Pin job'}
+                >
+                  <StarIcon filled={job.starred} />
+                </button>
+              </td>
               {isVisible('title') && (
                 <td className="title-cell">
                   <button type="button" className="title-button" onClick={() => onPreview(job)}>

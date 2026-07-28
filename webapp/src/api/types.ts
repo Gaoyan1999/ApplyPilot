@@ -46,6 +46,7 @@ export interface Job {
   stage: Stage
   user_action: UserAction | null
   dismissed: boolean
+  starred: boolean
 }
 
 export interface SearchJobsParams {
@@ -60,6 +61,7 @@ export interface SearchJobsParams {
   user_action: UserAction[]
   user_action_mode: 'is' | 'is not'
   include_dismissed: boolean
+  starred_only: boolean
   // 'YYYY-MM-DD', inclusive on both ends. Either/both may be null (open-ended).
   discovered_after: string | null
   discovered_before: string | null

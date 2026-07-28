@@ -56,6 +56,7 @@ export function searchJobs(params: SearchJobsParams): Promise<SearchJobsResponse
   for (const ua of params.user_action) qs.append('user_action', ua)
   qs.set('user_action_mode', params.user_action_mode === 'is not' ? 'is_not' : 'is')
   qs.set('include_dismissed', String(params.include_dismissed))
+  qs.set('starred_only', String(params.starred_only))
   if (params.discovered_after) qs.set('discovered_after', params.discovered_after)
   if (params.discovered_before) qs.set('discovered_before', params.discovered_before)
   if (params.score_min !== null) qs.set('score_min', String(params.score_min))
@@ -111,6 +112,10 @@ export function setJobUserAction(url: string, userAction: UserAction | null): Pr
 
 export function setJobDismissed(url: string, dismissed: boolean): Promise<Job> {
   return sendJson<Job>(`/api/jobs/${encodeURIComponent(url)}`, 'PATCH', { dismissed })
+}
+
+export function setJobStarred(url: string, starred: boolean): Promise<Job> {
+  return sendJson<Job>(`/api/jobs/${encodeURIComponent(url)}`, 'PATCH', { starred })
 }
 
 export interface CoverLetterText {

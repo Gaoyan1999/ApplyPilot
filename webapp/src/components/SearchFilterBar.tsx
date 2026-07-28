@@ -5,6 +5,7 @@ import { CLASS_BY_JOB_TYPE, LABEL_BY_JOB_TYPE } from './JobTypeBadge'
 import { JOB_TYPE_ORDER } from './jobTypeOrder'
 import { MultiSelectFilter, type FilterMode } from './MultiSelectFilter'
 import { ScoreFilter } from './ScoreFilter'
+import { StarIcon } from './StarIcon'
 import { CLASS_BY_USER_ACTION, LABEL_BY_USER_ACTION } from './UserActionBadge'
 import { USER_ACTION_ORDER } from './userActionOrder'
 
@@ -25,6 +26,8 @@ interface Props {
   scoreMin: number | null
   scoreMax: number | null
   onScoreRangeChange: (min: number | null, max: number | null) => void
+  starredOnly: boolean
+  onStarredOnlyChange: (value: boolean) => void
 }
 
 const JOB_TYPE_OPTIONS = JOB_TYPE_ORDER.map((jobType) => ({
@@ -56,6 +59,8 @@ export function SearchFilterBar({
   scoreMin,
   scoreMax,
   onScoreRangeChange,
+  starredOnly,
+  onStarredOnlyChange,
 }: Props) {
   return (
     <div className="filter-bar">
@@ -87,6 +92,15 @@ export function SearchFilterBar({
         />
         <DateRangeFilter from={dateFrom} to={dateTo} onChange={onDateRangeChange} />
         <ScoreFilter min={scoreMin} max={scoreMax} onChange={onScoreRangeChange} />
+        <button
+          type="button"
+          className={`starred-only-toggle${starredOnly ? ' starred-only-toggle-active' : ''}`}
+          onClick={() => onStarredOnlyChange(!starredOnly)}
+          aria-pressed={starredOnly}
+        >
+          <StarIcon filled={starredOnly} />
+          Starred only
+        </button>
       </div>
     </div>
   )

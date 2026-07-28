@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ApiError, getJob, getStatus, listCvs, searchJobs, setJobDismissed, setJobUserAction } from './api/client'
+import { ApiError, getJob, getStatus, listCvs, searchJobs, setJobDismissed, setJobStarred, setJobUserAction } from './api/client'
 import type { Job, JobType, SearchJobsParams, UserAction } from './api/types'
 import { useRefreshable } from './hooks/useRefreshable'
 import { useTheme } from './hooks/useTheme'
@@ -50,6 +50,7 @@ function App() {
   const [scoreMin, setScoreMin] = useState<number | null>(null)
   const [scoreMax, setScoreMax] = useState<number | null>(null)
   const [showDismissed, setShowDismissed] = useLocalStorageState('applypilot-show-dismissed', false)
+  const [starredOnly, setStarredOnly] = useLocalStorageState('applypilot-filter-starred-only', false)
   const [hiddenColumns, setHiddenColumns] = useLocalStorageState<SortKey[]>('applypilot-hidden-columns', [])
   const [panelWidth, setPanelWidth] = useLocalStorageState('applypilot-job-detail-width', DEFAULT_PANEL_WIDTH)
   const [sortKey, setSortKey] = useLocalStorageState<SortKey>('applypilot-sort-key', 'discovered_at')
@@ -81,6 +82,7 @@ function App() {
     scoreMin,
     scoreMax,
     showDismissed,
+    starredOnly,
     sortKey,
     sortDir,
     pageSize,
@@ -101,6 +103,7 @@ function App() {
         user_action: userActionFilter,
         user_action_mode: userActionFilterMode,
         include_dismissed: showDismissed,
+        starred_only: starredOnly,
         discovered_after: dateFrom,
         discovered_before: dateTo,
         score_min: scoreMin,
@@ -121,6 +124,7 @@ function App() {
       scoreMin,
       scoreMax,
       showDismissed,
+      starredOnly,
       sortKey,
       sortDir,
     ],
@@ -185,6 +189,17 @@ function App() {
       refreshPreviewIfOpen(job.url)
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : 'Failed to update dismissed state')
+    }
+  }
+
+  async function handleStarredChange(job: Job, starred: boolean) {
+    try {
+      await setJobStarred(job.url, starred)
+      setActionError(null)
+      refresh()
+      refreshPreviewIfOpen(job.url)
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : 'Failed to update starred state')
     }
   }
 
@@ -265,6 +280,8 @@ function App() {
           setScoreMin(min)
           setScoreMax(max)
         }}
+        starredOnly={starredOnly}
+        onStarredOnlyChange={setStarredOnly}
       />
 
       <JobsTable
@@ -275,6 +292,7 @@ function App() {
         onPreview={(job) => setPreviewUrl(job.url)}
         onUserActionChange={handleUserActionChange}
         onDismissChange={handleDismissChange}
+        onStarredChange={handleStarredChange}
         hiddenColumns={hiddenColumns}
       />
 
