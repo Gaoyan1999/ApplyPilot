@@ -274,6 +274,7 @@ function App() {
         onSort={handleSort}
         onPreview={(job) => setPreviewUrl(job.url)}
         onUserActionChange={handleUserActionChange}
+        onDismissChange={handleDismissChange}
         hiddenColumns={hiddenColumns}
       />
 

@@ -1,8 +1,6 @@
 import type { UserAction } from '../api/types'
 
 export const LABEL_BY_USER_ACTION: Record<UserAction, string> = {
-  need_tailor: 'Need tailor',
-  need_auto_apply: 'Need auto apply',
   applied: 'Applied',
   interviewing: 'Interviewing',
   offer: 'Offer',
@@ -11,8 +9,6 @@ export const LABEL_BY_USER_ACTION: Record<UserAction, string> = {
 }
 
 export const CLASS_BY_USER_ACTION: Record<UserAction, string> = {
-  need_tailor: 'user-action-need_tailor',
-  need_auto_apply: 'user-action-need_auto_apply',
   applied: 'user-action-applied',
   interviewing: 'user-action-interviewing',
   offer: 'user-action-offer',
