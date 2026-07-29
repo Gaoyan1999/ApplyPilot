@@ -252,9 +252,9 @@ body {
    this content into the space actually left of the panel instead of
    staying centered on the full viewport underneath it. */
 .app-container {
-  max-width: 1100px;
+  max-width: 1800px;
   margin: 0 auto;
-  padding: 32px 24px 64px;
+  padding: 32px 32px 64px;
   transition: margin-right 0.15s ease;
 }
 
