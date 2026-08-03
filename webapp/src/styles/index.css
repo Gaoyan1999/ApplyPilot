@@ -1803,29 +1803,6 @@ body.col-resizing {
   color: var(--text);
 }
 
-.dismiss-toggle {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg-subtle);
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  padding: 5px 10px;
-  flex-shrink: 0;
-}
-
-.dismiss-toggle:hover {
-  color: var(--text);
-  background: var(--border);
-}
-
-.dismiss-toggle-active {
-  background: var(--stage-failed-bg);
-  color: var(--stage-failed-fg);
-  border-color: transparent;
-}
-
 .modal-body {
   padding: 20px;
   overflow-y: auto;

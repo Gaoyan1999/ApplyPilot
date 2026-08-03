@@ -273,16 +273,6 @@ export function JobPreviewModal({
             {[job.company, job.site, job.location].filter(Boolean).join(' · ')}
           </div>
         </div>
-        <div className="modal-header-actions">
-          <button
-            type="button"
-            className={`dismiss-toggle${job.dismissed ? ' dismiss-toggle-active' : ''}`}
-            onClick={() => onDismissChange(job, !job.dismissed)}
-            title={job.dismissed ? 'Show this job in the dashboard again' : 'Hide this job from the dashboard'}
-          >
-            {job.dismissed ? 'Restore' : 'Not for me'}
-          </button>
-        </div>
       </div>
 
       <div className="modal-body">
@@ -291,6 +281,8 @@ export function JobPreviewModal({
             <UserActionSelect
               value={job.user_action}
               onChange={(value) => onUserActionChange(job, value)}
+              dismissed={job.dismissed}
+              onDismissChange={(dismissed) => onDismissChange(job, dismissed)}
             />
           </MetaRow>
           <MetaRow label="Score">
