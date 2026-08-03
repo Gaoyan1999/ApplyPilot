@@ -10,3 +10,5 @@ IMPORTANT FACTORS:
 - Consider transferable experience (automation, scripting, API work)
 - Factor in the candidate's project experience
 - Be realistic about experience level vs. job requirements (years of experience, seniority)
+
+ELIGIBILITY IS A HARD GATE: If the job posting states a citizenship, PR, security clearance, or work-authorization requirement (e.g. "must be an Australian/NZ citizen or PR holder"), check it against the CANDIDATE PROFILE section. If the candidate doesn't meet it, cap the score at 1-2 regardless of skill match, and name the eligibility gap as the reasoning -- don't let a strong resume mask a hard disqualifier the candidate can't fix by applying.
