@@ -1,8 +1,9 @@
 """Job fit scoring: LLM-powered evaluation of candidate-job match quality.
 
-Scores jobs on a 1-10 scale by comparing the user's resume against each
-job description. All personal data is loaded at runtime from the user's
-profile and resume file.
+Scores jobs on a 1-10 scale by comparing the user's resume, plus relevant
+fields from the user's profile (work authorization, location, availability,
+etc.), against each job description. All personal data is loaded at runtime
+from the user's profile and resume file.
 """
 
 import json
@@ -40,6 +41,35 @@ KEYWORDS: [comma-separated ATS keywords from the job description that match or c
 REASONING: [One concise sentence, no filler. If the score is low, name the specific gap causing it -- you may briefly credit a relevant strength first (e.g. with an em dash), but end on the actual disqualifying reason, not a vague summary. Example: "Strong full-stack engineering experience -- especially in TypeScript, Java, Vue/React, and AI-integrated document systems -- but lacks the 5+ years of professional Python experience on large distributed systems this role requires." If the score is high, just state why the candidate fits -- don't dwell on minor gaps.]"""
 
 
+def _build_candidate_context(profile: dict) -> str:
+    """Format the user's profile as extra context for the LLM scorer.
+
+    Resume text alone doesn't carry structured facts a job posting's stated
+    requirements might hinge on -- citizenship/PR/visa status, location,
+    availability, salary range -- so without this the LLM has no way to
+    check those requirements against the candidate at all.
+
+    `personal.password` is a credential and never belongs in an LLM prompt.
+    `eeo_voluntary` (gender, race, veteran/disability status) is excluded on
+    principle: those are protected characteristics and must never factor
+    into a job-fit score.
+    """
+    excluded_sections = {"eeo_voluntary"}
+    lines = []
+    for section, fields in profile.items():
+        if section in excluded_sections or not isinstance(fields, dict):
+            continue
+        for key, value in fields.items():
+            if section == "personal" and key == "password":
+                continue
+            if isinstance(value, list):
+                value = ", ".join(str(v) for v in value)
+            if not value:
+                continue
+            lines.append(f"{key.replace('_', ' ')}: {value}")
+    return "\n".join(lines)
+
+
 def _parse_score_response(response: str) -> dict:
     """Parse the LLM's score response into structured data.
 
@@ -69,7 +99,7 @@ def _parse_score_response(response: str) -> dict:
     return {"score": score, "keywords": keywords, "reasoning": reasoning}
 
 
-def score_job(resume_text: str, job: dict, score_prompt: str) -> dict:
+def score_job(resume_text: str, job: dict, score_prompt: str, candidate_context: str = "") -> dict:
     """Score a single job against the resume.
 
     Args:
@@ -77,6 +107,10 @@ def score_job(resume_text: str, job: dict, score_prompt: str) -> dict:
         job: Job dict with keys: title, site, location, full_description.
         score_prompt: The scoring system prompt, built once per batch via
             _build_score_prompt() (includes any Settings-page override).
+        candidate_context: Formatted profile fields (work authorization,
+            location, availability, etc.) via _build_candidate_context().
+            Optional so callers that don't have a profile loaded (e.g. quick
+            ad-hoc scoring) still work.
 
     Returns:
         {"score": int, "keywords": str, "reasoning": str}
@@ -88,9 +122,14 @@ def score_job(resume_text: str, job: dict, score_prompt: str) -> dict:
         f"DESCRIPTION:\n{(job.get('full_description') or '')[:6000]}"
     )
 
+    user_content = f"RESUME:\n{resume_text}"
+    if candidate_context:
+        user_content += f"\n\nCANDIDATE PROFILE:\n{candidate_context}"
+    user_content += f"\n\n---\n\nJOB POSTING:\n{job_text}"
+
     messages = [
         {"role": "system", "content": score_prompt},
-        {"role": "user", "content": f"RESUME:\n{resume_text}\n\n---\n\nJOB POSTING:\n{job_text}"},
+        {"role": "user", "content": user_content},
     ]
 
     try:
@@ -123,6 +162,7 @@ def run_scoring(
         {"scored": int, "errors": int, "elapsed": float, "distribution": list}
     """
     resume_text = RESUME_PATH.read_text(encoding="utf-8")
+    candidate_context = _build_candidate_context(load_profile())
     conn = get_connection()
 
     if rescore:
@@ -151,7 +191,7 @@ def run_scoring(
     score_prompt = _build_score_prompt(prompts["scoring"])
 
     for job in jobs:
-        result = score_job(resume_text, job, score_prompt)
+        result = score_job(resume_text, job, score_prompt, candidate_context)
         result["url"] = job["url"]
         completed += 1
 
