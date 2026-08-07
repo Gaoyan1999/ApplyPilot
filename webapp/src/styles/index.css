@@ -1850,6 +1850,41 @@ body.col-resizing {
   white-space: pre-line;
 }
 
+.score-criteria {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+.score-criteria-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.4;
+}
+
+.score-criteria-icon {
+  flex: 0 0 auto;
+  width: 14px;
+  text-align: center;
+  font-weight: 700;
+  margin-top: 1px;
+}
+
+.score-criteria-icon.met {
+  color: var(--score-high-fg);
+}
+
+.score-criteria-icon.miss {
+  color: var(--error-fg);
+}
+
+.score-criteria-text-miss {
+  color: var(--text-muted);
+}
+
 .section-heading {
   font-size: 13px;
   font-weight: 700;

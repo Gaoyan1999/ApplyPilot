@@ -13,6 +13,7 @@ import {
 } from '../api/client'
 import type { AutoSubmitStatus, Job, UserAction } from '../api/types'
 import { formatDate } from '../lib/format'
+import { ScoreCriteria } from './ScoreCriteria'
 import { ScorePill } from './ScorePill'
 import { SiteIcon } from './SiteIcon'
 import { UserActionSelect } from './UserActionSelect'
@@ -287,7 +288,7 @@ export function JobPreviewModal({
           </MetaRow>
           <MetaRow label="Score">
             <ScorePill score={job.fit_score} />
-            {job.score_reasoning && <span className="meta-note">{job.score_reasoning}</span>}
+            {job.score_reasoning && <ScoreCriteria reasoning={job.score_reasoning} />}
           </MetaRow>
           {job.salary && <MetaRow label="Salary">{job.salary}</MetaRow>}
           <MetaRow label="Listing">

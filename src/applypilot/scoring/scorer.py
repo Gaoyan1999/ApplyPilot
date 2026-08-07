@@ -38,7 +38,10 @@ def _build_score_prompt(template: str) -> str:
 RESPOND IN EXACTLY THIS FORMAT (no other text):
 SCORE: [1-10]
 KEYWORDS: [comma-separated ATS keywords from the job description that match or could match the candidate]
-REASONING: [One concise sentence, no filler. If the score is low, name the specific gap causing it -- you may briefly credit a relevant strength first (e.g. with an em dash), but end on the actual disqualifying reason, not a vague summary. Example: "Strong full-stack engineering experience -- especially in TypeScript, Java, Vue/React, and AI-integrated document systems -- but lacks the 5+ years of professional Python experience on large distributed systems this role requires." If the score is high, just state why the candidate fits -- don't dwell on minor gaps.]"""
+CRITERIA: [One requirement per line, each prefixed with MET or GAP followed by " | " then a short (under 10 words) label naming that specific requirement. List the 2-5 requirements that most drove the score -- the ones a candidate would actually want to know about, not every minor detail. Example:
+MET | 5+ years backend engineering
+MET | Python & distributed systems
+GAP | No healthcare/HIPAA domain experience]"""
 
 
 def _build_candidate_context(profile: dict) -> str:
@@ -77,26 +80,43 @@ def _parse_score_response(response: str) -> dict:
         response: Raw LLM response text.
 
     Returns:
-        {"score": int, "keywords": str, "reasoning": str}
+        {"score": int, "keywords": str, "met": list[str], "gaps": list[str]}
     """
     score = 0
     keywords = ""
-    reasoning = response
+    met: list[str] = []
+    gaps: list[str] = []
+    in_criteria = False
 
-    for line in response.split("\n"):
-        line = line.strip()
+    for raw_line in response.split("\n"):
+        line = raw_line.strip()
         if line.startswith("SCORE:"):
+            in_criteria = False
             try:
                 score = int(re.search(r"\d+", line).group())
                 score = max(1, min(10, score))
             except (AttributeError, ValueError):
                 score = 0
         elif line.startswith("KEYWORDS:"):
+            in_criteria = False
             keywords = line.replace("KEYWORDS:", "").strip()
-        elif line.startswith("REASONING:"):
-            reasoning = line.replace("REASONING:", "").strip()
+        elif line.startswith("CRITERIA:"):
+            in_criteria = True
+            line = line.replace("CRITERIA:", "").strip()
+            if not line:
+                continue
+        if in_criteria and "|" in line:
+            label, _, text = line.partition("|")
+            label = label.strip().upper()
+            text = text.strip()
+            if not text:
+                continue
+            if label == "MET":
+                met.append(text)
+            elif label == "GAP":
+                gaps.append(text)
 
-    return {"score": score, "keywords": keywords, "reasoning": reasoning}
+    return {"score": score, "keywords": keywords, "met": met, "gaps": gaps}
 
 
 def score_job(resume_text: str, job: dict, score_prompt: str, candidate_context: str = "") -> dict:
@@ -113,7 +133,7 @@ def score_job(resume_text: str, job: dict, score_prompt: str, candidate_context:
             ad-hoc scoring) still work.
 
     Returns:
-        {"score": int, "keywords": str, "reasoning": str}
+        {"score": int, "keywords": str, "met": list[str], "gaps": list[str]}
     """
     job_text = (
         f"TITLE: {job['title']}\n"
@@ -138,7 +158,7 @@ def score_job(resume_text: str, job: dict, score_prompt: str, candidate_context:
         return _parse_score_response(response)
     except Exception as e:
         log.error("LLM error scoring job '%s': %s", job.get("title", "?"), e)
-        return {"score": 0, "keywords": "", "reasoning": f"LLM error: {e}"}
+        return {"score": 0, "keywords": "", "met": [], "gaps": [f"LLM error: {e}"]}
 
 
 def run_scoring(
@@ -197,8 +217,9 @@ def run_scoring(
 
         if result["score"] == 0:
             errors += 1
-            if on_warning and result.get("reasoning", "").startswith("LLM error:"):
-                on_warning(f"Scoring failed for '{job.get('title', '?')[:60]}': {result['reasoning']}")
+            gaps = result.get("gaps") or []
+            if on_warning and gaps and gaps[0].startswith("LLM error:"):
+                on_warning(f"Scoring failed for '{job.get('title', '?')[:60]}': {gaps[0]}")
 
         results.append(result)
 
@@ -209,12 +230,14 @@ def run_scoring(
         if on_progress:
             on_progress({"done": completed, "total": len(jobs)})
 
-    # Write scores to DB
+    # Write scores to DB. score_reasoning stores JSON: {"met": [...], "gaps": [...]}
+    # so the UI can render a checklist instead of a free-text sentence.
     now = datetime.now(timezone.utc).isoformat()
     for r in results:
+        reasoning_json = json.dumps({"met": r["met"], "gaps": r["gaps"]})
         conn.execute(
             "UPDATE jobs SET fit_score = ?, score_reasoning = ?, scored_at = ? WHERE url = ?",
-            (r["score"], f"{r['keywords']}\n{r['reasoning']}", now, r["url"]),
+            (r["score"], reasoning_json, now, r["url"]),
         )
     conn.commit()
 

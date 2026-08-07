@@ -10,6 +10,7 @@ Generates a self-contained HTML dashboard with:
 
 from __future__ import annotations
 
+import json
 import os
 import webbrowser
 from html import escape
@@ -154,11 +155,22 @@ def generate_dashboard(output_path: str | None = None) -> str:
         site_color = colors.get(j["site"] or "", "#6b7280")
         apply_url = escape(j["application_url"] or "")
 
-        # Parse keywords and reasoning from score_reasoning
+        # score_reasoning is JSON ({"met": [...], "gaps": [...]}) for jobs scored
+        # after the checklist redesign; older rows still hold a plain
+        # "keywords\nreasoning" string, so fall back to that format.
         reasoning_raw = j["score_reasoning"] or ""
-        reasoning_lines = reasoning_raw.split("\n")
-        keywords = reasoning_lines[0][:120] if reasoning_lines else ""
-        reasoning = reasoning_lines[1][:200] if len(reasoning_lines) > 1 else ""
+        keywords = ""
+        reasoning = ""
+        try:
+            parsed = json.loads(reasoning_raw)
+            met = parsed.get("met") or []
+            gaps = parsed.get("gaps") or []
+            reasoning = "; ".join(f"✓ {m}" for m in met) + (" — " if met and gaps else "") + "; ".join(f"✕ {g}" for g in gaps)
+            reasoning = reasoning[:200]
+        except (json.JSONDecodeError, AttributeError):
+            reasoning_lines = reasoning_raw.split("\n")
+            keywords = reasoning_lines[0][:120] if reasoning_lines else ""
+            reasoning = reasoning_lines[1][:200] if len(reasoning_lines) > 1 else ""
 
         desc_preview = escape(j["full_description"] or "")[:300]
         full_desc_html = escape(j["full_description"] or "").replace("\n", "<br>")
