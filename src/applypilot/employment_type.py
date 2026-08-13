@@ -49,8 +49,14 @@ def classify_title_job_type(title: str | None) -> str:
 
 
 def classify_job_type(native: str | None, title: str | None = None) -> str:
-    """Entry point for every discovery call site. Native signal (even if it
-    maps to "unknown") always wins over the title fallback."""
+    """Entry point for every discovery call site. A title that clearly reads
+    as an internship (e.g. "Software Engineer Intern") always wins, since
+    sources frequently mark internship postings as "full_time" in their
+    native employment-type field (meaning full-time hours, not employment
+    category). Otherwise native signal (even if it maps to "unknown") wins
+    over the title fallback."""
+    if title and _TITLE_INTERN_RE.search(title):
+        return "intern"
     native_result = classify_native_job_type(native)
     if native_result is not None:
         return native_result
