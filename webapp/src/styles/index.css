@@ -1520,6 +1520,18 @@ body.col-resizing {
   background: var(--bg-subtle);
 }
 
+.jobs-table tbody tr {
+  outline: none;
+}
+
+.jobs-table tbody tr.jobs-table-row-focused {
+  background: var(--stage-enriched-bg);
+}
+
+.jobs-table tbody tr.jobs-table-row-focused:hover {
+  background: var(--stage-enriched-bg);
+}
+
 .jobs-table-row-dismissed td {
   text-decoration: line-through;
   color: var(--text-muted);

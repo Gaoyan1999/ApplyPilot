@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import type { Job, UserAction } from '../api/types'
 import { formatDate } from '../lib/format'
 import { useLocalStorageState } from '../hooks/useLocalStorageState'
@@ -63,6 +64,73 @@ export function JobsTable({
     DEFAULT_COLUMN_WIDTHS,
   )
 
+  // Tracked by job url (not index) so the highlight follows the same job
+  // across a refresh/re-sort instead of jumping to whatever now sits at the
+  // old row position.
+  const [focusedUrl, setFocusedUrl] = useState<string | null>(null)
+  const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({})
+
+  const focusedIndex = jobs.findIndex((j) => j.url === focusedUrl)
+  // Roving tabindex: exactly one row is in the page's tab order at a time.
+  // Before anything has been focused, that's the first row, so Tab from
+  // above the table lands on row 1 rather than skipping the table entirely.
+  const rovingIndex = focusedIndex === -1 ? 0 : focusedIndex
+
+  function focusRowAt(index: number) {
+    const target = jobs[index]
+    if (!target) return
+    rowRefs.current[target.url]?.focus()
+  }
+
+  // Tab reaches the first row on its own via the roving tabindex above, but
+  // ArrowDown has no row to fire on until one is already focused. Catch it
+  // at the window level so the very first press jumps into the list --
+  // scoped to when nothing else on the page has focus, so it never steals
+  // the key from a text input, dropdown, or modal.
+  useEffect(() => {
+    function onWindowKeyDown(e: KeyboardEvent) {
+      if (focusedUrl !== null) return
+      if (document.activeElement !== document.body) return
+      if (e.key !== 'ArrowDown') return
+      if (jobs.length === 0) return
+      e.preventDefault()
+      rowRefs.current[jobs[0].url]?.focus()
+    }
+    window.addEventListener('keydown', onWindowKeyDown)
+    return () => window.removeEventListener('keydown', onWindowKeyDown)
+  }, [focusedUrl, jobs])
+
+  function handleRowKeyDown(e: React.KeyboardEvent<HTMLTableRowElement>, index: number, job: Job) {
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault()
+        focusRowAt(index + 1)
+        break
+      case 'ArrowUp':
+        e.preventDefault()
+        focusRowAt(index - 1)
+        break
+      case 'Tab':
+        // At the first/last row, fall through to the browser's default tab
+        // handling so focus leaves the table for the next/previous control
+        // on the page instead of getting trapped.
+        if (e.shiftKey) {
+          if (index > 0) {
+            e.preventDefault()
+            focusRowAt(index - 1)
+          }
+        } else if (index < jobs.length - 1) {
+          e.preventDefault()
+          focusRowAt(index + 1)
+        }
+        break
+      case 'Enter':
+        e.preventDefault()
+        onPreview(job)
+        break
+    }
+  }
+
   function startResize(key: ColumnKey, e: React.MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
@@ -124,8 +192,33 @@ export function JobsTable({
           </tr>
         </thead>
         <tbody>
-          {jobs.map((job) => (
-            <tr key={job.url} className={job.dismissed ? 'jobs-table-row-dismissed' : undefined}>
+          {jobs.map((job, index) => (
+            <tr
+              key={job.url}
+              ref={(el) => {
+                rowRefs.current[job.url] = el
+              }}
+              tabIndex={index === rovingIndex ? 0 : -1}
+              className={[
+                job.dismissed ? 'jobs-table-row-dismissed' : '',
+                job.url === focusedUrl ? 'jobs-table-row-focused' : '',
+              ]
+                .filter(Boolean)
+                .join(' ') || undefined}
+              onFocus={() => {
+                setFocusedUrl(job.url)
+                onPreview(job)
+              }}
+              onClick={(e) => {
+                // Clicks on a row's own interactive controls (star toggle,
+                // title, site link, action select) manage their own focus --
+                // only steal focus onto the row for clicks on plain cells.
+                if (!(e.target as HTMLElement).closest('button, a, [role]')) {
+                  rowRefs.current[job.url]?.focus()
+                }
+              }}
+              onKeyDown={(e) => handleRowKeyDown(e, index, job)}
+            >
               <td className="star-cell">
                 <button
                   type="button"
