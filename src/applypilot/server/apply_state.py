@@ -40,9 +40,25 @@ _state: dict = {
 }
 
 
-def get_status() -> dict:
+def get_status(url: str | None = None) -> dict:
+    """Return the tracked run's status. If `url` is given and doesn't match
+    the job the tracked run belongs to, this is a status request for a job
+    that isn't the one we have state for -- report idle rather than leaking
+    the other job's error/transcript into the caller's view."""
     with _lock:
         state = dict(_state)
+    if url is not None and state["url"] != url:
+        return {
+            "running": False,
+            "url": url,
+            "started_at": None,
+            "finished_at": None,
+            "error": None,
+            "status": None,
+            "last_action": None,
+            "actions": 0,
+            "transcript": [],
+        }
     ws = dashboard.get_state(_WORKER_ID)
     state["status"] = ws.status if ws else None
     state["last_action"] = ws.last_action if ws else None
