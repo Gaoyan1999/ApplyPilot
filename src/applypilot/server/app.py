@@ -346,12 +346,12 @@ def start_job_auto_submit(url: str) -> dict:
     if not apply_state.start_apply(url):
         raise HTTPException(status_code=409, detail="An auto-submit run is already in progress")
 
-    return apply_state.get_status()
+    return apply_state.get_status(url)
 
 
 @app.get("/api/jobs/{url:path}/auto-submit/status")
 def get_job_auto_submit_status(url: str) -> dict:
-    return apply_state.get_status()
+    return apply_state.get_status(url)
 
 
 @app.post("/api/jobs/{url:path}/auto-submit/cancel")
