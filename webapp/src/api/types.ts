@@ -49,9 +49,10 @@ export interface Job {
   starred: boolean
 }
 
-export interface SearchJobsParams {
-  page: number
-  page_size: number
+// The jobs-table filter bar's criteria, with no pagination/sort attached --
+// shared with anything that should operate on "whatever the table is
+// currently filtered to" (e.g. StatusCheckPanel's scan scope).
+export interface JobFilterParams {
   q: string
   job_type: JobType[]
   // 'is' | 'is not' -- the app-wide FilterMode from components/MultiSelectFilter.
@@ -68,6 +69,11 @@ export interface SearchJobsParams {
   // fit_score bounds, inclusive on both ends. Either/both may be null (open-ended).
   score_min: number | null
   score_max: number | null
+}
+
+export interface SearchJobsParams extends JobFilterParams {
+  page: number
+  page_size: number
   // Excludes 'stage' -- JobsTable.SortKey's dead, unused sort option (no
   // column wires it up) that the server doesn't support sorting by.
   sort_by: 'title' | 'company' | 'site' | 'location' | 'job_type' | 'fit_score' | 'discovered_at'
@@ -189,6 +195,26 @@ export interface AutoSubmitStatus {
   // The agent's own narrated reasoning + tool-use action descriptions, in
   // order -- mirrors the CLI's --verbose terminal output.
   transcript: string[]
+}
+
+export interface StatusCheckLogEntry {
+  url: string
+  title: string | null
+  company: string | null
+  result: 'closed' | 'open' | 'error'
+}
+
+export interface StatusCheckStatus {
+  running: boolean
+  started_at: string | null
+  finished_at: string | null
+  checked: number
+  total: number
+  closed_found: number
+  current: { url: string; title: string | null; company: string | null } | null
+  log: StatusCheckLogEntry[]
+  warnings: string[]
+  error: string | null
 }
 
 export interface Cv {

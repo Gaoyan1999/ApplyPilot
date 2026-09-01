@@ -1008,6 +1008,11 @@
   font-size: 12px;
 }
 
+/* Sits above .search-minimized so both can be visible at once without overlapping. */
+.status-check-minimized {
+  bottom: 76px;
+}
+
 .search-minimized-dismiss:hover {
   color: var(--text);
 }
@@ -1229,10 +1234,16 @@
   color: var(--text-muted);
 }
 
-/* Date range filter popover */
+/* Date range filter popover. Portaled to <body> (see DateRangeFilter.tsx)
+   so it escapes clipping by an `overflow: hidden` ancestor -- e.g. used
+   inside a modal -- with position/top/left set inline by the component.
+   z-index follows the same convention as .user-action-popover-portal
+   below, so it sits above .modal-backdrop (z-index: 100) regardless of
+   where it's used. */
 .date-range-popover {
   width: auto;
   padding: 10px;
+  z-index: 1000;
 }
 
 .date-range-body {

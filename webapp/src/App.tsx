@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ApiError, getJob, getStatus, listCvs, searchJobs, setJobDismissed, setJobStarred, setJobUserAction } from './api/client'
-import type { Job, JobType, SearchJobsParams, UserAction } from './api/types'
+import type { Job, JobFilterParams, JobType, SearchJobsParams, UserAction } from './api/types'
 import { useRefreshable } from './hooks/useRefreshable'
 import { useTheme } from './hooks/useTheme'
 import { useLocalStorageState } from './hooks/useLocalStorageState'
@@ -11,6 +11,7 @@ import type { DateKey } from './lib/dateRange'
 import { JobsTable, type SortDir, type SortKey } from './components/JobsTable'
 import { JobPreviewModal } from './components/JobPreviewModal'
 import { SearchPanel } from './components/SearchPanel'
+import { StatusCheckPanel } from './components/StatusCheckPanel'
 import { SettingsModal } from './components/SettingsModal'
 import { CvLibraryModal } from './components/CvLibraryModal'
 import './styles/index.css'
@@ -88,6 +89,38 @@ function App() {
     pageSize,
   ])
 
+  // The table's active filter criteria, with no pagination/sort attached --
+  // shared with StatusCheckPanel so its scan operates on exactly the same
+  // set of jobs the table is currently showing.
+  const filterParams: JobFilterParams = useMemo(
+    () => ({
+      q: debouncedSearch,
+      job_type: jobTypeFilter,
+      job_type_mode: jobTypeFilterMode,
+      user_action: userActionFilter,
+      user_action_mode: userActionFilterMode,
+      include_dismissed: showDismissed,
+      starred_only: starredOnly,
+      discovered_after: dateFrom,
+      discovered_before: dateTo,
+      score_min: scoreMin,
+      score_max: scoreMax,
+    }),
+    [
+      debouncedSearch,
+      jobTypeFilter,
+      jobTypeFilterMode,
+      userActionFilter,
+      userActionFilterMode,
+      showDismissed,
+      starredOnly,
+      dateFrom,
+      dateTo,
+      scoreMin,
+      scoreMax,
+    ],
+  )
+
   const {
     data: searchResult,
     error: jobsError,
@@ -95,39 +128,13 @@ function App() {
   } = useRefreshable(
     () =>
       searchJobs({
+        ...filterParams,
         page,
         page_size: pageSize,
-        q: debouncedSearch,
-        job_type: jobTypeFilter,
-        job_type_mode: jobTypeFilterMode,
-        user_action: userActionFilter,
-        user_action_mode: userActionFilterMode,
-        include_dismissed: showDismissed,
-        starred_only: starredOnly,
-        discovered_after: dateFrom,
-        discovered_before: dateTo,
-        score_min: scoreMin,
-        score_max: scoreMax,
         sort_by: toApiSortKey(sortKey),
         sort_dir: sortDir,
       }),
-    [
-      page,
-      pageSize,
-      debouncedSearch,
-      jobTypeFilter,
-      jobTypeFilterMode,
-      userActionFilter,
-      userActionFilterMode,
-      dateFrom,
-      dateTo,
-      scoreMin,
-      scoreMax,
-      showDismissed,
-      starredOnly,
-      sortKey,
-      sortDir,
-    ],
+    [filterParams, page, pageSize, sortKey, sortDir],
   )
 
   const jobs = searchResult?.items ?? []
@@ -234,6 +241,7 @@ function App() {
         <h1>ApplyPilot Dashboard</h1>
         <div className="app-header-actions">
           <SearchPanel onActivity={refresh} />
+          <StatusCheckPanel filters={filterParams} onActivity={refresh} />
           <CvLibraryModal onActivity={refreshCvs} />
           <SettingsModal
             theme={theme}

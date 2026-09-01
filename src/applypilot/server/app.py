@@ -36,7 +36,7 @@ from applypilot.config import (
 )
 from applypilot.database import get_connection, get_stats, init_db, search_jobs
 from applypilot.search_config import SearchYamlConfig
-from applypilot.server import apply_state, search_state
+from applypilot.server import apply_state, search_state, status_check_state
 from applypilot.server.stages import STAGE_ORDER, USER_ACTIONS, compute_stage
 
 # Configures the root logger so applypilot.* loggers (e.g. discovery.jobspy)
@@ -584,6 +584,82 @@ def confirm_new_search_results() -> dict:
     the window for discarding them."""
     search_state.confirm_new_jobs()
     return {"ok": True}
+
+
+class JobFilterBody(BaseModel):
+    """Same filters as GET /api/jobs/search (job_type/user_action/discovered
+    range/score/starred) -- lets the status-check scan operate on exactly
+    the set of jobs the user has filtered the table down to, rather than a
+    separate ad hoc scope."""
+
+    q: str = ""
+    job_type: list[str] = []
+    job_type_mode: str = "is"
+    user_action: list[str] = []
+    user_action_mode: str = "is"
+    include_dismissed: bool = False
+    starred_only: bool = False
+    discovered_after: str | None = None
+    discovered_before: str | None = None
+    score_min: int | None = None
+    score_max: int | None = None
+
+
+def _status_check_candidates(body: JobFilterBody) -> list[dict]:
+    """Jobs matching the given filters, narrowed to ones worth rechecking --
+    not yet applied to, and not already marked closed."""
+    conn = get_connection()
+    jobs, _ = search_jobs(
+        conn,
+        q=body.q,
+        job_type=body.job_type,
+        job_type_mode=body.job_type_mode,
+        user_action=body.user_action,
+        user_action_mode=body.user_action_mode,
+        include_dismissed=body.include_dismissed,
+        starred_only=body.starred_only,
+        discovered_after=body.discovered_after,
+        discovered_before=body.discovered_before,
+        score_min=body.score_min,
+        score_max=body.score_max,
+        sort_by="discovered_at",
+        sort_dir="desc",
+        page=1,
+        page_size=100_000,
+    )
+    return [j for j in jobs if not j.get("applied_at") and j.get("user_action") != "closed"]
+
+
+@app.post("/api/status-check/candidates")
+def preview_status_check_candidates(body: JobFilterBody) -> dict:
+    """How many jobs would this scan actually check -- shown before the user
+    commits, since the filters can match more jobs than are actually
+    pending (already-applied/closed jobs are silently excluded)."""
+    return {"count": len(_status_check_candidates(body))}
+
+
+@app.post("/api/status-check/run", status_code=202)
+def run_status_check(body: JobFilterBody) -> dict:
+    """Rechecks pending jobs matching the given filters and marks any that
+    have closed. Playwright-only, no LLM call -- unlike /api/search/run,
+    this needs no tier check."""
+    candidates = _status_check_candidates(body)
+    jobs = [{"url": j["url"], "title": j.get("title"), "company": j.get("company")} for j in candidates]
+
+    if not status_check_state.start_status_check(jobs):
+        raise HTTPException(status_code=409, detail="A status check is already running")
+
+    return status_check_state.get_status()
+
+
+@app.get("/api/status-check/status")
+def get_status_check_status() -> dict:
+    return status_check_state.get_status()
+
+
+@app.post("/api/status-check/cancel")
+def cancel_status_check() -> dict:
+    return {"cancelled": status_check_state.cancel()}
 
 
 def _resolve_static_dir() -> Path | None:
