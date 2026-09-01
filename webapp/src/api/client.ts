@@ -1,4 +1,29 @@
-import type { AutoSubmitStatus, Cv, Job, PromptsConfig, SearchConfig, SearchJobsParams, SearchJobsResponse, SearchStatus, Status, UserAction } from './types'
+import type { AutoSubmitStatus, Cv, Job, JobFilterParams, PromptsConfig, SearchConfig, SearchJobsParams, SearchJobsResponse, SearchStatus, Status, StatusCheckStatus, UserAction } from './types'
+
+// Translates the app-wide FilterMode ('is' | 'is not') to the API's
+// 'is' | 'is_not' -- shared by every endpoint that takes job_type_mode/
+// user_action_mode.
+function apiFilterMode(mode: 'is' | 'is not'): 'is' | 'is_not' {
+  return mode === 'is not' ? 'is_not' : 'is'
+}
+
+// Shapes JobFilterParams into the JSON body /api/status-check/* expects --
+// the same filter fields GET /api/jobs/search takes as query params.
+function jobFilterBody(f: JobFilterParams) {
+  return {
+    q: f.q,
+    job_type: f.job_type,
+    job_type_mode: apiFilterMode(f.job_type_mode),
+    user_action: f.user_action,
+    user_action_mode: apiFilterMode(f.user_action_mode),
+    include_dismissed: f.include_dismissed,
+    starred_only: f.starred_only,
+    discovered_after: f.discovered_after,
+    discovered_before: f.discovered_before,
+    score_min: f.score_min,
+    score_max: f.score_max,
+  }
+}
 
 export class ApiError extends Error {
   status: number
@@ -52,9 +77,9 @@ export function searchJobs(params: SearchJobsParams): Promise<SearchJobsResponse
   qs.set('page_size', String(params.page_size))
   if (params.q) qs.set('q', params.q)
   for (const jt of params.job_type) qs.append('job_type', jt)
-  qs.set('job_type_mode', params.job_type_mode === 'is not' ? 'is_not' : 'is')
+  qs.set('job_type_mode', apiFilterMode(params.job_type_mode))
   for (const ua of params.user_action) qs.append('user_action', ua)
-  qs.set('user_action_mode', params.user_action_mode === 'is not' ? 'is_not' : 'is')
+  qs.set('user_action_mode', apiFilterMode(params.user_action_mode))
   qs.set('include_dismissed', String(params.include_dismissed))
   qs.set('starred_only', String(params.starred_only))
   if (params.discovered_after) qs.set('discovered_after', params.discovered_after)
@@ -104,6 +129,22 @@ export function discardNewSearchResults(): Promise<{ deleted: number }> {
 
 export function confirmSearchResults(): Promise<{ ok: boolean }> {
   return sendJson<{ ok: boolean }>('/api/search/confirm', 'POST')
+}
+
+export function getStatusCheckCandidateCount(filters: JobFilterParams): Promise<{ count: number }> {
+  return sendJson<{ count: number }>('/api/status-check/candidates', 'POST', jobFilterBody(filters))
+}
+
+export function runStatusCheck(filters: JobFilterParams): Promise<StatusCheckStatus> {
+  return sendJson<StatusCheckStatus>('/api/status-check/run', 'POST', jobFilterBody(filters))
+}
+
+export function getStatusCheckStatus(): Promise<StatusCheckStatus> {
+  return getJson<StatusCheckStatus>('/api/status-check/status')
+}
+
+export function cancelStatusCheck(): Promise<{ cancelled: boolean }> {
+  return sendJson<{ cancelled: boolean }>('/api/status-check/cancel', 'POST')
 }
 
 export function setJobUserAction(url: string, userAction: UserAction | null): Promise<Job> {

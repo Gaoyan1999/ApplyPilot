@@ -281,7 +281,7 @@ function SearchResultsStep({ count }: { count: number }) {
 /** Non-blocking summary of third-party calls that permanently failed after
  * retries (a LinkedIn/Glassdoor scrape, an LLM call, a detail-page fetch).
  * These never stop the run -- this is just visibility into what got skipped. */
-function WarningsSummary({ warnings }: { warnings: string[] }) {
+export function WarningsSummary({ warnings }: { warnings: string[] }) {
   const [open, setOpen] = useState(false)
   if (warnings.length === 0) return null
 
