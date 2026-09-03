@@ -10,6 +10,16 @@ Detection is deterministic (HTTP status + known "closed" phrases in the
 rendered page), not an LLM call -- unlike enrichment/detail.py's cascade,
 this doesn't need a description, just a yes/no on whether the posting is
 still live, so a phrase match is enough and keeps this tier-independent.
+
+LinkedIn only renders its "No longer accepting applications" banner in
+place of the Apply button, and the Apply button itself is a signed-in-only
+element -- an anonymous visitor gets a "Sign in" prompt there regardless of
+whether the posting is actually still open. So a bare, cookie-less
+Playwright context (what this used before) can never see that phrase for
+LinkedIn: it's not that the phrase is missing, it's that the whole panel is
+swapped out before the phrase would ever appear. To see the real status we
+reuse the same signed-in Chrome profile the apply pipeline uses (cloned
+from the user's real Chrome profile the first time either one runs).
 """
 
 import logging
@@ -19,11 +29,17 @@ from collections.abc import Callable
 
 from playwright.sync_api import sync_playwright
 
+from applypilot.apply.chrome import setup_worker_profile
 from applypilot.database import get_connection
 
 log = logging.getLogger(__name__)
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+
+# Dedicated worker slot for this module's Chrome profile -- kept separate
+# from the numeric IDs (0-9) apply workers use so a status-check scan can
+# never contend with an in-progress apply run for the same profile dir.
+_PROFILE_WORKER_ID = 99
 
 # HTTP-level signals that the posting is simply gone.
 PERMANENT_FAILURES = {404, 410, 451}
@@ -90,10 +106,13 @@ def run_status_check(
     if not jobs:
         return stats
 
+    profile_dir = setup_worker_profile(_PROFILE_WORKER_ID)
+
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(user_agent=UA)
-        page = context.new_page()
+        context = p.chromium.launch_persistent_context(
+            str(profile_dir), headless=True, user_agent=UA,
+        )
+        page = context.pages[0] if context.pages else context.new_page()
 
         try:
             for i, job in enumerate(jobs):
@@ -125,6 +144,6 @@ def run_status_check(
 
                 time.sleep(0.5)
         finally:
-            browser.close()
+            context.close()
 
     return stats
