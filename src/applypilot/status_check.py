@@ -26,6 +26,7 @@ import logging
 import threading
 import time
 from collections.abc import Callable
+from urllib.parse import urlsplit
 
 from playwright.sync_api import sync_playwright
 
@@ -62,7 +63,7 @@ CLOSED_PATTERNS = [
 ]
 
 
-def _check_one(page, url: str) -> dict:
+def _check_one(page, url: str, warmed_hosts: set[str]) -> dict:
     """Visit one job URL and decide whether the posting looks closed.
 
     Returns {"result": "closed" | "open" | "error", "reason": str | None}.
@@ -70,6 +71,23 @@ def _check_one(page, url: str) -> dict:
     next scheduled run naturally retries it.
     """
     try:
+        parts = urlsplit(url)
+        host = parts.netloc
+        if host and host not in warmed_hosts:
+            # LinkedIn (and likely other sites) bot-blocks a browser context's
+            # very first request when it lands directly on a job URL --
+            # returns HTTP 999 and a generic "Join LinkedIn" signup wall
+            # instead of the real page, so the closed/open phrases never get
+            # a chance to appear and every job silently reads as "open".
+            # Visiting the site's homepage first establishes a normal-looking
+            # browsing pattern and avoids the block for the rest of the scan.
+            try:
+                page.goto(f"{parts.scheme}://{host}/", timeout=20000)
+                page.wait_for_timeout(1000)
+            except Exception:
+                pass
+            warmed_hosts.add(host)
+
         resp = page.goto(url, timeout=45000)
         if resp and resp.status in PERMANENT_FAILURES:
             return {"result": "closed", "reason": f"HTTP {resp.status}"}
@@ -113,6 +131,7 @@ def run_status_check(
             str(profile_dir), headless=True, user_agent=UA,
         )
         page = context.pages[0] if context.pages else context.new_page()
+        warmed_hosts: set[str] = set()
 
         try:
             for i, job in enumerate(jobs):
@@ -120,7 +139,7 @@ def run_status_check(
                     break
 
                 url, title, company = job["url"], job["title"], job["company"]
-                outcome = _check_one(page, url)
+                outcome = _check_one(page, url, warmed_hosts)
                 stats["checked"] += 1
 
                 if outcome["result"] == "closed":
