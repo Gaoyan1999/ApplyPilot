@@ -12,12 +12,18 @@ import re
 import time
 from collections.abc import Callable
 from datetime import datetime, timezone
+from pathlib import Path
 
 from applypilot.config import RESUME_PATH, load_profile, load_prompts
 from applypilot.database import get_connection, get_jobs_by_stage
 from applypilot.llm import get_client
 
 log = logging.getLogger(__name__)
+
+# Cap on the combined knowledge-base context, mirroring the job description
+# truncation below -- folder summaries are expected to stay well under this
+# on their own; this is just a safety net.
+KNOWLEDGE_BASE_CHAR_LIMIT = 6000
 
 
 # ── Scoring Prompt ────────────────────────────────────────────────────────
@@ -73,6 +79,47 @@ def _build_candidate_context(profile: dict) -> str:
     return "\n".join(lines)
 
 
+def _load_knowledge_base(kb_dir: str) -> str:
+    """Load folder-level summaries from the user's personal knowledge base.
+
+    The knowledge base is a set of Markdown notes (e.g. an Obsidian vault
+    folder) organized as topic subfolders -- projects, courses, prepared
+    interview answers, etc. -- documenting things a resume and profile.json
+    are too compact to hold. Rather than reading every note (unbounded,
+    grows without limit), only each subfolder's own `index.md` is read: a
+    short, hand-maintained summary of what that folder contains. New
+    subfolders are picked up automatically as long as they have an
+    `index.md`.
+
+    Returns "" if `kb_dir` is unset or doesn't exist -- the knowledge base
+    is opt-in, same as `candidate_context` in `score_job`.
+    """
+    if not kb_dir:
+        return ""
+    base = Path(kb_dir)
+    if not base.is_dir():
+        return ""
+
+    sections = []
+    for index_path in sorted(base.glob("*/index.md")):
+        raw = index_path.read_text(encoding="utf-8")
+        # Strip HTML comments -- unfilled template placeholders (e.g. an
+        # index.md the user hasn't written a real summary into yet) are
+        # authored as "<!-- ... -->" instructions to the human, not content
+        # for the LLM. Without this, an empty folder still injects its
+        # placeholder prompt text as if it were real signal.
+        content = re.sub(r"<!--.*?-->", "", raw, flags=re.DOTALL).strip()
+        # A folder whose index.md is still just the template skeleton
+        # (frontmatter + headings, no prose written in) has nothing to
+        # say -- skip it entirely rather than adding an empty section.
+        body = re.sub(r"^---\n.*?\n---\n", "", content, flags=re.DOTALL)
+        body = re.sub(r"^#{1,6}.*$", "", body, flags=re.MULTILINE).strip()
+        if body:
+            sections.append(f"## {index_path.parent.name}\n{content}")
+
+    return "\n\n".join(sections)[:KNOWLEDGE_BASE_CHAR_LIMIT]
+
+
 def _parse_score_response(response: str) -> dict:
     """Parse the LLM's score response into structured data.
 
@@ -119,7 +166,13 @@ def _parse_score_response(response: str) -> dict:
     return {"score": score, "keywords": keywords, "met": met, "gaps": gaps}
 
 
-def score_job(resume_text: str, job: dict, score_prompt: str, candidate_context: str = "") -> dict:
+def score_job(
+    resume_text: str,
+    job: dict,
+    score_prompt: str,
+    candidate_context: str = "",
+    knowledge_base: str = "",
+) -> dict:
     """Score a single job against the resume.
 
     Args:
@@ -131,6 +184,9 @@ def score_job(resume_text: str, job: dict, score_prompt: str, candidate_context:
             location, availability, etc.) via _build_candidate_context().
             Optional so callers that don't have a profile loaded (e.g. quick
             ad-hoc scoring) still work.
+        knowledge_base: Folder-level summaries from the user's personal
+            knowledge base via _load_knowledge_base(). Optional, same as
+            candidate_context.
 
     Returns:
         {"score": int, "keywords": str, "met": list[str], "gaps": list[str]}
@@ -145,6 +201,8 @@ def score_job(resume_text: str, job: dict, score_prompt: str, candidate_context:
     user_content = f"RESUME:\n{resume_text}"
     if candidate_context:
         user_content += f"\n\nCANDIDATE PROFILE:\n{candidate_context}"
+    if knowledge_base:
+        user_content += f"\n\nKNOWLEDGE BASE:\n{knowledge_base}"
     user_content += f"\n\n---\n\nJOB POSTING:\n{job_text}"
 
     messages = [
@@ -182,7 +240,9 @@ def run_scoring(
         {"scored": int, "errors": int, "elapsed": float, "distribution": list}
     """
     resume_text = RESUME_PATH.read_text(encoding="utf-8")
-    candidate_context = _build_candidate_context(load_profile())
+    profile = load_profile()
+    candidate_context = _build_candidate_context(profile)
+    knowledge_base = _load_knowledge_base(profile.get("knowledge_base_dir", ""))
     conn = get_connection()
 
     if rescore:
@@ -211,7 +271,7 @@ def run_scoring(
     score_prompt = _build_score_prompt(prompts["scoring"])
 
     for job in jobs:
-        result = score_job(resume_text, job, score_prompt, candidate_context)
+        result = score_job(resume_text, job, score_prompt, candidate_context, knowledge_base)
         result["url"] = job["url"]
         completed += 1
 
