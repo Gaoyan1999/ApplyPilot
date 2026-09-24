@@ -242,6 +242,9 @@ function App() {
         <div className="app-header-actions">
           <SearchPanel onActivity={refresh} />
           <StatusCheckPanel filters={filterParams} onActivity={refresh} />
+          <a className="search-trigger" href="#/tasks">
+            Tasks
+          </a>
           <CvLibraryModal onActivity={refreshCvs} />
           <SettingsModal
             theme={theme}

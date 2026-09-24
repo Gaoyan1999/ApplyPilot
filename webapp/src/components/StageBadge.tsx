@@ -7,6 +7,8 @@ export const CLASS_BY_STAGE: Record<Stage, string> = {
   Tailored: 'stage-tailored',
   'Cover Letter Ready': 'stage-cover-letter-ready',
   Applying: 'stage-applying',
+  'Ready for Review': 'stage-ready-for-review',
+  Blocked: 'stage-blocked',
   Applied: 'stage-applied',
   Failed: 'stage-failed',
 }

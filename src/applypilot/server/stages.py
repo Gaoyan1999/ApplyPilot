@@ -12,6 +12,8 @@ STAGE_ORDER = [
     "Tailored",
     "Cover Letter Ready",
     "Applying",
+    "Ready for Review",
+    "Blocked",
     "Applied",
     "Failed",
 ]
@@ -35,7 +37,11 @@ def compute_stage(job: dict) -> str:
     """Return the current pipeline stage label for a job row."""
     if job.get("applied_at"):
         return "Applied"
-    if job.get("apply_status") == "failed" or job.get("apply_error"):
+    if job.get("apply_status") == "blocked":
+        return "Blocked"
+    if job.get("apply_status") == "ready_for_review":
+        return "Ready for Review"
+    if job.get("apply_status") == "failed":
         return "Failed"
     if job.get("apply_status") == "in_progress":
         return "Applying"

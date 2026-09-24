@@ -405,6 +405,10 @@ DEFAULTS = {
     "poll_interval": 60,
     "apply_timeout": 300,
     "viewport": "1280x900",
+    # Number of concurrent web-triggered auto-submit slots (server/apply_state.py) --
+    # each slot gets its own Chrome instance/CDP port/browser profile, mirroring
+    # launcher.py's worker_id-parameterized CLI batch mode.
+    "web_apply_workers": 3,
 }
 
 

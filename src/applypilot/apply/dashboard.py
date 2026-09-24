@@ -24,7 +24,7 @@ class WorkerState:
     """Tracks the current state of the apply worker."""
 
     worker_id: int = 0
-    status: str = "starting"  # starting, applying, applied, failed, expired, captcha, idle, done
+    status: str = "starting"  # starting, applying, ready_for_review, blocked, applied, failed, expired, captcha, idle, done
     job_title: str = ""
     company: str = ""
     score: int = 0

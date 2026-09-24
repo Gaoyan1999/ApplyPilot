@@ -5,6 +5,8 @@ export type Stage =
   | 'Tailored'
   | 'Cover Letter Ready'
   | 'Applying'
+  | 'Ready for Review'
+  | 'Blocked'
   | 'Applied'
   | 'Failed'
 
@@ -195,6 +197,15 @@ export interface AutoSubmitStatus {
   // The agent's own narrated reasoning + tool-use action descriptions, in
   // order -- mirrors the CLI's --verbose terminal output.
   transcript: string[]
+  // Present on the multi-slot shape (GET /api/jobs/{url}/auto-submit/status
+  // and GET /api/auto-submit/status) -- absent on the "no matching slot"
+  // idle stub. True once the run finished in ready_for_review/blocked and
+  // its Chrome window was deliberately left open for review -- the slot
+  // stays occupied until dismissed (POST .../auto-submit/dismiss).
+  pending_review?: boolean
+  slot_id?: number
+  job_title?: string | null
+  job_company?: string | null
 }
 
 export interface StatusCheckLogEntry {
@@ -239,6 +250,8 @@ export interface Status {
   cover_exhausted: number
   applied: number
   apply_errors: number
+  ready_for_review: number
+  blocked: number
   ready_to_apply: number
   score_distribution: ScoreDistItem[]
   by_site: SiteStat[]

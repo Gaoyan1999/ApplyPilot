@@ -7,6 +7,8 @@ export const STAGE_ORDER: Stage[] = [
   'Tailored',
   'Cover Letter Ready',
   'Applying',
+  'Ready for Review',
+  'Blocked',
   'Applied',
   'Failed',
 ]

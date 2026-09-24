@@ -28,6 +28,10 @@
   --stage-cover-fg: #1c7d6c;
   --stage-applying-bg: #fdf1c7;
   --stage-applying-fg: #97690b;
+  --stage-ready-for-review-bg: #d7f4f7;
+  --stage-ready-for-review-fg: #0f7a8c;
+  --stage-blocked-bg: #fde8d2;
+  --stage-blocked-fg: #a15c1f;
   --stage-applied-bg: #d7f3df;
   --stage-applied-fg: #1a7a3c;
   --stage-failed-bg: #fbe1df;
@@ -90,6 +94,10 @@
     --stage-cover-fg: #6fd4c0;
     --stage-applying-bg: #3a2f0e;
     --stage-applying-fg: #f0c14b;
+    --stage-ready-for-review-bg: #0f2e33;
+    --stage-ready-for-review-fg: #6fd9e8;
+    --stage-blocked-bg: #3a2410;
+    --stage-blocked-fg: #f0a355;
     --stage-applied-bg: #163a24;
     --stage-applied-fg: #6fd996;
     --stage-failed-bg: #3a1f1f;
@@ -140,6 +148,10 @@
   --stage-cover-fg: #1c7d6c;
   --stage-applying-bg: #fdf1c7;
   --stage-applying-fg: #97690b;
+  --stage-ready-for-review-bg: #d7f4f7;
+  --stage-ready-for-review-fg: #0f7a8c;
+  --stage-blocked-bg: #fde8d2;
+  --stage-blocked-fg: #a15c1f;
   --stage-applied-bg: #d7f3df;
   --stage-applied-fg: #1a7a3c;
   --stage-failed-bg: #fbe1df;
@@ -201,6 +213,10 @@
   --stage-cover-fg: #6fd4c0;
   --stage-applying-bg: #3a2f0e;
   --stage-applying-fg: #f0c14b;
+  --stage-ready-for-review-bg: #0f2e33;
+  --stage-ready-for-review-fg: #6fd9e8;
+  --stage-blocked-bg: #3a2410;
+  --stage-blocked-fg: #f0a355;
   --stage-applied-bg: #163a24;
   --stage-applied-fg: #6fd996;
   --stage-failed-bg: #3a1f1f;

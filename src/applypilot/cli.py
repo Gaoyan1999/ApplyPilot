@@ -149,7 +149,6 @@ def apply(
     min_score: int = typer.Option(7, "--min-score", help="Minimum fit score for job selection."),
     model: str = typer.Option("haiku", "--model", "-m", help="Claude model name."),
     continuous: bool = typer.Option(False, "--continuous", "-c", help="Run forever, polling for new jobs."),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Preview actions without submitting."),
     headless: bool = typer.Option(False, "--headless", help="Run browsers in headless mode."),
     url: Optional[str] = typer.Option(None, "--url", help="Apply to a specific job URL."),
     gen: bool = typer.Option(False, "--gen", help="Generate prompt file for manual debugging instead of running."),
@@ -241,7 +240,6 @@ def apply(
     console.print(f"  Workers:  {workers}")
     console.print(f"  Model:    {model}")
     console.print(f"  Headless: {headless}")
-    console.print(f"  Dry run:  {dry_run}")
     if url:
         console.print(f"  Target:   {url}")
     console.print()
@@ -252,7 +250,6 @@ def apply(
         min_score=min_score,
         headless=headless,
         model=model,
-        dry_run=dry_run,
         continuous=continuous,
         workers=workers,
     )
