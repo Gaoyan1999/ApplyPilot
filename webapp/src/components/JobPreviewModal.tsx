@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm'
 import {
   ApiError,
   cancelAutoSubmit,
+  dismissAutoSubmit,
   generateCoverLetter,
   getAutoSubmitStatus,
   getCoverLetter,
@@ -114,6 +115,7 @@ export function JobPreviewModal({
   const [autoSubmitRunning, setAutoSubmitRunning] = useState(false)
   const [autoSubmitStatus, setAutoSubmitStatus] = useState<AutoSubmitStatus | null>(null)
   const [autoSubmitError, setAutoSubmitError] = useState<string | null>(null)
+  const [dismissing, setDismissing] = useState(false)
 
   function startResize(e: React.MouseEvent) {
     e.preventDefault()
@@ -257,9 +259,27 @@ export function JobPreviewModal({
     }
   }
 
-  const autoSubmitRunningElsewhere = Boolean(
-    autoSubmitStatus?.running && autoSubmitStatus.url !== job.url,
-  )
+  // Closes the Chrome window left open for a ready_for_review/blocked job
+  // and frees its slot -- call this once you've submitted it yourself (or
+  // decided to give up on it), not before.
+  async function handleDismissAutoSubmit() {
+    setDismissing(true)
+    try {
+      await dismissAutoSubmit(job.url)
+      setAutoSubmitStatus(null)
+    } catch (e) {
+      setAutoSubmitError(e instanceof ApiError ? e.message : 'Failed to dismiss')
+    } finally {
+      setDismissing(false)
+    }
+  }
+
+  // A job already sitting in ready_for_review/blocked has a live Chrome
+  // window open on its own slot -- triggering another run on it would spin
+  // up a second, separate slot for the same job (apply_state.start_apply()
+  // also guards against this server-side, but disabling here avoids a
+  // pointless round-trip and a confusing 409).
+  const awaitingReview = job.apply_status === 'ready_for_review' || job.apply_status === 'blocked'
 
   return (
     <div className="modal-panel job-detail-panel" style={{ width }}>
@@ -330,16 +350,15 @@ export function JobPreviewModal({
               Cancel
             </button>
           ) : (
-            !job.applied_at && (
+            !job.applied_at &&
+            !awaitingReview && (
               <button
                 type="button"
-                disabled={autoSubmitStarting || (!job.tailored_at && cvCount === 0) || autoSubmitRunningElsewhere}
+                disabled={autoSubmitStarting || (!job.tailored_at && cvCount === 0)}
                 title={
                   !job.tailored_at && cvCount === 0
                     ? 'Add a CV in the CV library or tailor a resume for this job first'
-                    : autoSubmitRunningElsewhere
-                      ? 'Another auto-submit is already running'
-                      : undefined
+                    : undefined
                 }
                 onClick={handleAutoSubmit}
               >
@@ -360,6 +379,27 @@ export function JobPreviewModal({
         <AutoSubmitTranscript lines={autoSubmitStatus?.transcript ?? []} />
         {!autoSubmitRunning && autoSubmitStatus?.error && (
           <div className="auto-submit-block auto-submit-blocked">{autoSubmitStatus.error}</div>
+        )}
+        {!autoSubmitRunning && job.apply_status === 'ready_for_review' && (
+          <div className="auto-submit-block auto-submit-ready">
+            <span className="auto-submit-block-text">
+              Filled and ready — check the open Chrome window, verify it, and click Submit yourself.
+            </span>
+            <button type="button" className="task-delete-button" disabled={dismissing} onClick={handleDismissAutoSubmit}>
+              {dismissing ? 'Dismissing…' : 'Dismiss'}
+            </button>
+          </div>
+        )}
+        {!autoSubmitRunning && job.apply_status === 'blocked' && (
+          <div className="auto-submit-block auto-submit-needs-input">
+            <span className="auto-submit-block-text">
+              Blocked — needs your input: {job.apply_error || 'see the open Chrome window for details.'} Finish it
+              yourself in the open Chrome window.
+            </span>
+            <button type="button" className="task-delete-button" disabled={dismissing} onClick={handleDismissAutoSubmit}>
+              {dismissing ? 'Dismissing…' : 'Dismiss'}
+            </button>
+          </div>
         )}
         {!autoSubmitRunning && job.applied_at && (
           <div className="auto-submit-block auto-submit-success">Applied {formatDate(job.applied_at)}</div>

@@ -266,6 +266,20 @@ def cleanup_worker(worker_id: int, process: subprocess.Popen | None) -> None:
     logger.info("[worker-%d] Chrome cleaned up", worker_id)
 
 
+def close_worker_chrome(worker_id: int) -> None:
+    """Close a worker's Chrome instance that was deliberately left open for
+    review (see launcher.py's worker_loop finally-block, which skips
+    cleanup_worker() for ready_for_review/blocked outcomes). Looks up the
+    still-tracked process by worker_id -- _chrome_procs is only ever cleared
+    by cleanup_worker()/kill_all_chrome(), so it's still populated here even
+    though the worker thread that launched it has already exited. Called by
+    server/apply_state.py's dismiss() once the user is done with that job.
+    """
+    with _chrome_lock:
+        proc = _chrome_procs.get(worker_id)
+    cleanup_worker(worker_id, proc)
+
+
 def kill_all_chrome() -> None:
     """Kill all Chrome instances and any port zombies.
 

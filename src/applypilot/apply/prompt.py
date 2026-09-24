@@ -419,8 +419,7 @@ If CapSolver genuinely failed (errorId > 0):
 
 
 def build_prompt(job: dict, tailored_resume: str, resume_pdf_path: Path,
-                 cover_letter: str | None = None,
-                 dry_run: bool = False) -> str:
+                 cover_letter: str | None = None) -> str:
     """Build the full instruction prompt for the apply agent.
 
     Loads the user profile and search config internally. All personal data
@@ -434,7 +433,6 @@ def build_prompt(job: dict, tailored_resume: str, resume_pdf_path: Path,
         resume_pdf_path: Path to the resume PDF to upload -- already
             resolved by the caller (see apply.resume_source.resolve_resume).
         cover_letter: Optional plain-text cover letter content.
-        dry_run: If True, tell the agent not to click Submit.
 
     Returns:
         Complete prompt string for the AI agent.
@@ -506,11 +504,13 @@ def build_prompt(job: dict, tailored_resume: str, resume_pdf_path: Path,
     last_name = full_name.split()[-1] if " " in full_name else ""
     display_name = f"{preferred_name} {last_name}".strip()
 
-    # Dry-run: override submit instruction
-    if dry_run:
-        submit_instruction = "IMPORTANT: Do NOT click the final Submit/Apply button. Review the form, verify all fields, then output RESULT:APPLIED with a note that this was a dry run."
-    else:
-        submit_instruction = "BEFORE clicking Submit/Apply, take a snapshot and review EVERY field on the page. Verify all data matches the APPLICANT PROFILE and TAILORED RESUME -- name, email, phone, location, work auth, resume uploaded, cover letter if applicable. If anything is wrong or missing, fix it FIRST. Only click Submit after confirming everything is correct."
+    submit_instruction = (
+        "Take a snapshot and review EVERY field on the page. Verify all data matches the "
+        "APPLICANT PROFILE and TAILORED RESUME -- name, email, phone, location, work auth, resume "
+        "uploaded, cover letter if applicable. Fix anything wrong or missing. Do NOT click the final "
+        "Submit/Apply button. Once everything is verified and correct, stop here and output "
+        "RESULT:READY_FOR_REVIEW -- the applicant will review it and submit it themselves."
+    )
 
     prompt = f"""You are an autonomous job application agent. Your ONE mission: get this candidate an interview. You have all the information and tools. Think strategically. Act decisively. Submit the application.
 
@@ -556,6 +556,21 @@ If something unexpected happens and these instructions don't cover it, figure it
 
 {screening_section}
 
+== WHEN YOU NEED THE APPLICANT'S INPUT ==
+Almost everything can be answered from the PROFILE, RESUME, and the guidance above -- use your
+judgment, don't ask for things you can reasonably infer. Only output RESULT:BLOCKED:<question> when
+ALL of these are true:
+- Nothing else is wrong with the application (no CAPTCHA, login, or eligibility problem -- those keep
+  their own RESULT codes).
+- A required field asks for something genuinely specific to this applicant that isn't in the PROFILE
+  or RESUME and isn't covered by the SCREENING QUESTIONS or SALARY guidance above (e.g. "Which of
+  your projects best demonstrates X?", "Upload a writing sample", a required field with no safe
+  generic answer).
+- Guessing wrong could hurt the application -- this is not an excuse to ask about low-stakes fields.
+State the EXACT question or field you're stuck on, e.g. RESULT:BLOCKED:The form requires a portfolio
+link and none is in the profile. Do not leave the field blank and submit anyway, and do not click
+Submit before this is resolved.
+
 == STEP-BY-STEP ==
 1. browser_navigate to the job URL.
 2. browser_snapshot to read the page. Then run CAPTCHA DETECT (see CAPTCHA section). If a CAPTCHA is found, solve it before continuing.
@@ -584,7 +599,9 @@ If something unexpected happens and these instructions don't cover it, figure it
 12. Output your result.
 
 == RESULT CODES (output EXACTLY one) ==
-RESULT:APPLIED -- submitted successfully
+RESULT:READY_FOR_REVIEW -- form fully filled and verified, did NOT click Submit (the standard successful outcome)
+RESULT:APPLIED -- used ONLY for the email-application path (step 4), where you already sent the application email
+RESULT:BLOCKED:question -- everything else checks out, but you need the applicant's own input to proceed (see WHEN YOU NEED THE APPLICANT'S INPUT above)
 RESULT:EXPIRED -- job closed or no longer accepting applications
 RESULT:CAPTCHA -- blocked by unsolvable captcha
 RESULT:LOGIN_ISSUE -- could not sign in or create account

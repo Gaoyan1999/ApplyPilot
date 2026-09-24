@@ -115,6 +115,8 @@ def get_status() -> dict:
         "cover_exhausted": stats["cover_exhausted"],
         "applied": stats["applied"],
         "apply_errors": stats["apply_errors"],
+        "ready_for_review": stats["ready_for_review"],
+        "blocked": stats["blocked"],
         "ready_to_apply": stats["ready_to_apply"],
         "score_distribution": [
             {"score": s, "count": c} for s, c in stats["score_distribution"]
@@ -324,9 +326,11 @@ def _require_tier3() -> None:
 
 @app.post("/api/jobs/{url:path}/auto-submit", status_code=202)
 def start_job_auto_submit(url: str) -> dict:
-    """Kick off a background Claude Code session that fills and submits this
-    one job's application in a visible Chrome window. Single-flight -- only
-    one auto-submit run at a time (see server/apply_state.py)."""
+    """Kick off a background Claude Code session that fills out this one
+    job's application in a visible Chrome window (it stops short of
+    clicking Submit -- see apply/prompt.py). Runs in whichever web
+    auto-submit slot is free; multiple jobs can be in flight at once (see
+    server/apply_state.py)."""
     _require_tier3()
 
     conn = get_connection()
@@ -343,8 +347,11 @@ def start_job_auto_submit(url: str) -> dict:
     if row["applied_at"]:
         raise HTTPException(status_code=400, detail="This job has already been applied to.")
 
-    if not apply_state.start_apply(url):
-        raise HTTPException(status_code=409, detail="An auto-submit run is already in progress")
+    if apply_state.start_apply(url) is None:
+        raise HTTPException(
+            status_code=409,
+            detail="All auto-submit slots are busy or awaiting your review -- dismiss one from the Tasks dashboard first.",
+        )
 
     return apply_state.get_status(url)
 
@@ -354,9 +361,23 @@ def get_job_auto_submit_status(url: str) -> dict:
     return apply_state.get_status(url)
 
 
+@app.get("/api/auto-submit/status")
+def get_all_auto_submit_statuses() -> list[dict]:
+    """All slots currently running or awaiting review -- backs the Tasks
+    dashboard's list of in-flight auto-applies."""
+    return apply_state.get_all_statuses()
+
+
 @app.post("/api/jobs/{url:path}/auto-submit/cancel")
 def cancel_job_auto_submit(url: str) -> dict:
-    return {"cancelled": apply_state.cancel()}
+    return {"cancelled": apply_state.cancel(url)}
+
+
+@app.post("/api/jobs/{url:path}/auto-submit/dismiss")
+def dismiss_job_auto_submit(url: str) -> dict:
+    """Close the Chrome window left open for a ready_for_review/blocked job
+    and free its slot for a future auto-submit."""
+    return {"dismissed": apply_state.dismiss(url)}
 
 
 _MAX_CV_BYTES = 10 * 1024 * 1024  # 10MB

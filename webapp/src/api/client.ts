@@ -183,8 +183,16 @@ export function getAutoSubmitStatus(url: string): Promise<AutoSubmitStatus> {
   return getJson<AutoSubmitStatus>(`/api/jobs/${encodeURIComponent(url)}/auto-submit/status`)
 }
 
+export function getAllAutoSubmitStatuses(): Promise<AutoSubmitStatus[]> {
+  return getJson<AutoSubmitStatus[]>('/api/auto-submit/status')
+}
+
 export function cancelAutoSubmit(url: string): Promise<{ cancelled: boolean }> {
   return sendJson<{ cancelled: boolean }>(`/api/jobs/${encodeURIComponent(url)}/auto-submit/cancel`, 'POST')
+}
+
+export function dismissAutoSubmit(url: string): Promise<{ dismissed: boolean }> {
+  return sendJson<{ dismissed: boolean }>(`/api/jobs/${encodeURIComponent(url)}/auto-submit/dismiss`, 'POST')
 }
 
 export function listCvs(): Promise<Cv[]> {

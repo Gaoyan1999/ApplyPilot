@@ -47,16 +47,39 @@ def _load_blocked():
 # How often to poll the DB when the queue is empty (seconds)
 POLL_INTERVAL = config.DEFAULTS["poll_interval"]
 
-# Thread-safe shutdown coordination
+# Thread-safe shutdown coordination -- CLI batch-mode only (stops every
+# worker together on double Ctrl+C). The web path runs each auto-submit as
+# its own single-shot, single-job worker_loop() call (limit=1, target_url
+# set), which never re-checks this between jobs, so touching it from the
+# web path would only risk interfering with unrelated concurrent slots for
+# no benefit -- server/apply_state.py deliberately leaves it alone.
 _stop_event = threading.Event()
 
-# Set by apply_state.cancel() (the web "Cancel" button) right before it
-# kills the claude process, so worker_loop's cleanup knows to leave the
-# now-abandoned Chrome window open for the user to inspect instead of
-# tearing it down like it does after every other job outcome. Not set by
-# the CLI's Ctrl+C handling, which intentionally does tear Chrome down --
-# in continuous/batch mode a fresh Chrome opens for the next job anyway.
-_keep_chrome_on_cancel = threading.Event()
+# Marks a specific worker_id's Chrome as "leave it open for the user to
+# inspect" instead of tearing it down like every other job outcome does --
+# set by apply_state.cancel() (the web "Cancel" button) right before it
+# kills that slot's claude process. Per-worker (not a single Event) because
+# multiple web-triggered slots can be running at once; cancelling one must
+# not affect any other. Not set by the CLI's Ctrl+C handling, which
+# intentionally does tear Chrome down -- in continuous/batch mode a fresh
+# Chrome opens for the next job anyway.
+_keep_chrome_on_cancel: set[int] = set()
+_keep_chrome_on_cancel_lock = threading.Lock()
+
+
+def _mark_keep_chrome_on_cancel(worker_id: int) -> None:
+    with _keep_chrome_on_cancel_lock:
+        _keep_chrome_on_cancel.add(worker_id)
+
+
+def _pop_keep_chrome_on_cancel(worker_id: int) -> bool:
+    """Returns True (and clears the flag) iff `worker_id` was marked."""
+    with _keep_chrome_on_cancel_lock:
+        if worker_id in _keep_chrome_on_cancel:
+            _keep_chrome_on_cancel.discard(worker_id)
+            return True
+        return False
+
 
 # Track active Claude Code processes for skip (Ctrl+C) handling
 _claude_procs: dict[int, subprocess.Popen] = {}
@@ -200,7 +223,14 @@ def acquire_job(target_url: str | None = None, min_score: int = 7,
 def mark_result(url: str, status: str, error: str | None = None,
                 permanent: bool = False, duration_ms: int | None = None,
                 task_id: str | None = None) -> None:
-    """Update a job's apply status in the database."""
+    """Update a job's apply status in the database.
+
+    `status` of "applied" (human-set only now -- see mark_job()) and
+    "ready_for_review"/"blocked" (the agent's two non-failure terminal
+    outcomes) don't touch apply_attempts -- neither is a failure, so neither
+    should count toward the retry budget. Everything else falls through to
+    the generic failure path, which does.
+    """
     conn = get_connection()
     now = datetime.now(timezone.utc).isoformat()
     if status == "applied":
@@ -210,6 +240,20 @@ def mark_result(url: str, status: str, error: str | None = None,
                            apply_duration_ms = ?, apply_task_id = ?
             WHERE url = ?
         """, (now, duration_ms, task_id, url))
+    elif status == "ready_for_review":
+        conn.execute("""
+            UPDATE jobs SET apply_status = 'ready_for_review',
+                           apply_error = NULL, agent_id = NULL,
+                           apply_duration_ms = ?, apply_task_id = ?
+            WHERE url = ?
+        """, (duration_ms, task_id, url))
+    elif status == "blocked":
+        conn.execute("""
+            UPDATE jobs SET apply_status = 'blocked', apply_error = ?,
+                           agent_id = NULL, apply_duration_ms = ?,
+                           apply_task_id = ?
+            WHERE url = ?
+        """, (error or "unknown", duration_ms, task_id, url))
     else:
         attempts = 99 if permanent else "COALESCE(apply_attempts, 0) + 1"
         conn.execute(f"""
@@ -325,7 +369,7 @@ def reset_failed() -> int:
 # ---------------------------------------------------------------------------
 
 def run_job(job: dict, port: int, resume_pdf_path: Path, worker_id: int = 0,
-            model: str = "sonnet", dry_run: bool = False) -> tuple[str, int]:
+            model: str = "sonnet") -> tuple[str, int]:
     """Spawn a Claude Code session for one job application.
 
     Args:
@@ -336,7 +380,8 @@ def run_job(job: dict, port: int, resume_pdf_path: Path, worker_id: int = 0,
 
     Returns:
         Tuple of (status_string, duration_ms). Status is one of:
-        'applied', 'expired', 'captcha', 'login_issue',
+        'ready_for_review', 'applied' (email-application path only),
+        'expired', 'captcha', 'login_issue', 'blocked:reason',
         'failed:reason', or 'skipped'.
     """
     # Read resume text (sibling .txt of whatever PDF was resolved)
@@ -348,7 +393,6 @@ def run_job(job: dict, port: int, resume_pdf_path: Path, worker_id: int = 0,
         job=job,
         tailored_resume=resume_text,
         resume_pdf_path=resume_pdf_path,
-        dry_run=dry_run,
     )
 
     # Write per-worker MCP config
@@ -462,9 +506,21 @@ def run_job(job: dict, port: int, resume_pdf_path: Path, worker_id: int = 0,
                                 elif "ref" in inp:
                                     desc = f"{name} {inp.get('element', inp.get('text', ''))}"[:50]
                                 elif "fields" in inp:
-                                    desc = f"{name} ({len(inp['fields'])} fields)"
+                                    # Show what was actually entered/selected (not just a
+                                    # count) so the dashboard's task log reflects the real
+                                    # data the agent chose, not just that "5 fields" happened.
+                                    field_strs = [
+                                        f"{f.get('name') or f.get('ref') or '?'}={str(f.get('value', ''))[:40]}"
+                                        for f in inp["fields"]
+                                    ]
+                                    desc = f"{name}: " + "; ".join(field_strs)
                                 elif "paths" in inp:
-                                    desc = f"{name} upload"
+                                    paths = inp["paths"]
+                                    filenames = (
+                                        ", ".join(Path(p).name for p in paths)
+                                        if isinstance(paths, list) else str(paths)
+                                    )
+                                    desc = f"{name}: {filenames}"
                                 else:
                                     desc = name
 
@@ -513,12 +569,27 @@ def run_job(job: dict, port: int, resume_pdf_path: Path, worker_id: int = 0,
         def _clean_reason(s: str) -> str:
             return re.sub(r'[*`"]+$', '', s).strip()
 
-        for result_status in ["APPLIED", "EXPIRED", "CAPTCHA", "LOGIN_ISSUE"]:
+        for result_status in ["READY_FOR_REVIEW", "APPLIED", "EXPIRED", "CAPTCHA", "LOGIN_ISSUE"]:
             if f"RESULT:{result_status}" in output:
                 add_event(f"[W{worker_id}] {result_status} ({elapsed}s): {job['title'][:30]}")
                 update_state(worker_id, status=result_status.lower(),
                              last_action=f"{result_status} ({elapsed}s)")
                 return result_status.lower(), duration_ms
+
+        if "RESULT:BLOCKED" in output:
+            for out_line in output.split("\n"):
+                if "RESULT:BLOCKED" in out_line:
+                    reason = (
+                        out_line.split("RESULT:BLOCKED:")[-1].strip()
+                        if ":" in out_line[out_line.index("BLOCKED") + 7:]
+                        else "unknown"
+                    )
+                    reason = _clean_reason(reason)
+                    add_event(f"[W{worker_id}] BLOCKED ({elapsed}s): {reason[:30]}")
+                    update_state(worker_id, status="blocked",
+                                 last_action=f"BLOCKED: {reason[:25]}")
+                    return f"blocked:{reason}", duration_ms
+            return "blocked:unknown", duration_ms
 
         if "RESULT:FAILED" in output:
             for out_line in output.split("\n"):
@@ -596,7 +667,7 @@ def _is_permanent_failure(result: str) -> bool:
 def worker_loop(worker_id: int = 0, limit: int = 1,
                 target_url: str | None = None,
                 min_score: int = 7, headless: bool = False,
-                model: str = "sonnet", dry_run: bool = False) -> tuple[int, int]:
+                model: str = "sonnet") -> tuple[int, int]:
     """Run jobs sequentially until limit is reached or queue is empty.
 
     Args:
@@ -606,7 +677,6 @@ def worker_loop(worker_id: int = 0, limit: int = 1,
         min_score: Minimum fit_score threshold.
         headless: Run Chrome headless.
         model: Claude model name.
-        dry_run: Don't click Submit.
 
     Returns:
         Tuple of (applied_count, failed_count).
@@ -659,22 +729,30 @@ def worker_loop(worker_id: int = 0, limit: int = 1,
             continue
 
         chrome_proc = None
+        result = None
         try:
             add_event(f"[W{worker_id}] Launching Chrome...")
             chrome_proc = launch_chrome(worker_id, port=port, headless=headless)
 
             result, duration_ms = run_job(job, port=port, resume_pdf_path=resolved_resume,
-                                            worker_id=worker_id, model=model, dry_run=dry_run)
+                                            worker_id=worker_id, model=model)
 
             if result == "skipped":
                 release_lock(job["url"])
                 add_event(f"[W{worker_id}] Skipped: {job['title'][:30]}")
                 continue
-            elif result == "applied":
-                mark_result(job["url"], "applied", duration_ms=duration_ms)
+            elif result in ("applied", "ready_for_review"):
+                # Both are "handled, not a failure" outcomes for the purposes
+                # of this counter -- ready_for_review just means the agent
+                # stopped short of clicking Submit (see prompt.py).
+                mark_result(job["url"], result, duration_ms=duration_ms)
                 applied += 1
                 update_state(worker_id, jobs_applied=applied,
                              jobs_done=applied + failed)
+            elif result.startswith("blocked:"):
+                reason = result.split(":", 1)[-1]
+                mark_result(job["url"], "blocked", reason, duration_ms=duration_ms)
+                update_state(worker_id, jobs_done=applied + failed)
             else:
                 reason = result.split(":", 1)[-1] if ":" in result else result
                 mark_result(job["url"], "failed", reason,
@@ -698,9 +776,11 @@ def worker_loop(worker_id: int = 0, limit: int = 1,
             update_state(worker_id, jobs_failed=failed)
         finally:
             if chrome_proc:
-                if _keep_chrome_on_cancel.is_set():
-                    _keep_chrome_on_cancel.clear()
+                needs_review = result == "ready_for_review" or (result or "").startswith("blocked:")
+                if _pop_keep_chrome_on_cancel(worker_id):
                     add_event(f"[W{worker_id}] Cancelled -- leaving Chrome open for review")
+                elif needs_review:
+                    add_event(f"[W{worker_id}] Leaving Chrome open for review: {job['title'][:30]}")
                 else:
                     cleanup_worker(worker_id, chrome_proc)
 
@@ -718,7 +798,7 @@ def worker_loop(worker_id: int = 0, limit: int = 1,
 
 def main(limit: int = 1, target_url: str | None = None,
          min_score: int = 7, headless: bool = False, model: str = "sonnet",
-         dry_run: bool = False, continuous: bool = False,
+         continuous: bool = False,
          poll_interval: int = 60, workers: int = 1) -> None:
     """Launch the apply pipeline.
 
@@ -728,7 +808,6 @@ def main(limit: int = 1, target_url: str | None = None,
         min_score: Minimum fit_score threshold.
         headless: Run Chrome in headless mode.
         model: Claude model name.
-        dry_run: Don't click Submit.
         continuous: Run forever, polling for new jobs.
         poll_interval: Seconds between DB polls when queue is empty.
         workers: Number of parallel workers (default 1).
@@ -802,7 +881,6 @@ def main(limit: int = 1, target_url: str | None = None,
                     min_score=min_score,
                     headless=headless,
                     model=model,
-                    dry_run=dry_run,
                 )
             else:
                 # Multi-worker — distribute limit across workers
@@ -825,7 +903,6 @@ def main(limit: int = 1, target_url: str | None = None,
                             min_score=min_score,
                             headless=headless,
                             model=model,
-                            dry_run=dry_run,
                         ): i
                         for i in range(workers)
                     }
