@@ -667,7 +667,7 @@ def _is_permanent_failure(result: str) -> bool:
 def worker_loop(worker_id: int = 0, limit: int = 1,
                 target_url: str | None = None,
                 min_score: int = 7, headless: bool = False,
-                model: str = "sonnet") -> tuple[int, int]:
+                model: str = "sonnet", apply_engine: str | None = None) -> tuple[int, int]:
     """Run jobs sequentially until limit is reached or queue is empty.
 
     Args:
@@ -677,10 +677,14 @@ def worker_loop(worker_id: int = 0, limit: int = 1,
         min_score: Minimum fit_score threshold.
         headless: Run Chrome headless.
         model: Claude model name.
+        apply_engine: "claude" (default) or "jev" (see apply/jev_engine.py).
+            None reads config.DEFAULTS["apply_engine"].
 
     Returns:
         Tuple of (applied_count, failed_count).
     """
+    if apply_engine is None:
+        apply_engine = config.DEFAULTS["apply_engine"]
     applied = 0
     failed = 0
     continuous = limit == 0
@@ -734,8 +738,24 @@ def worker_loop(worker_id: int = 0, limit: int = 1,
             add_event(f"[W{worker_id}] Launching Chrome...")
             chrome_proc = launch_chrome(worker_id, port=port, headless=headless)
 
-            result, duration_ms = run_job(job, port=port, resume_pdf_path=resolved_resume,
-                                            worker_id=worker_id, model=model)
+            if apply_engine == "jev":
+                try:
+                    from applypilot.apply.jev_engine import run_job_jev
+                    add_event(f"[W{worker_id}] Trying fast (jev) engine: {job['title'][:30]}")
+                    result, duration_ms = run_job_jev(job, port=port, resume_pdf_path=resolved_resume,
+                                                       worker_id=worker_id, model=model)
+                except Exception as e:
+                    # Genuine infra failure (jev_engine already closed its tab in
+                    # this case -- see its own try/except) -- fall back to the
+                    # full Claude engine on the SAME job, same Chrome, same
+                    # iteration, rather than a separate queued retry.
+                    add_event(f"[W{worker_id}] jev engine failed ({str(e)[:40]}), falling back to Claude")
+                    logger.warning("jev engine failed for %s, falling back to Claude: %s", job["url"], e)
+                    result, duration_ms = run_job(job, port=port, resume_pdf_path=resolved_resume,
+                                                    worker_id=worker_id, model=model)
+            else:
+                result, duration_ms = run_job(job, port=port, resume_pdf_path=resolved_resume,
+                                                worker_id=worker_id, model=model)
 
             if result == "skipped":
                 release_lock(job["url"])

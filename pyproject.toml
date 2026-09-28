@@ -20,7 +20,7 @@ classifiers = [
 dependencies = [
     "typer>=0.9.0",
     "rich>=13.0",
-    "httpx>=0.24",
+    "httpx[http2]>=0.24",
     "beautifulsoup4>=4.12",
     "playwright>=1.40",
     "python-dotenv>=1.0",
@@ -30,6 +30,10 @@ dependencies = [
     "uvicorn[standard]>=0.27",
     "python-multipart>=0.0.6",
     "pypdf>=4.0",
+    # Chrome/CDP connection layer for the jev fast-apply engine (apply/jev_engine.py) --
+    # the agent loop itself (apply/jev/) is vendored from browser-use/jev-ultrafast
+    # (not published on PyPI), but this is real infra we don't want to reimplement.
+    "browser-harness==0.1.13",
     ]
 
 [project.optional-dependencies]
