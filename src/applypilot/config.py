@@ -409,6 +409,11 @@ DEFAULTS = {
     # each slot gets its own Chrome instance/CDP port/browser profile, mirroring
     # launcher.py's worker_id-parameterized CLI batch mode.
     "web_apply_workers": 3,
+    # "claude" (default, full Claude Code agent) or "jev" (fast TypeSafe-based
+    # engine, apply/jev_engine.py) -- jev falls back to the Claude engine on
+    # any genuine infrastructure failure, but not on a stuck/blocked outcome
+    # (those are reported to the dashboard for manual review instead).
+    "apply_engine": "claude",
 }
 
 
