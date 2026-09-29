@@ -179,7 +179,9 @@ Hard facts -> answer truthfully from the profile. No guessing. This includes:
   - Citizenship, clearance, licenses, certifications: answer from profile only
   - Criminal/background: answer from profile only
 
-Skills and tools -> be confident. This candidate is a {target_role} with {years} years experience. If the question asks "Do you have experience with [tool]?" and it's in the same domain (DevOps, backend, ML, cloud, automation), answer YES. Software engineers learn tools fast. Don't sell short.
+Skills and tools, YES/NO questions ("Do you have experience with [tool]?") -> be confident. This candidate is a {target_role} with {years} years experience. If it's in the same domain (DevOps, backend, ML, cloud, automation), answer YES. Software engineers learn tools fast. Don't sell short.
+
+Skills and tools, NUMBER questions ("How many years of experience with [X]?") -> only give a real number if X is explicitly in the RESUME or the skills list in the profile. If X isn't listed there -- even if a closely related skill is (e.g. profile shows Java but the question asks about Kotlin) -- do NOT invent a plausible-sounding number. Enter 0, or pick the lowest option the form offers ("No experience" / "Less than 1 year"). Making up specific years for a skill this candidate doesn't have is lying on the application -- never do it.
 
 Open-ended questions ("Why do you want this role?", "Tell us about yourself", "What interests you?") -> Write 2-3 sentences. Be specific to THIS job. Reference something from the job description. Connect it to a real achievement from the resume. No generic fluff. No "I am passionate about..." -- sound like a real person.
 
@@ -499,6 +501,27 @@ def build_prompt(job: dict, tailored_resume: str, resume_pdf_path: Path,
     from applypilot.config import load_blocked_sso
     blocked_sso = load_blocked_sso()
 
+    # LinkedIn is excluded from blocked_sso (unlike Google/Microsoft/Okta) because
+    # the applicant can supply a specific account to log in as -- see linkedin_email
+    # below. Without one, LinkedIn logins are just as unsolvable as any other SSO.
+    linkedin_email = personal.get("linkedin_email", "")
+    linkedin_password = personal.get("linkedin_password", "")
+    if linkedin_email and linkedin_password:
+        linkedin_login_instruction = (
+            f"This browser profile may already be signed into LinkedIn, possibly as MULTIPLE "
+            f"accounts. If an account picker/chooser appears, click the account whose name or "
+            f"email matches {linkedin_email} -- NEVER guess or pick an unrelated account. Not "
+            f"listed, or a blank login form? Sign in as {linkedin_email} / {linkedin_password} "
+            f"(use \"Sign in with another account\" first if the chooser only offers other "
+            f"accounts)."
+        )
+    else:
+        linkedin_login_instruction = (
+            "No linkedin_email/linkedin_password configured in the profile -> this cannot be "
+            "solved safely (picking the wrong account among multiple logged-in ones is worse "
+            "than failing). Output RESULT:FAILED:sso_required."
+        )
+
     # Preferred display name
     preferred_name = personal.get("preferred_name", full_name.split()[0])
     last_name = full_name.split()[-1] if " " in full_name else ""
@@ -512,7 +535,7 @@ def build_prompt(job: dict, tailored_resume: str, resume_pdf_path: Path,
         "RESULT:READY_FOR_REVIEW -- the applicant will review it and submit it themselves."
     )
 
-    prompt = f"""You are an autonomous job application agent. Your ONE mission: get this candidate an interview. You have all the information and tools. Think strategically. Act decisively. Submit the application.
+    prompt = f"""You are an autonomous job application agent. Your ONE mission: get this candidate an interview. You have all the information and tools. Think strategically. Act decisively. Fill out the application completely and correctly, then STOP for the applicant's own final review and Submit click -- see step 10, this is non-negotiable.
 
 == JOB ==
 URL: {job.get('application_url') or job['url']}
@@ -534,9 +557,9 @@ Cover Letter PDF (upload if asked): {cl_upload_path or "N/A"}
 {profile_summary}
 
 == YOUR MISSION ==
-Submit a complete, accurate application. Use the profile and resume as source data -- adapt to fit each form's format.
+Fill out a complete, accurate application, ready for the applicant to submit themselves. Use the profile and resume as source data -- adapt to fit each form's format.
 
-If something unexpected happens and these instructions don't cover it, figure it out yourself. You are autonomous. Navigate pages, read content, try buttons, explore the site. The goal is always the same: submit the application. Do whatever it takes to reach that goal.
+If something unexpected happens and these instructions don't cover it, figure it out yourself. You are autonomous. Navigate pages, read content, try buttons, explore the site. The goal is always the same: get the application fully filled out and ready to go. Do whatever it takes to reach that goal -- except clicking the final Submit/Apply button, which is the applicant's call, not yours.
 
 {hard_rules}
 
@@ -580,14 +603,15 @@ Submit before this is resolved.
    - Output RESULT:APPLIED. Done.
    After clicking Apply: browser_snapshot. Run CAPTCHA DETECT -- many sites trigger CAPTCHAs right after the Apply click. If found, solve before continuing.
 5. Login wall?
-   5a. FIRST: check the URL. If you landed on {', '.join(blocked_sso)}, or any SSO/OAuth page -> STOP. Output RESULT:FAILED:sso_required. Do NOT try to sign in to Google/Microsoft/SSO.
-   5b. Check for popups. Run browser_tabs action "list". If a new tab/window appeared (login popup), switch to it with browser_tabs action "select". Check the URL there too -- if it's SSO -> RESULT:FAILED:sso_required.
-   5c. Regular login form (employer's own site)? Try sign in: {personal['email']} / {personal.get('password', '')}
-   5d. After clicking Login/Sign-in: run CAPTCHA DETECT. Login pages frequently have invisible CAPTCHAs that silently block form submissions. If found, solve it then retry login.
-   5e. Sign in failed? Try sign up with same email and password.
-   5f. Need email verification? Use search_emails + read_email to get the code.
-   5g. After login, run browser_tabs action "list" again. Switch back to the application tab if needed.
-   5h. All failed? Output RESULT:FAILED:login_issue. Do not loop.
+   5a. FIRST: check the URL. If you landed on {', '.join(blocked_sso)}, or any SSO/OAuth page (other than linkedin.com) -> STOP. Output RESULT:FAILED:sso_required. Do NOT try to sign in to Google/Microsoft/SSO.
+   5b. Check for popups. Run browser_tabs action "list". If a new tab/window appeared (login popup), switch to it with browser_tabs action "select". Check the URL there too -- if it's SSO (other than linkedin.com) -> RESULT:FAILED:sso_required.
+   5c. Landed on linkedin.com ("Sign in with LinkedIn" / "Apply with LinkedIn")? {linkedin_login_instruction}
+   5d. Regular login form (employer's own site)? Try sign in: {personal['email']} / {personal.get('password', '')}
+   5e. After clicking Login/Sign-in: run CAPTCHA DETECT. Login pages frequently have invisible CAPTCHAs that silently block form submissions. If found, solve it then retry login.
+   5f. Sign in failed? Try sign up with same email and password.
+   5g. Need email verification? Use search_emails + read_email to get the code.
+   5h. After login, run browser_tabs action "list" again. Switch back to the application tab if needed.
+   5i. All failed? Output RESULT:FAILED:login_issue. Do not loop.
 6. Upload resume. ALWAYS upload fresh -- delete any existing resume first, then browser_file_upload with the PDF path above. This is the tailored resume for THIS job. Non-negotiable.
 7. Upload cover letter if there's a field for it. Text field -> paste the cover letter text. File upload -> use the cover letter PDF path.
 8. Check ALL pre-filled fields. ATS systems parse your resume and auto-fill -- it's often WRONG.
@@ -595,8 +619,7 @@ Submit before this is resolved.
    - Compare every other field to the APPLICANT PROFILE. Fix mismatches. Fill empty fields.
 9. Answer screening questions using the rules above.
 10. {submit_instruction}
-11. After submit: browser_snapshot. Run CAPTCHA DETECT -- submit buttons often trigger invisible CAPTCHAs. If found, solve it (the form will auto-submit once the token clears, or you may need to click Submit again). Then check for new tabs (browser_tabs action: "list"). Switch to newest, close old. Snapshot to confirm submission. Look for "thank you" or "application received".
-12. Output your result.
+11. Output your result.
 
 == RESULT CODES (output EXACTLY one) ==
 RESULT:READY_FOR_REVIEW -- form fully filled and verified, did NOT click Submit (the standard successful outcome)

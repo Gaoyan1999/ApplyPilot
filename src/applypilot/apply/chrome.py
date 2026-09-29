@@ -176,6 +176,12 @@ def launch_chrome(worker_id: int, port: int | None = None,
 
     chrome_exe = config.get_chrome_path()
 
+    # Match the OS window size to the MCP's --viewport-size (see launcher.py's
+    # _make_mcp_config). A smaller window than the viewport it's asked to
+    # render forces Chrome to scale the page to fit, which is what made
+    # everything look oversized.
+    viewport_w, viewport_h = config.DEFAULTS["viewport"].split("x")
+
     cmd = [
         chrome_exe,
         f"--remote-debugging-port={port}",
@@ -183,7 +189,7 @@ def launch_chrome(worker_id: int, port: int | None = None,
         "--profile-directory=Default",
         "--no-first-run",
         "--no-default-browser-check",
-        "--window-size=1024,768",
+        f"--window-size={viewport_w},{viewport_h}",
         "--disable-session-crashed-bubble",
         "--disable-features=InfiniteSessionRestore,PasswordManagerOnboarding",
         "--hide-crash-restore-bubble",
