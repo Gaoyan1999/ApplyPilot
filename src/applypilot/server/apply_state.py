@@ -31,11 +31,12 @@ doing" poll.
 
 import logging
 import threading
+import uuid
 from datetime import datetime, timezone
 
 from applypilot import config
 from applypilot.apply import chrome, dashboard, launcher
-from applypilot.database import get_connection
+from applypilot.database import create_task, get_connection, update_task
 
 log = logging.getLogger(__name__)
 
@@ -58,6 +59,9 @@ _slots: dict[int, dict] = {
         # check alone would miss this case and wrongly free the slot while its
         # Chrome (and browser profile dir) is still alive on it.
         "was_cancelled": False,
+        # id of this run's row in the `tasks` table (database.py) -- internal
+        # bookkeeping only, not part of the public status payload.
+        "task_id": None,
     }
     for i in range(_NUM_SLOTS)
 }
@@ -68,6 +72,7 @@ def _slot_status(slot_id: int, slot: dict) -> dict:
     public status payload."""
     status = dict(slot)
     status.pop("was_cancelled", None)
+    status.pop("task_id", None)
     status["slot_id"] = slot_id
     ws = dashboard.get_state(slot_id)
     status["status"] = ws.status if ws else None
@@ -136,18 +141,58 @@ def start_apply(url: str, model: str = "haiku") -> int | None:
         )
         if free_id is None:
             return None
+        task_id = uuid.uuid4().hex
+        started_at = datetime.now(timezone.utc).isoformat()
         _slots[free_id].update(
             running=True,
             url=url,
-            started_at=datetime.now(timezone.utc).isoformat(),
+            started_at=started_at,
             finished_at=None,
             error=None,
             was_cancelled=False,
+            task_id=task_id,
         )
+
+    create_task(
+        get_connection(),
+        id=task_id,
+        type="auto_apply",
+        status="running",
+        started_at=started_at,
+        job_url=url,
+        payload={"slot_id": free_id},
+    )
 
     thread = threading.Thread(target=_run, args=(free_id, url, model), daemon=True)
     thread.start()
     return free_id
+
+
+def get_live_payload(slot_id: int) -> dict | None:
+    """Live per-action detail for a still-`running` auto_apply task row --
+    merged onto it at read time by GET /api/tasks (app.py) rather than
+    written continuously to the DB during the run (dashboard.WorkerState
+    already tracks this in-memory, same as the per-job status endpoints
+    JobPreviewModal polls). Returns None if this slot isn't actually
+    occupied by a live run (e.g. it finished/was freed since the caller's
+    task row was read)."""
+    with _lock:
+        occupied = _slots.get(slot_id, {}).get("running", False)
+    if not occupied:
+        return None
+    ws = dashboard.get_state(slot_id)
+    if ws is None:
+        return None
+    return {
+        "slot_id": slot_id,
+        "status": ws.status,
+        "last_action": ws.last_action,
+        "actions": ws.actions,
+        "transcript": list(ws.transcript),
+        "job_title": ws.job_title,
+        "job_company": ws.company,
+        "screenshot": ws.screenshot,
+    }
 
 
 def _describe_no_op(url: str) -> str:
@@ -177,6 +222,8 @@ def _describe_no_op(url: str) -> str:
 def _run(slot_id: int, url: str, model: str) -> None:
     dashboard.init_worker(slot_id)
     pending_review = False
+    apply_status = None
+    was_cancelled = False
     try:
         applied, failed = launcher.worker_loop(
             worker_id=slot_id,
@@ -216,6 +263,43 @@ def _run(slot_id: int, url: str, model: str) -> None:
             _slots[slot_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
             _slots[slot_id]["pending_review"] = pending_review
             _slots[slot_id]["was_cancelled"] = False
+            task_id = _slots[slot_id]["task_id"]
+            error = _slots[slot_id]["error"]
+            finished_at = _slots[slot_id]["finished_at"]
+
+        if task_id:
+            # Mirrors TasksPage.tsx's mapAutoApplyStatus terminal-status
+            # logic, but driven by apply_status (the jobs-table outcome --
+            # this module's own docstring names it the source of truth)
+            # rather than dashboard.WorkerState.
+            if error:
+                status = "error"
+            elif apply_status == "blocked":
+                status = "blocked"
+            elif apply_status == "ready_for_review":
+                status = "success"
+            elif was_cancelled:
+                status = "terminated"
+            else:
+                status = "error"
+
+            ws = dashboard.get_state(slot_id)
+            update_task(
+                get_connection(),
+                task_id,
+                status=status,
+                finished_at=finished_at,
+                error=error,
+                payload={
+                    "slot_id": slot_id,
+                    "transcript": list(ws.transcript) if ws else [],
+                    "actions": ws.actions if ws else 0,
+                    "last_action": ws.last_action if ws else None,
+                    "job_title": ws.job_title if ws else None,
+                    "job_company": ws.company if ws else None,
+                    "screenshot": ws.screenshot if ws else None,
+                },
+            )
 
 
 def cancel(url: str) -> bool:

@@ -5,6 +5,7 @@ pipeline stage are created up front so any stage can run independently
 without migration ordering issues.
 """
 
+import json
 import sqlite3
 import threading
 from datetime import date, datetime, timedelta, timezone
@@ -142,6 +143,25 @@ def init_db(db_path: Path | str | None = None) -> sqlite3.Connection:
             starred               INTEGER DEFAULT 0
         )
     """)
+    conn.commit()
+
+    # Background-task history (search runs, status checks, auto-applies) --
+    # see create_task()/update_task()/list_tasks() below. A small fixed
+    # column set (unlike jobs' incrementally-grown registry), so no
+    # ensure_columns()-style forward migration needed for it.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS tasks (
+            id          TEXT PRIMARY KEY,
+            type        TEXT NOT NULL,
+            status      TEXT NOT NULL,
+            started_at  TEXT NOT NULL,
+            finished_at TEXT,
+            job_url     TEXT,
+            error       TEXT,
+            payload     TEXT NOT NULL DEFAULT '{}'
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_started_at ON tasks (started_at)")
     conn.commit()
 
     # Run migrations for any columns added after initial schema
@@ -606,3 +626,115 @@ def search_jobs(
         jobs = []
 
     return jobs, total
+
+
+# --- Background task history (search runs, status checks, auto-applies) ---
+#
+# Backs the web dashboard's Tasks page. Each of search_state.py,
+# status_check_state.py, and apply_state.py keeps its own fast in-memory
+# state for driving its own live-polling endpoint (unchanged by this), and
+# additionally writes through to this table at start/progress/finish so a
+# run survives a server restart and isn't lost the instant it finishes.
+#
+# `payload` is a free-form JSON blob rather than dedicated columns: the
+# three task types have unrelated shapes (discover/enrich/score counts +
+# log vs. checked/total + log vs. transcript/actions) and nothing needs
+# SQL-level filtering/sorting *inside* that data -- the frontend already
+# knows how to render each type from its own typed shape.
+
+
+def create_task(
+    conn: sqlite3.Connection,
+    id: str,
+    type: str,
+    status: str,
+    started_at: str,
+    job_url: str | None = None,
+    error: str | None = None,
+    payload: dict | None = None,
+) -> None:
+    """Insert a new task row. Called once when a search/status-check/
+    auto-apply run starts."""
+    conn.execute(
+        "INSERT INTO tasks (id, type, status, started_at, job_url, error, payload) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (id, type, status, started_at, job_url, error, json.dumps(payload or {})),
+    )
+    conn.commit()
+
+
+def update_task(
+    conn: sqlite3.Connection,
+    id: str,
+    status: str | None = None,
+    finished_at: str | None = None,
+    error: str | None = None,
+    payload: dict | None = None,
+) -> None:
+    """Partially update a task row -- only the fields explicitly passed are
+    written. Called on progress ticks (payload only) and on finish
+    (status/finished_at/error/payload together)."""
+    fields: list[str] = []
+    params: list = []
+    if status is not None:
+        fields.append("status = ?")
+        params.append(status)
+    if finished_at is not None:
+        fields.append("finished_at = ?")
+        params.append(finished_at)
+    if error is not None:
+        fields.append("error = ?")
+        params.append(error)
+    if payload is not None:
+        fields.append("payload = ?")
+        params.append(json.dumps(payload))
+    if not fields:
+        return
+    params.append(id)
+    conn.execute(f"UPDATE tasks SET {', '.join(fields)} WHERE id = ?", params)
+    conn.commit()
+
+
+def list_tasks(conn: sqlite3.Connection | None = None, limit: int = 200) -> list[dict]:
+    """Newest-first task history for the Tasks page. `payload` is decoded
+    back into a dict."""
+    if conn is None:
+        conn = get_connection()
+
+    rows = conn.execute(
+        "SELECT id, type, status, started_at, finished_at, job_url, error, payload "
+        "FROM tasks ORDER BY started_at DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+
+    tasks = []
+    for row in rows:
+        task = dict(row)
+        task["payload"] = json.loads(task["payload"]) if task["payload"] else {}
+        tasks.append(task)
+    return tasks
+
+
+def delete_task(conn: sqlite3.Connection, id: str) -> bool:
+    """Delete one task row. Returns whether a row was actually removed."""
+    cursor = conn.execute("DELETE FROM tasks WHERE id = ?", (id,))
+    conn.commit()
+    return cursor.rowcount > 0
+
+
+def reconcile_orphaned_tasks(conn: sqlite3.Connection | None = None) -> int:
+    """Call once at server startup, right after init_db(). Any task row
+    still 'running' at this point belongs to a Python thread that's gone
+    (the process that owned it just exited/crashed) -- there's no way to
+    resume it, so mark it failed instead of leaving it stuck showing
+    'running' forever. Returns the number of rows reconciled."""
+    if conn is None:
+        conn = get_connection()
+
+    now = datetime.now(timezone.utc).isoformat()
+    cursor = conn.execute(
+        "UPDATE tasks SET status = 'error', error = ?, finished_at = ? WHERE status = 'running'",
+        ("Interrupted — server restarted mid-run", now),
+    )
+    conn.commit()
+    return cursor.rowcount

@@ -34,7 +34,15 @@ from applypilot.config import (
     save_prompts,
     save_search_config,
 )
-from applypilot.database import get_connection, get_stats, init_db, search_jobs
+from applypilot.database import (
+    delete_task,
+    get_connection,
+    get_stats,
+    init_db,
+    list_tasks,
+    reconcile_orphaned_tasks,
+    search_jobs,
+)
 from applypilot.search_config import SearchYamlConfig
 from applypilot.server import apply_state, search_state, status_check_state
 from applypilot.server.stages import STAGE_ORDER, USER_ACTIONS, compute_stage
@@ -65,6 +73,11 @@ app = FastAPI(title="ApplyPilot Dashboard")
 # against one created before a column was added. Run the migration here too
 # so /api/jobs and friends never hit "no such column".
 init_db()
+
+# Any task row still 'running' at this point belongs to a Python thread from
+# a previous process that's gone -- there's no way to resume it, so mark it
+# failed instead of leaving it stuck showing "running" forever.
+reconcile_orphaned_tasks()
 
 # Curated job fields returned to the frontend — excludes internal/unused
 # columns (strategy, agent_id, last_attempted_at, apply_duration_ms,
@@ -363,8 +376,9 @@ def get_job_auto_submit_status(url: str) -> dict:
 
 @app.get("/api/auto-submit/status")
 def get_all_auto_submit_statuses() -> list[dict]:
-    """All slots currently running or awaiting review -- backs the Tasks
-    dashboard's list of in-flight auto-applies."""
+    """All slots currently running or awaiting review -- backs
+    JobPreviewModal's per-job polling. See GET /api/tasks for the Tasks
+    dashboard's persisted history view."""
     return apply_state.get_all_statuses()
 
 
@@ -378,6 +392,40 @@ def dismiss_job_auto_submit(url: str) -> dict:
     """Close the Chrome window left open for a ready_for_review/blocked job
     and free its slot for a future auto-submit."""
     return {"dismissed": apply_state.dismiss(url)}
+
+
+@app.get("/api/tasks")
+def get_tasks(limit: int = Query(200, ge=1, le=1000)) -> list[dict]:
+    """Persisted history of search runs, status checks, and auto-applies,
+    newest first -- backs the Tasks dashboard. Unlike the individual
+    /api/search/status, /api/status-check/status, and /api/auto-submit/status
+    endpoints (each only ever knows about "the current/last run"), this
+    reads from the `tasks` table so finished and past runs stick around
+    instead of disappearing the moment a slot frees up or a new run starts.
+
+    A still-`running` auto_apply row gets its live transcript/actions
+    merged in from apply_state's in-memory WorkerState (not written to the
+    DB continuously -- see apply_state.get_live_payload) so the row keeps
+    updating in real time during the run, same as before."""
+    tasks = list_tasks(get_connection(), limit=limit)
+    for task in tasks:
+        if task["type"] == "auto_apply" and task["status"] == "running":
+            slot_id = task["payload"].get("slot_id")
+            live = apply_state.get_live_payload(slot_id) if slot_id is not None else None
+            if live:
+                task["payload"] = {**task["payload"], **live}
+    return tasks
+
+
+@app.delete("/api/tasks/{task_id}")
+def remove_task(task_id: str) -> dict:
+    conn = get_connection()
+    row = conn.execute("SELECT status FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if row["status"] == "running":
+        raise HTTPException(status_code=400, detail="Can't delete a task that's still running")
+    return {"deleted": delete_task(conn, task_id)}
 
 
 _MAX_CV_BYTES = 10 * 1024 * 1024  # 10MB
