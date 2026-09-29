@@ -25,7 +25,7 @@ from rich.live import Live
 
 from applypilot import config
 from applypilot.database import get_connection
-from applypilot.apply import chrome, dashboard, prompt as prompt_mod
+from applypilot.apply import chrome, dashboard, prompt as prompt_mod, screenshot
 from applypilot.apply.chrome import (
     launch_chrome, cleanup_worker, kill_all_chrome,
     reset_worker_dir, cleanup_on_exit, _kill_process_tree,
@@ -737,6 +737,7 @@ def worker_loop(worker_id: int = 0, limit: int = 1,
         try:
             add_event(f"[W{worker_id}] Launching Chrome...")
             chrome_proc = launch_chrome(worker_id, port=port, headless=headless)
+            screenshot.start(worker_id, port)
 
             if apply_engine == "jev":
                 try:
@@ -795,6 +796,7 @@ def worker_loop(worker_id: int = 0, limit: int = 1,
             failed += 1
             update_state(worker_id, jobs_failed=failed)
         finally:
+            screenshot.stop(worker_id)
             if chrome_proc:
                 needs_review = result == "ready_for_review" or (result or "").startswith("blocked:")
                 if _pop_keep_chrome_on_cancel(worker_id):

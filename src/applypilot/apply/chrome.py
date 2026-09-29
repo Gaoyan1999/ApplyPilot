@@ -61,38 +61,6 @@ def _kill_process_tree(pid: int) -> None:
         logger.debug("Failed to kill process tree for PID %d", pid, exc_info=True)
 
 
-def _kill_on_port(port: int) -> None:
-    """Kill any process listening on a specific port (zombie cleanup).
-
-    Uses netstat on Windows, lsof on macOS/Linux.
-    """
-    try:
-        if platform.system() == "Windows":
-            result = subprocess.run(
-                ["netstat", "-ano", "-p", "TCP"],
-                capture_output=True, text=True, timeout=10,
-            )
-            for line in result.stdout.splitlines():
-                if f":{port}" in line and "LISTENING" in line:
-                    pid = line.strip().split()[-1]
-                    if pid.isdigit():
-                        _kill_process_tree(int(pid))
-        else:
-            # macOS / Linux
-            result = subprocess.run(
-                ["lsof", "-ti", f":{port}"],
-                capture_output=True, text=True, timeout=10,
-            )
-            for pid_str in result.stdout.strip().splitlines():
-                pid_str = pid_str.strip()
-                if pid_str.isdigit():
-                    _kill_process_tree(int(pid_str))
-    except FileNotFoundError:
-        logger.debug("Port-kill tool not found (netstat/lsof) for port %d", port)
-    except Exception:
-        logger.debug("Failed to kill process on port %d", port, exc_info=True)
-
-
 # ---------------------------------------------------------------------------
 # Worker profile management
 # ---------------------------------------------------------------------------
@@ -203,9 +171,6 @@ def launch_chrome(worker_id: int, port: int | None = None,
 
     profile_dir = setup_worker_profile(worker_id)
 
-    # Kill any zombie Chrome from a previous run on this port
-    _kill_on_port(port)
-
     # Patch preferences to suppress restore nag
     _suppress_restore_nag(profile_dir)
 
@@ -281,7 +246,7 @@ def close_worker_chrome(worker_id: int) -> None:
 
 
 def kill_all_chrome() -> None:
-    """Kill all Chrome instances and any port zombies.
+    """Kill all Chrome instances ApplyPilot itself launched.
 
     Called during graceful shutdown to ensure no orphan Chrome processes.
     """
@@ -289,13 +254,9 @@ def kill_all_chrome() -> None:
         procs = dict(_chrome_procs)
         _chrome_procs.clear()
 
-    for wid, proc in procs.items():
+    for proc in procs.values():
         if proc.poll() is None:
             _kill_process_tree(proc.pid)
-        _kill_on_port(BASE_CDP_PORT + wid)
-
-    # Sweep base port in case of zombies
-    _kill_on_port(BASE_CDP_PORT)
 
 
 def reset_worker_dir(worker_id: int) -> Path:
@@ -318,7 +279,7 @@ def reset_worker_dir(worker_id: int) -> Path:
 
 
 def cleanup_on_exit() -> None:
-    """Atexit handler: kill all Chrome processes and sweep CDP ports.
+    """Atexit handler: kill all Chrome processes ApplyPilot launched.
 
     Register this with atexit.register() at application startup.
     """
@@ -326,10 +287,6 @@ def cleanup_on_exit() -> None:
         procs = dict(_chrome_procs)
         _chrome_procs.clear()
 
-    for wid, proc in procs.items():
+    for proc in procs.values():
         if proc.poll() is None:
             _kill_process_tree(proc.pid)
-        _kill_on_port(BASE_CDP_PORT + wid)
-
-    # Sweep base port for any orphan
-    _kill_on_port(BASE_CDP_PORT)

@@ -206,6 +206,10 @@ export interface AutoSubmitStatus {
   slot_id?: number
   job_title?: string | null
   job_company?: string | null
+  // Latest JPEG screenshot of the worker's Chrome, base64-encoded (no data:
+  // prefix) -- null until the backend's screenshot poller has captured its
+  // first frame, or once no worker slot backs this status at all.
+  screenshot?: string | null
 }
 
 export interface StatusCheckLogEntry {
