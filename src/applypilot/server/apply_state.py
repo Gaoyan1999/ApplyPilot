@@ -76,6 +76,7 @@ def _slot_status(slot_id: int, slot: dict) -> dict:
     status["transcript"] = list(ws.transcript) if ws else []
     status["job_title"] = ws.job_title if ws else None
     status["job_company"] = ws.company if ws else None
+    status["screenshot"] = ws.screenshot if ws else None
     return status
 
 
@@ -100,6 +101,7 @@ def get_status(url: str | None = None) -> dict:
             "last_action": None,
             "actions": 0,
             "transcript": [],
+            "screenshot": None,
         }
     slot_id, slot = match
     return _slot_status(slot_id, slot)

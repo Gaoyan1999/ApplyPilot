@@ -41,6 +41,11 @@ class WorkerState:
     # show something like the CLI's --verbose terminal output instead of
     # just the terse last_action string. Reset per-job via init_worker().
     transcript: list[str] = field(default_factory=list)
+    # Latest JPEG screenshot of the worker's Chrome, base64-encoded -- kept
+    # fresh by apply/screenshot.py's poller while the job is running, and
+    # left as the last frame once it stops (e.g. Chrome left open for
+    # review). None until the poller manages its first successful capture.
+    screenshot: str | None = None
 
 
 # Module-level state (thread-safe via _lock)

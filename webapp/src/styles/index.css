@@ -2426,6 +2426,21 @@ body.col-resizing {
   overflow-y: auto;
 }
 
+.task-preview {
+  margin: 0 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg);
+  max-width: 480px;
+}
+
+.task-preview-image {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 .task-type-badge {
   display: inline-block;
   flex-shrink: 0;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   cancelAutoSubmit,
   cancelStatusCheck,
@@ -30,6 +30,9 @@ export interface Task {
   // the dismissed-tracking map (see autoApplyDismissed below).
   jobUrl?: string
   slotId?: number
+  // auto_apply only -- base64 JPEG (no data: prefix) of the worker Chrome's
+  // last-captured frame, for the live preview in the expanded row.
+  screenshot?: string | null
 }
 
 const TASK_TYPE_LABEL: Record<TaskType, string> = {
@@ -166,6 +169,7 @@ function mapAutoApplyStatus(s: AutoSubmitStatus): Task {
     log,
     jobUrl: s.url ?? undefined,
     slotId: s.slot_id,
+    screenshot: s.screenshot,
   }
 }
 
@@ -198,6 +202,16 @@ function TaskRow({ task, onStop, onDelete }: TaskRowProps) {
   // The backend has no cancel hook for a search run (only status-check and
   // auto-apply do) -- disable rather than pretend it works.
   const stopUnsupported = task.type === 'search'
+  const logRef = useRef<HTMLUListElement>(null)
+
+  // Keep the log pinned to its latest line as new entries stream in --
+  // without this, a running task's log stays scrolled wherever the user
+  // last left it while new lines keep appending below the fold.
+  useEffect(() => {
+    if (expanded && logRef.current) {
+      logRef.current.scrollTop = logRef.current.scrollHeight
+    }
+  }, [task.log, expanded])
 
   function toggle() {
     setExpanded((v) => !v)
@@ -280,10 +294,20 @@ function TaskRow({ task, onStop, onDelete }: TaskRowProps) {
             )}
           </dl>
 
+          {task.type === 'auto_apply' && task.screenshot && (
+            <div className="task-preview">
+              <img
+                className="task-preview-image"
+                src={`data:image/jpeg;base64,${task.screenshot}`}
+                alt="Live preview of the auto-apply browser"
+              />
+            </div>
+          )}
+
           {task.error && <p className="search-result search-error">{task.error}</p>}
 
           {task.log.length > 0 && (
-            <ul className="search-discover-log task-log">
+            <ul className="search-discover-log task-log" ref={logRef}>
               {task.log.map((line, i) => (
                 <li className="search-discover-log-row" key={i}>
                   <span className="search-discover-log-query">{line}</span>
