@@ -232,6 +232,25 @@ export interface StatusCheckStatus {
   error: string | null
 }
 
+// One row from the `tasks` table (database.py) -- GET /api/tasks. `payload`
+// is a free-form blob whose shape depends on `type`: a subset of
+// SearchStatus's fields for 'search', StatusCheckStatus's for
+// 'status_check', or AutoSubmitStatus's for 'auto_apply' (see
+// TasksPage.tsx's per-type payload readers).
+export type TaskType = 'search' | 'status_check' | 'auto_apply'
+export type TaskRecordStatus = 'running' | 'success' | 'error' | 'terminated' | 'blocked'
+
+export interface TaskRecord {
+  id: string
+  type: TaskType
+  status: TaskRecordStatus
+  started_at: string
+  finished_at: string | null
+  job_url: string | null
+  error: string | null
+  payload: Record<string, unknown>
+}
+
 export interface Cv {
   name: string
   filename: string

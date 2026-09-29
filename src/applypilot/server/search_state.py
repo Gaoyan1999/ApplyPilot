@@ -18,7 +18,10 @@ slower scraping, not corruption.
 
 import logging
 import threading
+import uuid
 from datetime import datetime, timezone
+
+from applypilot import database
 
 log = logging.getLogger(__name__)
 
@@ -64,14 +67,37 @@ _state: dict = {
     # without touching anything already in the DB. Cleared once
     # discarded/confirmed.
     "new_urls": [],
+    # id of this run's row in the `tasks` table (database.py) -- internal
+    # bookkeeping only, not part of the public status payload. None until
+    # start_search() assigns one.
+    "task_id": None,
 }
 
 
-def get_status() -> dict:
+def _snapshot() -> dict:
+    """The public status shape -- used both for get_status() and as the
+    `payload` written to the tasks table on every progress tick, so there's
+    one definition of "what this run's state looks like", not two."""
     with _lock:
         state = dict(_state)
     state.pop("new_urls", None)
+    state.pop("task_id", None)
     return state
+
+
+def get_status() -> dict:
+    return _snapshot()
+
+
+def _sync_to_db() -> None:
+    """Mirror the current snapshot onto this run's tasks-table row so the
+    Tasks page's history survives a finish or a server restart. A no-op if
+    no run has ever started (task_id still None)."""
+    with _lock:
+        task_id = _state.get("task_id")
+    if not task_id:
+        return
+    database.update_task(database.get_connection(), task_id, payload=_snapshot())
 
 
 def start_search() -> bool:
@@ -80,10 +106,12 @@ def start_search() -> bool:
     with _lock:
         if _state["running"]:
             return False
+        task_id = uuid.uuid4().hex
+        started_at = datetime.now(timezone.utc).isoformat()
         _state.update(
             running=True,
             stage="discover",
-            started_at=datetime.now(timezone.utc).isoformat(),
+            started_at=started_at,
             finished_at=None,
             queries=0,
             queries_total=0,
@@ -102,7 +130,17 @@ def start_search() -> bool:
             error=None,
             error_stage=None,
             new_urls=[],
+            task_id=task_id,
         )
+
+    database.create_task(
+        database.get_connection(),
+        id=task_id,
+        type="search",
+        status="running",
+        started_at=started_at,
+        payload=_snapshot(),
+    )
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
@@ -122,18 +160,21 @@ def _on_discover_progress(evt: dict) -> None:
         log_entry = evt.get("log_entry")
         if log_entry:
             _state["discover_log"] = (_state["discover_log"] + [log_entry])[-_MAX_LOG_LINES:]
+    _sync_to_db()
 
 
 def _on_enrich_progress(evt: dict) -> None:
     with _lock:
         _state["enriched"] = evt["done"]
         _state["enrich_total"] = evt["total"]
+    _sync_to_db()
 
 
 def _on_score_progress(evt: dict) -> None:
     with _lock:
         _state["scored"] = evt["done"]
         _state["score_total"] = evt["total"]
+    _sync_to_db()
 
 
 def _on_warning(message: str) -> None:
@@ -144,6 +185,7 @@ def _on_warning(message: str) -> None:
     to the next item."""
     with _lock:
         _state["warnings"] = (_state["warnings"] + [message])[-_MAX_WARNINGS:]
+    _sync_to_db()
 
 
 def _run() -> None:
@@ -187,6 +229,18 @@ def _run() -> None:
         with _lock:
             _state["running"] = False
             _state["finished_at"] = datetime.now(timezone.utc).isoformat()
+            task_id = _state.get("task_id")
+            finished_at = _state["finished_at"]
+            error = _state.get("error")
+        if task_id:
+            database.update_task(
+                database.get_connection(),
+                task_id,
+                status="error" if error else "success",
+                finished_at=finished_at,
+                error=error,
+                payload=_snapshot(),
+            )
 
 
 def _fail(stage: str | None, message: str) -> None:

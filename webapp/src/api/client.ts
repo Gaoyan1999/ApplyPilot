@@ -1,4 +1,4 @@
-import type { AutoSubmitStatus, Cv, Job, JobFilterParams, PromptsConfig, SearchConfig, SearchJobsParams, SearchJobsResponse, SearchStatus, Status, StatusCheckStatus, UserAction } from './types'
+import type { AutoSubmitStatus, Cv, Job, JobFilterParams, PromptsConfig, SearchConfig, SearchJobsParams, SearchJobsResponse, SearchStatus, Status, StatusCheckStatus, TaskRecord, UserAction } from './types'
 
 // Translates the app-wide FilterMode ('is' | 'is not') to the API's
 // 'is' | 'is_not' -- shared by every endpoint that takes job_type_mode/
@@ -193,6 +193,14 @@ export function cancelAutoSubmit(url: string): Promise<{ cancelled: boolean }> {
 
 export function dismissAutoSubmit(url: string): Promise<{ dismissed: boolean }> {
   return sendJson<{ dismissed: boolean }>(`/api/jobs/${encodeURIComponent(url)}/auto-submit/dismiss`, 'POST')
+}
+
+export function getAllTasks(): Promise<TaskRecord[]> {
+  return getJson<TaskRecord[]>('/api/tasks')
+}
+
+export function deleteTask(id: string): Promise<{ deleted: boolean }> {
+  return sendJson<{ deleted: boolean }>(`/api/tasks/${encodeURIComponent(id)}`, 'DELETE')
 }
 
 export function listCvs(): Promise<Cv[]> {

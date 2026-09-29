@@ -1,20 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  cancelAutoSubmit,
-  cancelStatusCheck,
-  dismissAutoSubmit,
-  getAllAutoSubmitStatuses,
-  getSearchStatus,
-  getStatusCheckStatus,
-} from '../api/client'
-import type { AutoSubmitStatus, SearchStatus, StatusCheckStatus } from '../api/types'
+import { cancelAutoSubmit, cancelStatusCheck, deleteTask, dismissAutoSubmit, getAllTasks } from '../api/client'
+import type { DiscoverLogEntry, StatusCheckLogEntry, TaskRecord, TaskRecordStatus, TaskType } from '../api/types'
 import { formatDate, formatDuration } from '../lib/format'
 import { ProgressBar } from '../components/ProgressBar'
 
 const POLL_INTERVAL_MS = 2000
 
-export type TaskType = 'search' | 'auto_apply' | 'status_check'
-export type TaskStatus = 'running' | 'success' | 'error' | 'idle' | 'terminated' | 'blocked'
+export type TaskStatus = TaskRecordStatus
 
 export interface Task {
   id: string
@@ -26,10 +18,8 @@ export interface Task {
   progress?: { current: number; total?: number; stageLabel?: string }
   error?: string | null
   log: string[]
-  // auto_apply only -- needed to call cancel/dismiss by job URL, and to key
-  // the dismissed-tracking map (see autoApplyDismissed below).
+  // auto_apply only -- needed to call cancel by job URL.
   jobUrl?: string
-  slotId?: number
   // auto_apply only -- base64 JPEG (no data: prefix) of the worker Chrome's
   // last-captured frame, for the live preview in the expanded row.
   screenshot?: string | null
@@ -45,15 +35,13 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   running: 'Running',
   success: 'Success',
   error: 'Failed',
-  idle: 'Queued',
   terminated: 'Terminated',
   blocked: 'Needs Input',
 }
 
-// A running/queued task can be stopped (-> terminated); anything else
-// (terminated, succeeded, blocked, or failed) is finished and can only be
-// deleted.
-const STOPPABLE: TaskStatus[] = ['running', 'idle']
+// A running task can be stopped (-> terminated); anything else (terminated,
+// succeeded, blocked, or failed) is finished and can only be deleted.
+const STOPPABLE: TaskStatus[] = ['running']
 
 /** Polls `fetcher` immediately, then every `intervalMs` -- keeps the last
  * good value on a transient network error rather than clearing the row. */
@@ -83,93 +71,83 @@ function usePolling<T>(fetcher: () => Promise<T>, intervalMs: number): T | null 
   return data
 }
 
-function mapSearchStatus(s: SearchStatus | null): Task | null {
-  if (!s || !s.started_at) return null
-
-  const status: TaskStatus = s.running ? 'running' : s.error ? 'error' : 'success'
-
-  let progress: Task['progress']
-  if (s.stage === 'discover') progress = { current: s.queries, total: s.queries_total || undefined, stageLabel: 'discover' }
-  else if (s.stage === 'enrich') progress = { current: s.enriched, total: s.enrich_total || undefined, stageLabel: 'enrich' }
-  else if (s.stage === 'score') progress = { current: s.scored, total: s.score_total || undefined, stageLabel: 'score' }
-
-  const log: string[] = []
-  if (s.queries_total > 0) {
-    log.push(`Discover: ${s.new} new, ${s.existing} existing across ${s.queries}/${s.queries_total} queries (${s.discover_errors} errors)`)
-  }
-  for (const entry of s.discover_log) {
-    log.push(
-      `${entry.query} @ ${entry.location}: ${entry.new} new, ${entry.existing} existing, ${entry.filtered} filtered` +
-        (entry.errors ? `, ${entry.errors} errors` : ''),
-    )
-  }
-  if (s.enrich_total > 0) log.push(`Enrich: ${s.enriched}/${s.enrich_total} done`)
-  if (s.score_total > 0) log.push(`Score: ${s.scored}/${s.score_total} done`)
-  for (const w of s.warnings) log.push(`Warning: ${w}`)
-
-  return {
-    id: 'search-current',
-    type: 'search',
-    label: 'Search run — discover → enrich → score',
-    status,
-    startedAt: s.started_at,
-    finishedAt: s.finished_at,
-    progress,
-    error: s.error ? `${s.error}${s.error_stage ? ` (at ${s.error_stage} stage)` : ''}` : null,
-    log,
-  }
+function taskLabel(t: TaskRecord): string {
+  if (t.type === 'search') return 'Search run — discover → enrich → score'
+  if (t.type === 'status_check') return 'Status check — rechecking pending postings'
+  const jobTitle = t.payload.job_title as string | null | undefined
+  const jobCompany = t.payload.job_company as string | null | undefined
+  return `Auto-apply — ${jobTitle || t.job_url || 'job'}${jobCompany ? ` @ ${jobCompany}` : ''}`
 }
 
-function mapStatusCheckStatus(s: StatusCheckStatus | null, wasStoppedByUser: boolean): Task | null {
-  if (!s || !s.started_at) return null
-
-  const status: TaskStatus = s.running ? 'running' : s.error ? 'error' : wasStoppedByUser ? 'terminated' : 'success'
-
-  const log = [
-    ...s.log.map((e) => `${e.result.toUpperCase()}: ${e.title ?? e.url}${e.company ? ` — ${e.company}` : ''}`),
-    ...s.warnings.map((w) => `Warning: ${w}`),
-  ]
-
-  return {
-    id: 'status-check-current',
-    type: 'status_check',
-    label: 'Status check — rechecking pending postings',
-    status,
-    startedAt: s.started_at,
-    finishedAt: s.finished_at,
-    progress: s.total > 0 ? { current: s.checked, total: s.total } : undefined,
-    error: s.error,
-    log,
+function taskProgress(t: TaskRecord): Task['progress'] {
+  const p = t.payload
+  if (t.type === 'search') {
+    const stage = p.stage as string | null | undefined
+    if (stage === 'discover') return { current: (p.queries as number) ?? 0, total: (p.queries_total as number) || undefined, stageLabel: 'discover' }
+    if (stage === 'enrich') return { current: (p.enriched as number) ?? 0, total: (p.enrich_total as number) || undefined, stageLabel: 'enrich' }
+    if (stage === 'score') return { current: (p.scored as number) ?? 0, total: (p.score_total as number) || undefined, stageLabel: 'score' }
+    return undefined
   }
+  if (t.type === 'status_check') {
+    const total = (p.total as number) ?? 0
+    return total > 0 ? { current: (p.checked as number) ?? 0, total } : undefined
+  }
+  // auto_apply -- only meaningful while running (live payload merged in by
+  // GET /api/tasks); a finished row's payload has no `actions` field.
+  if (t.status !== 'running') return undefined
+  return { current: (p.actions as number) ?? 0, stageLabel: (p.last_action as string | undefined) ?? undefined }
 }
 
-// Maps one occupied auto-submit slot to a Task. Only called for slots
-// getAllAutoSubmitStatuses() actually returned (running or pending_review),
-// so started_at/slot_id are always present.
-function mapAutoApplyStatus(s: AutoSubmitStatus): Task {
-  let status: TaskStatus
-  if (s.running) status = 'running'
-  else if (s.error) status = 'error'
-  else if (s.status === 'blocked') status = 'blocked'
-  else if (s.status === 'ready_for_review') status = 'success'
-  else if (s.pending_review) status = 'terminated' // cancelled mid-run -- Chrome left open, no specific terminal status
-  else status = 'error'
+function taskLog(t: TaskRecord): string[] {
+  const p = t.payload
+  if (t.type === 'search') {
+    const log: string[] = []
+    const queriesTotal = (p.queries_total as number) ?? 0
+    if (queriesTotal > 0) {
+      log.push(
+        `Discover: ${p.new ?? 0} new, ${p.existing ?? 0} existing across ${p.queries ?? 0}/${queriesTotal} queries (${p.discover_errors ?? 0} errors)`,
+      )
+    }
+    for (const entry of (p.discover_log as DiscoverLogEntry[] | undefined) ?? []) {
+      log.push(
+        `${entry.query} @ ${entry.location}: ${entry.new} new, ${entry.existing} existing, ${entry.filtered} filtered` +
+          (entry.errors ? `, ${entry.errors} errors` : ''),
+      )
+    }
+    const enrichTotal = (p.enrich_total as number) ?? 0
+    if (enrichTotal > 0) log.push(`Enrich: ${p.enriched ?? 0}/${enrichTotal} done`)
+    const scoreTotal = (p.score_total as number) ?? 0
+    if (scoreTotal > 0) log.push(`Score: ${p.scored ?? 0}/${scoreTotal} done`)
+    for (const w of (p.warnings as string[] | undefined) ?? []) log.push(`Warning: ${w}`)
+    return log
+  }
+  if (t.type === 'status_check') {
+    return [
+      ...((p.log as StatusCheckLogEntry[] | undefined) ?? []).map(
+        (e) => `${e.result.toUpperCase()}: ${e.title ?? e.url}${e.company ? ` — ${e.company}` : ''}`,
+      ),
+      ...((p.warnings as string[] | undefined) ?? []).map((w) => `Warning: ${w}`),
+    ]
+  }
+  // auto_apply
+  const transcript = (p.transcript as string[] | undefined) ?? []
+  const lastAction = p.last_action as string | undefined
+  return [...transcript, ...(lastAction ? [`Last: ${lastAction}`] : [])]
+}
 
-  const log = [...s.transcript, ...(s.last_action ? [`Last: ${s.last_action}`] : [])]
-
+function mapTask(t: TaskRecord): Task {
   return {
-    id: `auto-apply-${s.slot_id}`,
-    type: 'auto_apply',
-    label: `Auto-apply — ${s.job_title || s.url || 'job'}${s.job_company ? ` @ ${s.job_company}` : ''}`,
-    status,
-    startedAt: s.started_at!,
-    finishedAt: s.finished_at,
-    progress: s.running ? { current: s.actions, stageLabel: s.last_action ?? undefined } : undefined,
-    error: s.error ?? null,
-    log,
-    jobUrl: s.url ?? undefined,
-    slotId: s.slot_id,
-    screenshot: s.screenshot,
+    id: t.id,
+    type: t.type,
+    label: taskLabel(t),
+    status: t.status,
+    startedAt: t.started_at,
+    finishedAt: t.finished_at,
+    progress: taskProgress(t),
+    error: t.error,
+    log: taskLog(t),
+    jobUrl: t.job_url ?? undefined,
+    screenshot: t.type === 'auto_apply' ? (t.payload.screenshot as string | null | undefined) : undefined,
   }
 }
 
@@ -322,60 +300,8 @@ function TaskRow({ task, onStop, onDelete }: TaskRowProps) {
 }
 
 export function TasksPage() {
-  const searchStatus = usePolling(getSearchStatus, POLL_INTERVAL_MS)
-  const statusCheckStatus = usePolling(getStatusCheckStatus, POLL_INTERVAL_MS)
-  const autoApplyStatuses = usePolling(getAllAutoSubmitStatuses, POLL_INTERVAL_MS)
-
-  // Neither search_state.py nor status_check_state.py keeps a history of
-  // past runs -- there's only ever "the current/last run's status". So
-  // "delete" on one of those can't remove server state; it just hides that
-  // one run's row until a fresh run (a new started_at) replaces it.
-  const [dismissed, setDismissed] = useState<Record<string, string>>({})
-
-  // status_check_state.cancel() just stops the run early -- the resulting
-  // status looks identical to a normal finish (running: false, no error).
-  // Track that *we* asked for the stop so the row can say "Terminated"
-  // instead of "Success"; keyed by started_at so a later run isn't
-  // mislabeled once it reuses the same task id.
-  const [stoppedRunStartedAt, setStoppedRunStartedAt] = useState<string | null>(null)
-
-  // auto_apply slots vanish from getAllAutoSubmitStatuses() the instant
-  // they're no longer running/pending_review (server frees a plain-failed
-  // slot immediately, unlike search/status-check's lingering last-run
-  // snapshot) -- so cache each slot's last-seen Task locally, keyed by slot
-  // id, and keep showing it until the user explicitly deletes it. Dismissed
-  // tracking is keyed by (slotId, startedAt) so a slot reused by a later
-  // job isn't mislabeled as still-dismissed.
-  const [autoApplyCache, setAutoApplyCache] = useState<Record<number, Task>>({})
-  const [autoApplyDismissed, setAutoApplyDismissed] = useState<Record<number, string>>({})
-
-  useEffect(() => {
-    if (!autoApplyStatuses) return
-    setAutoApplyCache((prev) => {
-      const next = { ...prev }
-      for (const s of autoApplyStatuses) {
-        if (s.slot_id === undefined) continue
-        next[s.slot_id] = mapAutoApplyStatus(s)
-      }
-      return next
-    })
-  }, [autoApplyStatuses])
-
-  const searchTask = useMemo(() => mapSearchStatus(searchStatus), [searchStatus])
-  const statusCheckTask = useMemo(
-    () => mapStatusCheckStatus(statusCheckStatus, statusCheckStatus?.started_at === stoppedRunStartedAt),
-    [statusCheckStatus, stoppedRunStartedAt],
-  )
-
-  const tasks = useMemo(() => {
-    const realTasks = [searchTask, statusCheckTask].filter(
-      (t): t is Task => t !== null && dismissed[t.id] !== t.startedAt,
-    )
-    const autoApplyTasks = Object.values(autoApplyCache).filter(
-      (t) => t.slotId === undefined || autoApplyDismissed[t.slotId] !== t.startedAt,
-    )
-    return [...realTasks, ...autoApplyTasks]
-  }, [searchTask, statusCheckTask, dismissed, autoApplyCache, autoApplyDismissed])
+  const records = usePolling(getAllTasks, POLL_INTERVAL_MS)
+  const tasks = useMemo(() => (records ?? []).map(mapTask), [records])
 
   function handleStop(task: Task) {
     if (task.type === 'auto_apply') {
@@ -383,7 +309,6 @@ export function TasksPage() {
       return
     }
     if (task.type === 'status_check') {
-      setStoppedRunStartedAt(task.startedAt)
       cancelStatusCheck().catch(() => {
         // best-effort -- the next poll reflects whatever actually happened
       })
@@ -392,17 +317,15 @@ export function TasksPage() {
   }
 
   function handleDelete(task: Task) {
-    if (task.type === 'auto_apply') {
-      if (task.slotId !== undefined) {
-        setAutoApplyDismissed((prev) => ({ ...prev, [task.slotId!]: task.startedAt }))
-      }
-      // Best-effort: only actually frees something server-side when the
-      // slot is still pending_review (ready_for_review/blocked/cancelled);
-      // a harmless no-op otherwise (the slot already freed itself).
-      if (task.jobUrl) dismissAutoSubmit(task.jobUrl).catch(() => {})
-    } else {
-      setDismissed((prev) => ({ ...prev, [task.id]: task.startedAt }))
+    // A finished auto-apply sitting in ready_for_review/blocked still has
+    // its Chrome window deliberately left open (apply_state.py) -- dismiss
+    // closes that and frees the slot. Harmless no-op if it wasn't pending
+    // review. Both calls are best-effort: the row disappears from the next
+    // poll once the backend confirms the delete.
+    if (task.type === 'auto_apply' && task.jobUrl) {
+      dismissAutoSubmit(task.jobUrl).catch(() => {})
     }
+    deleteTask(task.id).catch(() => {})
   }
 
   const sorted = useMemo(
@@ -410,7 +333,7 @@ export function TasksPage() {
     [tasks],
   )
 
-  const runningCount = tasks.filter((t) => t.status === 'running' || t.status === 'idle').length
+  const runningCount = tasks.filter((t) => t.status === 'running').length
   const errorCount = tasks.filter((t) => t.status === 'error').length
   const successCount = tasks.filter((t) => t.status === 'success').length
 
@@ -431,7 +354,7 @@ export function TasksPage() {
       <div className="stat-pills">
         <div className="stat-pill">
           <div className="value">{runningCount}</div>
-          <div className="label">Running / Queued</div>
+          <div className="label">Running</div>
         </div>
         <div className="stat-pill">
           <div className="value">{successCount}</div>
