@@ -26,12 +26,14 @@ the user, this module explicitly activates that tab via
 import logging
 import os
 import time
+from datetime import datetime
 from pathlib import Path
 
 from browser_harness.helpers import cdp
 
 from applypilot import config
 from applypilot.apply.captcha import detect as captcha_detect, solve as captcha_solve
+from applypilot.apply.dashboard import append_transcript, get_state, update_state
 from applypilot.apply.jev import Agent
 from applypilot.apply.jev.browser import StalePage
 from applypilot.apply.jev.model import set_applicant_context
@@ -108,7 +110,41 @@ def run_job_jev(job: dict, port: int, resume_pdf_path: Path, worker_id: int = 0,
             caller should fall back to run_job() (the Claude engine).
     """
     start = time.time()
+    last_event = start  # for per-step deltas, same convention as launcher.run_job()
     os.environ["BU_CDP_URL"] = f"http://127.0.0.1:{port}"
+
+    worker_log = config.LOG_DIR / f"worker-{worker_id}.log"
+    ts_header = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_header = (
+        f"\n{'=' * 60}\n"
+        f"[{ts_header}] {job['title']} @ {job.get('site', '')}\n"
+        f"URL: {job.get('application_url') or job['url']}\n"
+        f"Score: {job.get('fit_score', 'N/A')}/10\n"
+        f"Engine: jev (fast path -- TypeSafe API, one call per DOM decision)\n"
+        f"{'=' * 60}\n"
+    )
+    with open(worker_log, "a", encoding="utf-8") as lf:
+        lf.write(log_header)
+    append_transcript(worker_id, "Engine: jev (fast path -- TypeSafe API, one call per DOM decision)")
+
+    def _log_step(desc: str) -> None:
+        nonlocal last_event
+        now = time.time()
+        step_s = now - last_event
+        last_event = now
+        line = f"{desc} ({step_s:.1f}s)"
+        with open(worker_log, "a", encoding="utf-8") as lf:
+            lf.write(f"  >> {line}\n")
+        append_transcript(worker_id, f">> {line}")
+        ws = get_state(worker_id)
+        cur_actions = ws.actions if ws else 0
+        update_state(worker_id, actions=cur_actions + 1, last_action=line[:35])
+
+    def _finish(status: str) -> tuple[str, int]:
+        duration_ms = int((time.time() - start) * 1000)
+        with open(worker_log, "a", encoding="utf-8") as lf:
+            lf.write(f"  => {status} ({duration_ms}ms total, engine=jev)\n")
+        return status, duration_ms
 
     profile = config.load_profile()
     resume_text = _load_resume_text(resume_pdf_path)
@@ -132,32 +168,37 @@ def run_job_jev(job: dict, port: int, resume_pdf_path: Path, worker_id: int = 0,
             if detection:
                 if capsolver_key and captcha_solve(agent.browser.evaluate, detection, capsolver_key):
                     log.info("Auto-solved %s captcha for %s", detection["type"], job["url"])
+                    _log_step(f"captcha_solve {detection['type']}")
                     continue
                 _activate_tab(agent)
-                duration_ms = int((time.time() - start) * 1000)
-                return f"blocked:captcha_{detection['type']}", duration_ms
+                return _finish(f"blocked:captcha_{detection['type']}")
 
             if not uploaded and _has_file_input(agent):
                 uploaded = _upload_resume(agent, resume_pdf_path)
+                _log_step("upload_resume")
 
             try:
                 state = agent.command("predict")
             except StalePage:
                 continue  # command('predict') internally re-observes; retry next loop iteration
 
-            choice = state["decision"]["choice"]
+            decision = state["decision"]
+            choice = decision["choice"]
+            _log_step(
+                f"{decision.get('operation', choice)} -> {choice} "
+                f"(model: {decision.get('model', 'jev')}, latency {decision.get('latency_ms', 0)}ms)"
+            )
 
             if choice in ("DONE", "BLOCKED"):
                 try:
                     state = agent.command("act", {"fingerprint": state["page"]["fingerprint"]})
                 except StalePage:
                     continue
-                duration_ms = int((time.time() - start) * 1000)
                 if state["status"] == "done":
                     _activate_tab(agent)
-                    return "ready_for_review", duration_ms
+                    return _finish("ready_for_review")
                 _activate_tab(agent)
-                return "blocked:stuck", duration_ms
+                return _finish("blocked:stuck")
 
             try:
                 agent.command("act", {"fingerprint": state["page"]["fingerprint"]})
@@ -170,12 +211,10 @@ def run_job_jev(job: dict, port: int, resume_pdf_path: Path, worker_id: int = 0,
                 # RESULT:BLOCKED for the Claude engine.
                 log.info("jev needs input on %s: %s", job["url"], e)
                 _activate_tab(agent)
-                duration_ms = int((time.time() - start) * 1000)
-                return "blocked:needs_input", duration_ms
+                return _finish("blocked:needs_input")
 
         _activate_tab(agent)
-        duration_ms = int((time.time() - start) * 1000)
-        return "blocked:max_steps_exceeded", duration_ms
+        return _finish("blocked:max_steps_exceeded")
     except Exception:
         # Genuine infrastructure failure (daemon/TypeSafe unreachable, etc.) --
         # nothing useful to show the user, so close this tab and let the

@@ -2016,6 +2016,31 @@ body.col-resizing {
   flex: 1;
 }
 
+.auto-submit-block-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.auto-submit-retry-button {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: normal;
+  background: var(--text);
+  color: var(--bg);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.auto-submit-retry-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .auto-submit-running {
   background: var(--stage-applying-bg);
   color: var(--stage-applying-fg);

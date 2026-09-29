@@ -439,6 +439,7 @@ def run_job(job: dict, port: int, resume_pdf_path: Path, worker_id: int = 0,
         f"[{ts_header}] {job['title']} @ {job.get('site', '')}\n"
         f"URL: {job.get('application_url') or job['url']}\n"
         f"Score: {job.get('fit_score', 'N/A')}/10\n"
+        f"Engine: claude ({model}, via Claude Code CLI + Playwright MCP)\n"
         f"{'=' * 60}\n"
     )
 
@@ -477,6 +478,7 @@ def run_job(job: dict, port: int, resume_pdf_path: Path, worker_id: int = 0,
         proc.stdin.close()
 
         text_parts: list[str] = []
+        last_event = start  # for per-step deltas -- see tool_use handling below
         with open(worker_log, "a", encoding="utf-8") as lf:
             lf.write(log_header)
 
@@ -523,6 +525,15 @@ def run_job(job: dict, port: int, resume_pdf_path: Path, worker_id: int = 0,
                                     desc = f"{name}: {filenames}"
                                 else:
                                     desc = name
+
+                                # Time track: how long since the previous step (thinking +
+                                # the prior tool call's own execution time, since the stream
+                                # gives us no separate tool-completion event to split those
+                                # two apart) -- this is what actually shows where a run is slow.
+                                now = time.time()
+                                step_s = now - last_event
+                                last_event = now
+                                desc = f"{desc} ({step_s:.1f}s)"
 
                                 lf.write(f"  >> {desc}\n")
                                 append_transcript(worker_id, f">> {desc}")
