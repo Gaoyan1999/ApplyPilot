@@ -31,8 +31,8 @@ function App() {
   const { data: status, error: statusError, refresh: refreshStatus } = useRefreshable(getStatus)
   const { data: cvs, refresh: refreshCvs } = useRefreshable(listCvs)
 
-  const [search, setSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [search, setSearch] = useLocalStorageState('applypilot-filter-search', '')
+  const [debouncedSearch, setDebouncedSearch] = useState(search)
   const [jobTypeFilter, setJobTypeFilter] = useLocalStorageState<JobType[]>('applypilot-filter-job-type', [])
   const [jobTypeFilterMode, setJobTypeFilterMode] = useLocalStorageState<FilterMode>(
     'applypilot-filter-job-type-mode',
@@ -46,10 +46,10 @@ function App() {
     'applypilot-filter-user-action-mode',
     'is',
   )
-  const [dateFrom, setDateFrom] = useState<DateKey | null>(null)
-  const [dateTo, setDateTo] = useState<DateKey | null>(null)
-  const [scoreMin, setScoreMin] = useState<number | null>(null)
-  const [scoreMax, setScoreMax] = useState<number | null>(null)
+  const [dateFrom, setDateFrom] = useLocalStorageState<DateKey | null>('applypilot-filter-date-from', null)
+  const [dateTo, setDateTo] = useLocalStorageState<DateKey | null>('applypilot-filter-date-to', null)
+  const [scoreMin, setScoreMin] = useLocalStorageState<number | null>('applypilot-filter-score-min', null)
+  const [scoreMax, setScoreMax] = useLocalStorageState<number | null>('applypilot-filter-score-max', null)
   const [showDismissed, setShowDismissed] = useLocalStorageState('applypilot-show-dismissed', false)
   const [starredOnly, setStarredOnly] = useLocalStorageState('applypilot-filter-starred-only', false)
   const [hiddenColumns, setHiddenColumns] = useLocalStorageState<SortKey[]>('applypilot-hidden-columns', [])
