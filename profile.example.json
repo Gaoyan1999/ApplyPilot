@@ -11,6 +11,8 @@
     "country": "Your Country",
     "postal_code": "A1B 2C3",
     "linkedin_url": "https://www.linkedin.com/in/yourprofile",
+    "linkedin_email": "your.linkedin.login@example.com",
+    "linkedin_password": "YOUR_LINKEDIN_PASSWORD",
     "github_url": "https://github.com/yourusername",
     "portfolio_url": "",
     "website_url": ""

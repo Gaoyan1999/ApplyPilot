@@ -257,6 +257,12 @@ def _setup_profile(resume_text: str, ai_enabled: bool) -> dict:
         "postal_code": _prompt("Postal/ZIP code", p.get("postal_code", ""), default=""),
         "address": _prompt("Street address (optional, used for form auto-fill)", p.get("address", ""), default=""),
         "linkedin_url": _prompt("LinkedIn URL", p.get("linkedin_url", ""), default=""),
+        "linkedin_email": _prompt(
+            "LinkedIn login email (used when a job asks to sign in with LinkedIn --"
+            " important if you have more than one LinkedIn account)",
+            p.get("linkedin_email", ""), default="",
+        ),
+        "linkedin_password": Prompt.ask("LinkedIn password (leave blank to skip LinkedIn sign-in)", password=True, default=""),
         "github_url": _prompt("GitHub URL (optional)", p.get("github_url", ""), default=""),
         "portfolio_url": _prompt("Portfolio URL (optional)", p.get("portfolio_url", ""), default=""),
         "website_url": _prompt("Personal website URL (optional)", p.get("website_url", ""), default=""),
