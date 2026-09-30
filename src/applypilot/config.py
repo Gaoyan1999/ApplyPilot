@@ -413,7 +413,7 @@ DEFAULTS = {
     # engine, apply/jev_engine.py) -- jev falls back to the Claude engine on
     # any genuine infrastructure failure, but not on a stuck/blocked outcome
     # (those are reported to the dashboard for manual review instead).
-    "apply_engine": "claude",
+    "apply_engine": "jev",
 }
 
 

@@ -66,9 +66,22 @@
     }
     if (['checkbox','radio'].includes(e.type)) base.checked=String(e.checked);
     if (e.tagName==='SELECT') {
-      for (const o of e.options) if (!o.selected && !o.disabled && !o.closest('optgroup[disabled]'))
+      // Cap options PER select, not just the global 250-action budget below --
+      // a single long dropdown (e.g. a phone country-code picker with ~250
+      // countries) can otherwise consume the entire budget by itself and
+      // silently push every other field/button on the page (a required text
+      // input, a Next button) past the global cutoff. Confirmed cause of a
+      // LinkedIn Easy Apply "Mobile phone number" field + "Next" never once
+      // appearing in the snapshot: the country dropdown alone contributed
+      // 248 of the 250 slots.
+      let pushed=0;
+      for (const o of e.options) {
+        if (pushed>=40) break;
+        if (o.selected || o.disabled || o.closest('optgroup[disabled]')) continue;
         actions.push({...base,kind:'select',value:o.value,
           current_value:[...e.selectedOptions].map(o=>o.label).join(', '),label:base.label+' → '+o.label});
+        pushed++;
+      }
     } else {
       const editable=!e.readOnly && e.getAttribute('aria-readonly')!=='true' &&
         (['textbox','searchbox','spinbutton'].includes(rname) ||

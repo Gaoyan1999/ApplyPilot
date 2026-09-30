@@ -17,8 +17,13 @@ from applypilot import config
 
 logger = logging.getLogger(__name__)
 
-# CDP port base — each worker uses BASE_CDP_PORT + worker_id
-BASE_CDP_PORT = 9222
+# CDP port base — each worker uses BASE_CDP_PORT + worker_id.
+# Deliberately NOT 9222: that's the universal default debug port every other
+# CDP tool reaches for too (including, on this machine, a plain already-
+# running Chrome that had remote debugging enabled on it some other way) --
+# a collision there silently sends our traffic to the wrong browser instead
+# of erroring, which is much worse than a normal "port in use" failure.
+BASE_CDP_PORT = 19222
 
 # Track Chrome processes per worker for cleanup
 _chrome_procs: dict[int, subprocess.Popen] = {}

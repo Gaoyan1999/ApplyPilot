@@ -332,7 +332,15 @@ def dismiss(url: str) -> bool:
     blocked with its Chrome window intentionally left open -- closes that
     Chrome and frees the slot for a future start_apply(). Returns False if
     no slot is holding `url` in pending_review state (still running, no
-    matching slot, or already dismissed)."""
+    matching slot, or already dismissed).
+
+    A 'blocked' job also gets its apply_status/apply_error cleared here --
+    the whole point of dismissing one of these is "I gave up on this run,
+    let me try again", so the Auto-Submit button needs to actually come
+    back rather than staying hidden behind a permanently-'blocked' row.
+    ready_for_review is deliberately left alone: that one means the user
+    already submitted it by hand in the Chrome window, and auto-clearing it
+    would risk a real duplicate application getting queued/re-triggered."""
     with _lock:
         slot_id = next(
             (i for i, s in _slots.items() if s["url"] == url and s["pending_review"]),
@@ -343,4 +351,12 @@ def dismiss(url: str) -> bool:
         _slots[slot_id]["pending_review"] = False
 
     chrome.close_worker_chrome(slot_id)
+
+    conn = get_connection()
+    conn.execute(
+        """UPDATE jobs SET apply_status = NULL, apply_error = NULL, apply_task_id = NULL
+           WHERE url = ? AND apply_status = 'blocked'""",
+        (url,),
+    )
+    conn.commit()
     return True

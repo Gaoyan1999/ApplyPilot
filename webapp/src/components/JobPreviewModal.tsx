@@ -116,6 +116,7 @@ export function JobPreviewModal({
   const [autoSubmitStatus, setAutoSubmitStatus] = useState<AutoSubmitStatus | null>(null)
   const [autoSubmitError, setAutoSubmitError] = useState<string | null>(null)
   const [dismissing, setDismissing] = useState(false)
+  const [retrying, setRetrying] = useState(false)
 
   function startResize(e: React.MouseEvent) {
     e.preventDefault()
@@ -251,6 +252,25 @@ export function JobPreviewModal({
     }
   }
 
+  // Closes whatever's left open from the previous attempt, then starts a
+  // fresh one -- one click instead of Dismiss, wait for the refresh, then
+  // Auto-Submit again. Safe for ready_for_review too: acquire_job() already
+  // allows re-claiming any job that isn't 'in_progress', and the agent never
+  // clicks Submit itself, so a retry can't cause a double-submit on its own
+  // -- only the user's own Submit click in the (now-replaced) Chrome window
+  // does that, same as it always could.
+  async function handleRetryAutoSubmit() {
+    setRetrying(true)
+    setAutoSubmitError(null)
+    try {
+      await dismissAutoSubmit(job.url).catch(() => {})
+      await handleAutoSubmit()
+      onAutoSubmitComplete()
+    } finally {
+      setRetrying(false)
+    }
+  }
+
   async function handleCancelAutoSubmit() {
     try {
       await cancelAutoSubmit(job.url)
@@ -267,6 +287,10 @@ export function JobPreviewModal({
     try {
       await dismissAutoSubmit(job.url)
       setAutoSubmitStatus(null)
+      // A dismissed 'blocked' job gets its apply_status cleared server-side
+      // (see apply_state.dismiss()) so Auto-Submit can show again -- but
+      // that only works if the job list/panel actually re-fetch it.
+      onAutoSubmitComplete()
     } catch (e) {
       setAutoSubmitError(e instanceof ApiError ? e.message : 'Failed to dismiss')
     } finally {
@@ -385,9 +409,14 @@ export function JobPreviewModal({
             <span className="auto-submit-block-text">
               Filled and ready — check the open Chrome window, verify it, and click Submit yourself.
             </span>
-            <button type="button" className="task-delete-button" disabled={dismissing} onClick={handleDismissAutoSubmit}>
-              {dismissing ? 'Dismissing…' : 'Dismiss'}
-            </button>
+            <div className="auto-submit-block-actions">
+              <button type="button" className="auto-submit-retry-button" disabled={retrying || dismissing} onClick={handleRetryAutoSubmit}>
+                {retrying ? 'Retrying…' : 'Retry'}
+              </button>
+              <button type="button" className="task-delete-button" disabled={dismissing || retrying} onClick={handleDismissAutoSubmit}>
+                {dismissing ? 'Dismissing…' : 'Dismiss'}
+              </button>
+            </div>
           </div>
         )}
         {!autoSubmitRunning && job.apply_status === 'blocked' && (
@@ -396,9 +425,14 @@ export function JobPreviewModal({
               Blocked — needs your input: {job.apply_error || 'see the open Chrome window for details.'} Finish it
               yourself in the open Chrome window.
             </span>
-            <button type="button" className="task-delete-button" disabled={dismissing} onClick={handleDismissAutoSubmit}>
-              {dismissing ? 'Dismissing…' : 'Dismiss'}
-            </button>
+            <div className="auto-submit-block-actions">
+              <button type="button" className="auto-submit-retry-button" disabled={retrying || dismissing} onClick={handleRetryAutoSubmit}>
+                {retrying ? 'Retrying…' : 'Retry'}
+              </button>
+              <button type="button" className="task-delete-button" disabled={dismissing || retrying} onClick={handleDismissAutoSubmit}>
+                {dismissing ? 'Dismissing…' : 'Dismiss'}
+              </button>
+            </div>
           </div>
         )}
         {!autoSubmitRunning && job.applied_at && (
