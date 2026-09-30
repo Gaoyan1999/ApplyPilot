@@ -18,6 +18,13 @@ Changes from upstream:
   fixed ~200ms budget to up to 15s with backoff -- upstream's window only
   covers in-page UI updates; real ATS forms navigate to a new page after
   "Apply"/"Continue", which the original budget can't wait out.
+- snapshot.js caps each <select>'s offered options at 40 (was unbounded)
+  instead of only the global 250-action budget -- a single long dropdown
+  (e.g. a ~250-country phone code picker) could otherwise consume nearly the
+  entire budget by itself, silently pushing every other field/button on the
+  page past the cutoff. Confirmed cause of a required "Mobile phone number"
+  field plus the page's own "Next" button never once appearing in the
+  snapshot.
 """
 
 from .agent import Agent
