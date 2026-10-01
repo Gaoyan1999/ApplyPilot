@@ -86,10 +86,13 @@ function PromptTabContent({
 interface Props {
   theme: Theme
   onToggleTheme: () => void
-  showDismissed: boolean
-  onToggleShowDismissed: () => void
-  hiddenColumns: SortKey[]
-  onToggleColumn: (key: SortKey) => void
+  // Dashboard-only -- the job table's row visibility/columns don't exist on
+  // other pages, so these are omitted when SettingsModal is rendered from
+  // the shared TopBar on a non-dashboard page.
+  showDismissed?: boolean
+  onToggleShowDismissed?: () => void
+  hiddenColumns?: SortKey[]
+  onToggleColumn?: (key: SortKey) => void
 }
 
 const EMPTY_DEFAULTS = { cover_letter: '', tailoring: '', scoring: '' }
@@ -264,31 +267,38 @@ export function SettingsModal({
                       <span className="field-label-inline">Theme</span>
                       <ThemeToggle theme={theme} onToggle={onToggleTheme} />
                     </div>
-                    <label className="toggle-check">
-                      <input
-                        type="checkbox"
-                        checked={showDismissed}
-                        onChange={onToggleShowDismissed}
-                      />
-                      Show dismissed jobs (marked "Not for me")
-                    </label>
-                    <p className="prompt-field-description">
-                      Jobs marked "Not for me" are hidden from the dashboard by default. Turn this on to see them again.
-                    </p>
 
-                    <div className="config-section">
-                      <h3>Visible columns</h3>
-                      <div className="switch-grid">
-                        {COLUMNS.map((col) => (
-                          <Switch
-                            key={col.key}
-                            label={col.label}
-                            checked={!hiddenColumns.includes(col.key)}
-                            onChange={() => onToggleColumn(col.key)}
+                    {onToggleShowDismissed && (
+                      <>
+                        <label className="toggle-check">
+                          <input
+                            type="checkbox"
+                            checked={showDismissed ?? false}
+                            onChange={onToggleShowDismissed}
                           />
-                        ))}
+                          Show dismissed jobs (marked "Not for me")
+                        </label>
+                        <p className="prompt-field-description">
+                          Jobs marked "Not for me" are hidden from the dashboard by default. Turn this on to see them again.
+                        </p>
+                      </>
+                    )}
+
+                    {hiddenColumns && onToggleColumn && (
+                      <div className="config-section">
+                        <h3>Visible columns</h3>
+                        <div className="switch-grid">
+                          {COLUMNS.map((col) => (
+                            <Switch
+                              key={col.key}
+                              label={col.label}
+                              checked={!hiddenColumns.includes(col.key)}
+                              onChange={() => onToggleColumn(col.key)}
+                            />
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </>
                 )}
 

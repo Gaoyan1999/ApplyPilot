@@ -13,8 +13,6 @@ APP_DIR = Path(os.environ.get("APPLYPILOT_DIR", Path.home() / ".applypilot"))
 # Core paths
 DB_PATH = APP_DIR / "applypilot.db"
 PROFILE_PATH = APP_DIR / "profile.json"
-RESUME_PATH = APP_DIR / "resume.txt"
-RESUME_PDF_PATH = APP_DIR / "resume.pdf"
 SEARCH_CONFIG_PATH = APP_DIR / "searches.yaml"
 PROMPTS_DIR = APP_DIR / "prompts"
 ENV_PATH = APP_DIR / ".env"
@@ -103,9 +101,68 @@ def load_profile() -> dict:
     import json
     if not PROFILE_PATH.exists():
         raise FileNotFoundError(
-            f"Profile not found at {PROFILE_PATH}. Run `applypilot init` first."
+            f"Profile not found at {PROFILE_PATH}. Open the Context page in the dashboard to set one up."
         )
     return json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
+
+
+# profile.json's "personal" section mixes AI-derivable fields (name, email,
+# urls, ...) with manual-only, sensitive fields (password, linkedin_password,
+# linkedin_email) that must never be sent to an LLM prompt and must never be
+# clobbered by a re-extraction. This is the allowlist of keys an AI
+# extraction is allowed to write -- anything else in "personal" survives
+# untouched across apply_profile_extraction() calls.
+_PROFILE_AI_PERSONAL_KEYS = (
+    "full_name", "preferred_name", "email", "phone",
+    "city", "province_state", "country", "postal_code", "address",
+    "linkedin_url", "github_url", "portfolio_url", "website_url",
+)
+
+# profile.json sections an AI extraction produces (see profile_ai.py).
+_PROFILE_AI_SECTIONS = ("personal", "experience", "skills_boundary", "resume_facts")
+
+# Default EEO answers for a brand-new profile -- never prompted for, never
+# sent to the LLM (scorer.py hard-excludes this section from scoring
+# context; these are protected characteristics).
+_DEFAULT_EEO_VOLUNTARY = {
+    "gender": "Decline to self-identify",
+    "race_ethnicity": "Decline to self-identify",
+    "veteran_status": "Decline to self-identify",
+    "disability_status": "Decline to self-identify",
+}
+
+
+def apply_profile_extraction(profile: dict, extracted: dict) -> dict:
+    """Merge an AI extraction (profile_ai.extract_profile_fields) into an
+    existing profile dict and return the merged result.
+
+    `experience`, `skills_boundary`, and `resume_facts` are replaced
+    wholesale -- the AI is the only source for those. `personal` is merged
+    key-by-key through _PROFILE_AI_PERSONAL_KEYS so password fields already
+    in `profile` are never touched. Every other section (work_authorization,
+    compensation, availability, eeo_voluntary) is left exactly as-is --
+    those are never AI-derived.
+    """
+    merged = dict(profile)
+
+    personal = dict(merged.get("personal", {}))
+    for key in _PROFILE_AI_PERSONAL_KEYS:
+        value = extracted.get("personal", {}).get(key)
+        if value:
+            personal[key] = value
+    merged["personal"] = personal
+
+    for section in ("experience", "skills_boundary", "resume_facts"):
+        value = extracted.get(section)
+        if isinstance(value, dict):
+            merged[section] = value
+
+    merged.setdefault("work_authorization", {})
+    merged.setdefault("compensation", {})
+    merged.setdefault("availability", {})
+    merged.setdefault("eeo_voluntary", dict(_DEFAULT_EEO_VOLUNTARY))
+
+    return merged
 
 
 def load_search_config() -> "SearchYamlConfig":
@@ -114,7 +171,7 @@ def load_search_config() -> "SearchYamlConfig":
     from applypilot.search_config import SearchYamlConfig
     if not SEARCH_CONFIG_PATH.exists():
         raise FileNotFoundError(
-            f"Search config not found at {SEARCH_CONFIG_PATH}. Run `applypilot init` first."
+            f"Search config not found at {SEARCH_CONFIG_PATH}. Open the Context page in the dashboard to set one up."
         )
     raw = yaml.safe_load(SEARCH_CONFIG_PATH.read_text(encoding="utf-8")) or {}
     return SearchYamlConfig.model_validate(raw)
@@ -260,14 +317,15 @@ def safe_cv_name(name: str) -> str:
 def list_cvs() -> list[dict]:
     """List CVs from CV_DIR, sorted by name.
 
-    Returns [{"name", "filename", "uploaded_at", "size"}] -- all derived
-    straight from the filesystem, no separate metadata store. Sorted so a
-    "pick the first CV" fallback (e.g. cv_match's failure policy) is
-    stable and predictable.
+    Returns [{"name", "filename", "uploaded_at", "size", "primary"}] --
+    derived straight from the filesystem, plus the primary marker (see
+    get_primary_cv_name). Sorted so a "pick the first CV" fallback (e.g.
+    cv_match's failure policy) is stable and predictable.
     """
     if not CV_DIR.exists():
         return []
 
+    primary_name = get_primary_cv_name()
     entries = []
     for pdf_path in CV_DIR.glob("*.pdf"):
         stat = pdf_path.stat()
@@ -276,6 +334,7 @@ def list_cvs() -> list[dict]:
             "filename": pdf_path.name,
             "uploaded_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
             "size": stat.st_size,
+            "primary": pdf_path.stem == primary_name,
         })
     entries.sort(key=lambda e: e["name"].lower())
     return entries
@@ -289,17 +348,67 @@ def read_cv_text(name: str) -> str:
     return txt_path.read_text(encoding="utf-8").strip()
 
 
+def get_primary_cv_name() -> str | None:
+    """Name of the CV marked primary (CV_DIR/.primary), or None if unset
+    or the marked CV no longer exists."""
+    marker = CV_DIR / ".primary"
+    if not marker.exists():
+        return None
+    name = marker.read_text(encoding="utf-8").strip()
+    if not name or not (CV_DIR / f"{name}.pdf").exists():
+        return None
+    return name
+
+
+def set_primary_cv(name: str) -> None:
+    """Mark the CV `name` as the primary resume used for scoring, tailoring,
+    and cover letters. Raises ValueError if no such CV exists."""
+    safe_name = safe_cv_name(name)
+    if not (CV_DIR / f"{safe_name}.pdf").exists():
+        raise ValueError(f"No CV named '{safe_name}'.")
+    (CV_DIR / ".primary").write_text(safe_name, encoding="utf-8")
+
+
+def get_primary_resume_text() -> str:
+    """Extracted text of the primary CV.
+
+    Raises FileNotFoundError if no CV is marked primary -- callers (scoring,
+    tailoring, cover letters) have no sensible fallback without one.
+    """
+    name = get_primary_cv_name()
+    if not name:
+        raise FileNotFoundError(
+            "No primary CV set. Upload a CV and mark it primary in the CV Library."
+        )
+    return read_cv_text(name)
+
+
+def get_primary_resume_pdf_path() -> Path:
+    """Path to the primary CV's PDF. Raises FileNotFoundError if unset."""
+    name = get_primary_cv_name()
+    if not name:
+        raise FileNotFoundError(
+            "No primary CV set. Upload a CV and mark it primary in the CV Library."
+        )
+    return CV_DIR / f"{name}.pdf"
+
+
 def save_cv(name: str, pdf_bytes: bytes) -> dict:
     """Save a new CV: write {safe_name}.pdf, extract text to {safe_name}.txt.
 
     Raises ValueError if a CV with this name already exists -- collisions
     are rejected rather than silently overwritten, since a re-upload with
     the same name is more likely a mistake than an intended replace.
+
+    The first CV ever saved is auto-marked primary -- otherwise scoring/
+    tailoring/cover-letters would have no resume to read until the user
+    opens the CV Library and sets one by hand.
     """
     CV_DIR.mkdir(parents=True, exist_ok=True)
     safe_name = safe_cv_name(name)
     pdf_path = CV_DIR / f"{safe_name}.pdf"
     txt_path = CV_DIR / f"{safe_name}.txt"
+    is_first_cv = not any(CV_DIR.glob("*.pdf"))
 
     if pdf_path.exists():
         raise ValueError(f"A CV named '{safe_name}' already exists -- delete it first or choose a different name.")
@@ -322,27 +431,43 @@ def save_cv(name: str, pdf_bytes: bytes) -> dict:
     tmp_txt.write_text(text, encoding="utf-8")
     tmp_txt.replace(txt_path)
 
+    if is_first_cv:
+        set_primary_cv(safe_name)
+
     stat = pdf_path.stat()
     return {
         "name": safe_name,
         "filename": pdf_path.name,
         "uploaded_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
         "size": stat.st_size,
+        "primary": is_first_cv,
     }
 
 
 def delete_cv(name: str) -> bool:
-    """Remove a CV's .pdf and .txt files. Returns whether anything existed."""
+    """Remove a CV's .pdf and .txt files. Returns whether anything existed.
+
+    If the deleted CV was primary, reassigns primary to another remaining
+    CV (first by name, same stable order as list_cvs()) or clears the
+    marker if none are left.
+    """
     safe_name = safe_cv_name(name)
     pdf_path = CV_DIR / f"{safe_name}.pdf"
     txt_path = CV_DIR / f"{safe_name}.txt"
 
     existed = pdf_path.exists()
+    was_primary = existed and get_primary_cv_name() == safe_name
     pdf_path.unlink(missing_ok=True)
     txt_path.unlink(missing_ok=True)
-    return existed
 
-    return prompts
+    if was_primary:
+        remaining = list_cvs()
+        if remaining:
+            set_primary_cv(remaining[0]["name"])
+        else:
+            (CV_DIR / ".primary").unlink(missing_ok=True)
+
+    return existed
 
 
 def get_excluded_titles() -> list[str]:
@@ -437,7 +562,7 @@ TIER_LABELS = {
 }
 
 TIER_COMMANDS: dict[int, list[str]] = {
-    1: ["init", "run discover", "run enrich", "status", "dashboard"],
+    1: ["run discover", "run enrich", "status", "dashboard"],
     2: ["run score", "run tailor", "run cover", "run pdf", "run"],
     3: ["apply"],
 }
@@ -485,7 +610,7 @@ def check_tier(required: int, feature: str) -> None:
 
     missing: list[str] = []
     if required >= 2 and not any(os.environ.get(k) for k in ("GEMINI_API_KEY", "OPENAI_API_KEY", "LLM_URL")):
-        missing.append("LLM API key — run [bold]applypilot init[/bold] or set GEMINI_API_KEY")
+        missing.append("LLM API key — set it on the Context page in the dashboard, or set GEMINI_API_KEY")
     if required >= 3:
         if not shutil.which("claude"):
             missing.append("Claude Code CLI — install from [bold]https://claude.ai/code[/bold]")
@@ -504,3 +629,116 @@ def check_tier(required: int, feature: str) -> None:
             _console.print(f"  - {m}")
     _console.print()
     raise SystemExit(1)
+
+
+def _knowledge_base_folder_status(kb_dir: str) -> list[dict]:
+    """Per-subfolder status of the knowledge base -- same "has real content"
+    definition as scorer._load_knowledge_base (HTML comments stripped,
+    frontmatter/headings stripped, empty after that = no real content), so
+    this status reflects exactly what scoring will actually use."""
+    base = Path(kb_dir)
+    if not kb_dir or not base.is_dir():
+        return []
+
+    folders = []
+    for index_path in sorted(base.glob("*/index.md")):
+        raw = index_path.read_text(encoding="utf-8")
+        content = re.sub(r"<!--.*?-->", "", raw, flags=re.DOTALL).strip()
+        body = re.sub(r"^---\n.*?\n---\n", "", content, flags=re.DOTALL)
+        body = re.sub(r"^#{1,6}.*$", "", body, flags=re.MULTILINE).strip()
+        folders.append({
+            "folder": index_path.parent.name,
+            "chars": len(body),
+        })
+    return folders
+
+
+def get_context_status() -> dict:
+    """Unified snapshot of what ApplyPilot currently knows about the user.
+
+    Content-level complement to get_tier()'s dependency-level check -- used
+    by the webapp's Context page for both the "nothing set up yet"
+    onboarding view and the ongoing gap checklist, so there's one gap model
+    instead of two.
+    """
+    tier = get_tier()
+
+    primary_name = get_primary_cv_name()
+    cv_section = {
+        "primary_cv": primary_name,
+        "cv_count": len(list_cvs()),
+        "resume_text_chars": len(read_cv_text(primary_name)) if primary_name else 0,
+    }
+
+    profile: dict = {}
+    if PROFILE_PATH.exists():
+        try:
+            profile = load_profile()
+        except Exception:
+            profile = {}
+    personal = profile.get("personal", {})
+    skills = profile.get("skills_boundary", {})
+    skills_count = sum(len(v) for v in skills.values() if isinstance(v, list))
+    profile_section = {
+        "exists": PROFILE_PATH.exists(),
+        "has_name": bool(personal.get("full_name")),
+        "has_email": bool(personal.get("email")),
+        "skills_count": skills_count,
+        "work_authorization_set": profile.get("work_authorization", {}).get("legally_authorized_to_work") is not None,
+        "compensation_set": bool(profile.get("compensation", {}).get("salary_expectation")),
+        "availability_set": bool(profile.get("availability", {}).get("earliest_start_date")),
+    }
+
+    kb_dir = profile.get("knowledge_base_dir", "")
+    kb_folders = _knowledge_base_folder_status(kb_dir) if kb_dir else []
+    kb_section = {
+        "dir": kb_dir or None,
+        "folder_count": len(kb_folders),
+        "empty_folders": [f["folder"] for f in kb_folders if f["chars"] == 0],
+    }
+
+    search_exists = SEARCH_CONFIG_PATH.exists()
+    query_count = 0
+    if search_exists:
+        try:
+            query_count = len(load_search_config().queries)
+        except Exception:
+            search_exists = False
+    search_section = {"exists": search_exists, "query_count": query_count}
+
+    has_llm = any(os.environ.get(k) for k in ("GEMINI_API_KEY", "OPENAI_API_KEY", "LLM_URL"))
+    has_claude = shutil.which("claude") is not None
+    try:
+        get_chrome_path()
+        has_chrome = True
+    except FileNotFoundError:
+        has_chrome = False
+
+    missing: list[str] = []
+    if not has_llm:
+        missing.append("LLM API key")
+    if not primary_name:
+        missing.append("A primary CV")
+    elif cv_section["resume_text_chars"] == 0:
+        missing.append(f"'{primary_name}' has no extracted text (scanned PDF?)")
+    if not profile_section["exists"] or not profile_section["has_name"]:
+        missing.append("Profile (upload a CV and run AI extraction)")
+    if profile_section["exists"] and not profile_section["work_authorization_set"]:
+        missing.append("Work authorization (manual field)")
+    if not search_section["exists"] or search_section["query_count"] == 0:
+        missing.append("Search queries")
+    if kb_section["empty_folders"]:
+        missing.append(f"Knowledge base folder(s) with no content: {', '.join(kb_section['empty_folders'])}")
+
+    return {
+        "tier": tier,
+        "tier_label": TIER_LABELS.get(tier, f"Tier {tier}"),
+        "env": {"configured": has_llm},
+        "cv": cv_section,
+        "profile": profile_section,
+        "knowledge_base": kb_section,
+        "search": search_section,
+        "claude_cli": has_claude,
+        "chrome": has_chrome,
+        "missing": missing,
+    }

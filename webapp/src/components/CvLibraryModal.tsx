@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ApiError, deleteCv, getCvFileUrl, listCvs, uploadCv } from '../api/client'
+import { ApiError, deleteCv, getCvFileUrl, listCvs, setPrimaryCv, uploadCv } from '../api/client'
 import type { Cv } from '../api/types'
 import { formatDate } from '../lib/format'
 
@@ -24,6 +24,7 @@ export function CvLibraryModal({ onActivity }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [deletingName, setDeletingName] = useState<string | null>(null)
+  const [settingPrimaryName, setSettingPrimaryName] = useState<string | null>(null)
 
   function refresh() {
     listCvs()
@@ -78,6 +79,19 @@ export function CvLibraryModal({ onActivity }: Props) {
     }
   }
 
+  async function handleSetPrimary(cvName: string) {
+    setSettingPrimaryName(cvName)
+    try {
+      await setPrimaryCv(cvName)
+      refresh()
+      onActivity()
+    } catch (e) {
+      setLoadError(e instanceof ApiError ? e.message : 'Failed to set primary CV')
+    } finally {
+      setSettingPrimaryName(null)
+    }
+  }
+
   return (
     <>
       <button
@@ -101,7 +115,8 @@ export function CvLibraryModal({ onActivity }: Props) {
 
             <div className="cv-library-panel">
               <p className="prompt-field-description">
-                Master resumes you maintain yourself. When auto-submitting a job with no tailored resume,
+                Master resumes you maintain yourself. The primary CV is the one scoring, tailoring, and
+                cover letters read as your base resume. When auto-submitting a job with no tailored resume,
                 the best-matching CV here is used instead — no LLM rewriting, just selection.
               </p>
 
@@ -119,19 +134,32 @@ export function CvLibraryModal({ onActivity }: Props) {
                         <a href={getCvFileUrl(cv.name)} target="_blank" rel="noreferrer" className="cv-row-name">
                           {cv.name}
                         </a>
+                        {cv.primary && <span className="cv-primary-badge">Primary</span>}
                         <span className="cv-row-meta">
                           {formatSize(cv.size)} · uploaded {formatDate(cv.uploaded_at)}
                         </span>
                       </div>
-                      <button
-                        type="button"
-                        className="remove-btn"
-                        disabled={deletingName === cv.name}
-                        onClick={() => handleDelete(cv.name)}
-                        aria-label={`Delete ${cv.name}`}
-                      >
-                        {deletingName === cv.name ? '…' : '✕'}
-                      </button>
+                      <div className="cv-row-actions">
+                        {!cv.primary && (
+                          <button
+                            type="button"
+                            className="cv-set-primary-btn"
+                            disabled={settingPrimaryName === cv.name}
+                            onClick={() => handleSetPrimary(cv.name)}
+                          >
+                            {settingPrimaryName === cv.name ? '…' : 'Set as primary'}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="remove-btn"
+                          disabled={deletingName === cv.name}
+                          onClick={() => handleDelete(cv.name)}
+                          aria-label={`Delete ${cv.name}`}
+                        >
+                          {deletingName === cv.name ? '…' : '✕'}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
