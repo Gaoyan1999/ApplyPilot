@@ -9,6 +9,7 @@ import json
 import math
 import os
 import time
+from typing import TypedDict
 
 import httpx
 
@@ -99,7 +100,37 @@ def action_space(actions):
     return elements, targets, controls
 
 
-def choose(state, goal, history):
+class Decision(TypedDict):
+    # NOT the same value as result["answers"]["operation"]["choice"] (a type
+    # name like "TYPE_TEXT"). This is that type name already resolved to a
+    # concrete DOM action id (e.g. "e16"), or the literal "DONE"/"BLOCKED"
+    # when there's no element to resolve to. agent.py keys off this field,
+    # never the raw per-question "choice" from the API response.
+    choice: str
+    operation: str  # the type name itself: "CLICK" / "TYPE_TEXT" / "SELECT" / "DONE" / "BLOCKED"
+    target: str | None
+    confidence: float
+    probabilities: dict
+    operation_probabilities: dict
+    target_probabilities: dict
+    target_confidence: float | None
+    raw_answers: dict
+    model: str
+    usage: dict
+    latency_ms: int
+    request: dict
+
+
+def call_typesafe(questions, state):
+    body = {
+        "model": os.environ.get("TYPESAFE_MODEL", "jev-latest"),
+        "state": state,
+        "questions": questions,
+    }
+    return post_json("https://api.typesafe.ai/v1/systemone", os.environ["TYPESAFE_API_KEY"], body)
+
+
+def choose(state, goal, history) -> Decision:
     elements, targets, controls = action_space(state["actions"])
     labels = {
         "CLICK": "Click an element, button, menu option, autocomplete suggestion, or calendar day.",
@@ -137,7 +168,7 @@ def choose(state, goal, history):
         "questions": questions,
     }
     started = time.perf_counter()
-    result = post_json("https://api.typesafe.ai/v1/systemone", os.environ["TYPESAFE_API_KEY"], body)
+    result = call_typesafe(questions, body["state"])
     operation_answer = validate_choice(result["answers"].get("operation", {}), operations)
     operation = operation_answer["choice"]
     target = None
