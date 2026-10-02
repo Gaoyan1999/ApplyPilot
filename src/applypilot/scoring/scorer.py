@@ -14,7 +14,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
-from applypilot.config import RESUME_PATH, load_profile, load_prompts
+from applypilot.config import get_primary_resume_text, load_profile, load_prompts
 from applypilot.database import get_connection, get_jobs_by_stage
 from applypilot.llm import get_client
 
@@ -239,7 +239,7 @@ def run_scoring(
     Returns:
         {"scored": int, "errors": int, "elapsed": float, "distribution": list}
     """
-    resume_text = RESUME_PATH.read_text(encoding="utf-8")
+    resume_text = get_primary_resume_text()
     profile = load_profile()
     candidate_context = _build_candidate_context(profile)
     knowledge_base = _load_knowledge_base(profile.get("knowledge_base_dir", ""))

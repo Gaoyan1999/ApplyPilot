@@ -256,7 +256,67 @@ export interface Cv {
   filename: string
   uploaded_at: string
   size: number
+  primary: boolean
 }
+
+export interface ContextStatus {
+  tier: number
+  tier_label: string
+  env: { configured: boolean }
+  cv: { primary_cv: string | null; cv_count: number; resume_text_chars: number }
+  profile: {
+    exists: boolean
+    has_name: boolean
+    has_email: boolean
+    skills_count: number
+    work_authorization_set: boolean
+    compensation_set: boolean
+    availability_set: boolean
+  }
+  knowledge_base: { dir: string | null; folder_count: number; empty_folders: string[] }
+  search: { exists: boolean; query_count: number }
+  claude_cli: boolean
+  chrome: boolean
+  missing: string[]
+}
+
+export interface ProfilePersonal {
+  full_name: string
+  preferred_name: string
+  email: string
+  phone: string
+  city: string
+  province_state: string
+  country: string
+  postal_code: string
+  address: string
+  linkedin_url: string
+  linkedin_email: string
+  linkedin_password: string
+  github_url: string
+  portfolio_url: string
+  website_url: string
+  password: string
+}
+
+export interface Profile {
+  personal: ProfilePersonal
+  work_authorization: { legally_authorized_to_work?: boolean; require_sponsorship?: boolean; work_permit_type?: string }
+  compensation: { salary_expectation?: string; salary_currency?: string; salary_range_min?: string; salary_range_max?: string }
+  experience: { years_of_experience_total?: string; education_level?: string; current_title?: string; target_role?: string }
+  skills_boundary: { programming_languages: string[]; frameworks: string[]; tools: string[] }
+  resume_facts: { preserved_companies: string[]; preserved_projects: string[]; preserved_school: string; real_metrics: string[] }
+  eeo_voluntary: Record<string, string>
+  availability: { earliest_start_date?: string }
+  knowledge_base_dir?: string
+}
+
+export interface SearchSuggestion {
+  queries: SearchQuery[]
+  exclude_titles: string[]
+}
+
+export type LlmProvider = 'gemini' | 'openai' | 'local'
 
 export interface Status {
   total: number

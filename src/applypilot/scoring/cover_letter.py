@@ -11,7 +11,7 @@ import re
 import time
 from datetime import datetime, timezone
 
-from applypilot.config import COVER_LETTER_DIR, RESUME_PATH, load_profile, load_prompts
+from applypilot.config import COVER_LETTER_DIR, get_primary_resume_text, load_profile, load_prompts
 from applypilot.database import get_connection, get_jobs_by_stage
 from applypilot.llm import get_client
 from applypilot.scoring.validator import (
@@ -319,7 +319,7 @@ def generate_cover_letter_for_job(url: str, validation_mode: str = "normal") -> 
         raise ValueError("Job has no description yet — run enrichment first.")
 
     profile = load_profile()
-    resume_text = RESUME_PATH.read_text(encoding="utf-8")
+    resume_text = get_primary_resume_text()
 
     letter = generate_cover_letter(resume_text, job, profile, validation_mode=validation_mode)
     result = _save_cover_letter(letter, job, profile)
@@ -351,7 +351,7 @@ def run_cover_letters(min_score: int = 7, limit: int = 20,
         {"generated": int, "errors": int, "elapsed": float}
     """
     profile = load_profile()
-    resume_text = RESUME_PATH.read_text(encoding="utf-8")
+    resume_text = get_primary_resume_text()
     conn = get_connection()
 
     # Fetch jobs that have tailored resumes but no cover letter yet

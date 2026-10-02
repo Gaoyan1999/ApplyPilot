@@ -47,17 +47,16 @@ python3.11 -m venv .venv
 source .venv/bin/activate   # run this again in any new terminal session
 ```
 
-Then install and run the setup wizard:
+Then install:
 
 ```bash
 pip install -e .
 pip install --no-deps python-jobspy && pip install pydantic tls-client requests markdownify regex
-applypilot init
 ```
 
 > `python-jobspy` (needed to search LinkedIn/Indeed) pins a numpy version that conflicts with pip's resolver, so it's installed separately with `--no-deps`.
 
-`init` walks you through your resume, profile, and LLM API key, then generates your `profile.json`, `searches.yaml`, and `.env`.
+Setup itself happens in the web dashboard (see step 4 below) — its **Context** page walks you through your LLM API key, resume upload (AI pre-fills your profile from it), and the few fields AI can't know (work authorization, salary expectations, availability), then generates your `profile.json`, `searches.yaml`, and `.env`.
 
 ### 3. Set up the frontend and backend
 

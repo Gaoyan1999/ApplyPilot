@@ -66,14 +66,6 @@ def main(
 
 
 @app.command()
-def init() -> None:
-    """Run the first-time setup wizard (profile, resume, search config)."""
-    from applypilot.wizard.init import run_wizard
-
-    run_wizard()
-
-
-@app.command()
 def run(
     stages: Optional[list[str]] = typer.Argument(
         None,
@@ -192,7 +184,7 @@ def apply(
     if not _profile_path.exists():
         console.print(
             "[red]Profile not found.[/red]\n"
-            "Run [bold]applypilot init[/bold] to create your profile first."
+            "Open the Context page in the dashboard to set one up."
         )
         raise typer.Exit(code=1)
 
@@ -350,7 +342,7 @@ def doctor() -> None:
     """Check your setup and diagnose missing requirements."""
     import shutil
     from applypilot.config import (
-        load_env, PROFILE_PATH, RESUME_PATH, RESUME_PDF_PATH,
+        load_env, PROFILE_PATH, get_primary_cv_name, read_cv_text,
         SEARCH_CONFIG_PATH, ENV_PATH, get_chrome_path,
     )
 
@@ -367,21 +359,22 @@ def doctor() -> None:
     if PROFILE_PATH.exists():
         results.append(("profile.json", ok_mark, str(PROFILE_PATH)))
     else:
-        results.append(("profile.json", fail_mark, "Run 'applypilot init' to create"))
+        results.append(("profile.json", fail_mark, "Open the Context page in the dashboard to create"))
 
-    # Resume
-    if RESUME_PATH.exists():
-        results.append(("resume.txt", ok_mark, str(RESUME_PATH)))
-    elif RESUME_PDF_PATH.exists():
-        results.append(("resume.txt", warn_mark, "Only PDF found — plain-text needed for AI stages"))
+    # Primary CV (resume)
+    primary_name = get_primary_cv_name()
+    if primary_name and read_cv_text(primary_name):
+        results.append(("primary CV", ok_mark, primary_name))
+    elif primary_name:
+        results.append(("primary CV", warn_mark, f"'{primary_name}' has no extracted text — scanned PDF? AI stages need text"))
     else:
-        results.append(("resume.txt", fail_mark, "Run 'applypilot init' to add your resume"))
+        results.append(("primary CV", fail_mark, "Open the Context page in the dashboard, or set one in the CV Library"))
 
     # Search config
     if SEARCH_CONFIG_PATH.exists():
         results.append(("searches.yaml", ok_mark, str(SEARCH_CONFIG_PATH)))
     else:
-        results.append(("searches.yaml", warn_mark, "Will use example config — run 'applypilot init'"))
+        results.append(("searches.yaml", warn_mark, "Will use example config — set one up on the Context page"))
 
     # jobspy (discovery dep installed separately)
     try:
@@ -406,7 +399,7 @@ def doctor() -> None:
         results.append(("LLM API key", ok_mark, f"Local: {os.environ.get('LLM_URL')}"))
     else:
         results.append(("LLM API key", fail_mark,
-                        "Set GEMINI_API_KEY in ~/.applypilot/.env (run 'applypilot init')"))
+                        "Set it on the Context page, or set GEMINI_API_KEY in ~/.applypilot/.env"))
 
     # --- Tier 3 checks ---
     # Claude Code CLI

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ApiError, getJob, getStatus, listCvs, searchJobs, setJobDismissed, setJobStarred, setJobUserAction } from './api/client'
+import { ApiError, getContextStatus, getJob, getStatus, listCvs, searchJobs, setJobDismissed, setJobStarred, setJobUserAction } from './api/client'
 import type { Job, JobFilterParams, JobType, SearchJobsParams, UserAction } from './api/types'
 import { useRefreshable } from './hooks/useRefreshable'
 import { useTheme } from './hooks/useTheme'
@@ -12,8 +12,7 @@ import { JobsTable, type SortDir, type SortKey } from './components/JobsTable'
 import { JobPreviewModal } from './components/JobPreviewModal'
 import { SearchPanel } from './components/SearchPanel'
 import { StatusCheckPanel } from './components/StatusCheckPanel'
-import { SettingsModal } from './components/SettingsModal'
-import { CvLibraryModal } from './components/CvLibraryModal'
+import { TopBar } from './components/TopBar'
 import './styles/index.css'
 
 const DEFAULT_PANEL_WIDTH = 480
@@ -61,6 +60,18 @@ function App() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewJob, setPreviewJob] = useState<Job | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+
+  // First run (nothing configured yet): send straight to the Context page's
+  // onboarding flow instead of an empty, unusable dashboard.
+  useEffect(() => {
+    getContextStatus()
+      .then((s) => {
+        if (!s.env.configured && !s.cv.primary_cv && !s.profile.exists) {
+          window.location.hash = '#/context'
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   // Debounce free-text search so it doesn't fire a request per keystroke.
   useEffect(() => {
@@ -236,25 +247,19 @@ function App() {
   const error = statusError || jobsError
 
   return (
-    <div className="app-container" style={{ marginRight: previewJob ? panelWidth : undefined }}>
+    <>
+      <TopBar
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onCvActivity={refreshCvs}
+        showDismissed={showDismissed}
+        onToggleShowDismissed={() => setShowDismissed((v) => !v)}
+        hiddenColumns={hiddenColumns}
+        onToggleColumn={toggleColumnVisibility}
+      />
+      <div className="app-container" style={{ marginRight: previewJob ? panelWidth : undefined }}>
       <div className="app-header">
         <h1>ApplyPilot Dashboard</h1>
-        <div className="app-header-actions">
-          <SearchPanel onActivity={refresh} />
-          <StatusCheckPanel filters={filterParams} onActivity={refresh} />
-          <a className="search-trigger" href="#/tasks">
-            Tasks
-          </a>
-          <CvLibraryModal onActivity={refreshCvs} />
-          <SettingsModal
-            theme={theme}
-            onToggleTheme={toggleTheme}
-            showDismissed={showDismissed}
-            onToggleShowDismissed={() => setShowDismissed((v) => !v)}
-            hiddenColumns={hiddenColumns}
-            onToggleColumn={toggleColumnVisibility}
-          />
-        </div>
       </div>
       <p className="subtitle">Live view of your job pipeline, updated as jobs are found or changed.</p>
 
@@ -293,6 +298,12 @@ function App() {
         }}
         starredOnly={starredOnly}
         onStarredOnlyChange={setStarredOnly}
+        actions={
+          <>
+            <SearchPanel onActivity={refresh} />
+            <StatusCheckPanel filters={filterParams} onActivity={refresh} />
+          </>
+        }
       />
 
       <JobsTable
@@ -357,7 +368,8 @@ function App() {
           onWidthChange={setPanelWidth}
         />
       )}
-    </div>
+      </div>
+    </>
   )
 }
 

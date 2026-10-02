@@ -1,4 +1,4 @@
-import type { AutoSubmitStatus, Cv, Job, JobFilterParams, PromptsConfig, SearchConfig, SearchJobsParams, SearchJobsResponse, SearchStatus, Status, StatusCheckStatus, TaskRecord, UserAction } from './types'
+import type { AutoSubmitStatus, ContextStatus, Cv, Job, JobFilterParams, LlmProvider, Profile, PromptsConfig, SearchConfig, SearchJobsParams, SearchJobsResponse, SearchStatus, SearchSuggestion, Status, StatusCheckStatus, TaskRecord, UserAction } from './types'
 
 // Translates the app-wide FilterMode ('is' | 'is not') to the API's
 // 'is' | 'is_not' -- shared by every endpoint that takes job_type_mode/
@@ -216,6 +216,50 @@ export function uploadCv(file: File, name: string): Promise<Cv> {
 
 export function deleteCv(name: string): Promise<{ deleted: boolean }> {
   return sendJson<{ deleted: boolean }>(`/api/cvs/${encodeURIComponent(name)}`, 'DELETE')
+}
+
+export function setPrimaryCv(name: string): Promise<{ primary: string }> {
+  return sendJson<{ primary: string }>(`/api/cvs/${encodeURIComponent(name)}/primary`, 'POST')
+}
+
+export function getContextStatus(): Promise<ContextStatus> {
+  return getJson<ContextStatus>('/api/context/status')
+}
+
+export function getProfile(): Promise<Profile> {
+  return getJson<Profile>('/api/profile')
+}
+
+export function extractProfile(cvName?: string): Promise<Profile> {
+  return sendJson<Profile>('/api/profile/extract', 'POST', cvName ? { cv_name: cvName } : {})
+}
+
+export interface ManualProfileFields {
+  work_authorization: Profile['work_authorization']
+  compensation: Profile['compensation']
+  availability: Profile['availability']
+  knowledge_base_dir: string
+  personal?: { password?: string; linkedin_password?: string; linkedin_email?: string }
+}
+
+export function saveManualProfile(fields: ManualProfileFields): Promise<Profile> {
+  return sendJson<Profile>('/api/profile/manual', 'PUT', fields)
+}
+
+export function suggestSearchConfig(cvName?: string): Promise<SearchSuggestion> {
+  return sendJson<SearchSuggestion>('/api/search/suggest', 'POST', cvName ? { cv_name: cvName } : {})
+}
+
+export interface SetupEnvFields {
+  provider: LlmProvider
+  api_key?: string
+  model?: string
+  url?: string
+  capsolver_key?: string
+}
+
+export function saveEnvConfig(fields: SetupEnvFields): Promise<ContextStatus> {
+  return sendJson<ContextStatus>('/api/setup/env', 'POST', fields)
 }
 
 export function getCvFileUrl(name: string): string {

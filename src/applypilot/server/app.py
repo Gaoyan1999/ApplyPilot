@@ -8,6 +8,7 @@ triggering a discover -> enrich -> score run (/api/search/run). No auth
 WebSockets.
 """
 
+import json
 import logging
 import sys
 import threading
@@ -22,17 +23,26 @@ from rich.console import Console
 
 from applypilot.config import (
     CV_DIR,
+    ENV_PATH,
+    PROFILE_PATH,
+    apply_profile_extraction,
     delete_cv,
     ensure_dirs,
+    get_context_status,
+    get_primary_cv_name,
     get_prompt_seed,
     get_tier,
     list_cvs,
+    load_env,
+    load_profile,
     load_prompts,
     load_search_config,
+    read_cv_text,
     safe_cv_name,
     save_cv,
     save_prompts,
     save_search_config,
+    set_primary_cv,
 )
 from applypilot.database import (
     delete_task,
@@ -43,6 +53,7 @@ from applypilot.database import (
     reconcile_orphaned_tasks,
     search_jobs,
 )
+from applypilot.profile_ai import extract_profile_fields, suggest_search_config
 from applypilot.search_config import SearchYamlConfig
 from applypilot.server import apply_state, search_state, status_check_state
 from applypilot.server.stages import STAGE_ORDER, USER_ACTIONS, compute_stage
@@ -59,7 +70,7 @@ logging.basicConfig(
 )
 
 _NEEDS_LLM_KEY_DETAIL = (
-    "This requires an LLM API key. Run 'applypilot init' or set "
+    "This requires an LLM API key. Set it on the Context page, or set "
     "GEMINI_API_KEY / OPENAI_API_KEY / LLM_URL."
 )
 
@@ -68,7 +79,7 @@ console = Console()
 app = FastAPI(title="ApplyPilot Dashboard")
 
 # The dashboard is otherwise read-only and assumes some other command (a
-# discovery/enrichment run, `applypilot init`) already created the schema --
+# discovery/enrichment run) already created the schema --
 # but the dashboard can also be the very first thing run against a DB, or
 # against one created before a column was added. Run the migration here too
 # so /api/jobs and friends never hit "no such column".
@@ -322,7 +333,7 @@ def _require_tier3() -> None:
     missing = []
     if get_tier() < 2:
         missing.append(
-            "an LLM API key -- run 'applypilot init' or set GEMINI_API_KEY / OPENAI_API_KEY / LLM_URL"
+            "an LLM API key -- set it on the Context page, or set GEMINI_API_KEY / OPENAI_API_KEY / LLM_URL"
         )
     if not shutil.which("claude"):
         missing.append("Claude Code CLI -- install from https://claude.ai/code")
@@ -466,6 +477,15 @@ def api_delete_cv(name: str) -> dict:
     return {"deleted": True}
 
 
+@app.post("/api/cvs/{name}/primary")
+def api_set_primary_cv(name: str) -> dict:
+    try:
+        set_primary_cv(name)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    return {"primary": safe_cv_name(name)}
+
+
 @app.get("/api/cvs/{name}/file")
 def api_get_cv_file(name: str):
     try:
@@ -477,6 +497,145 @@ def api_get_cv_file(name: str):
     if not pdf_path.exists():
         raise HTTPException(status_code=404, detail="CV not found")
     return FileResponse(pdf_path, media_type="application/pdf", filename=pdf_path.name)
+
+
+# ---------------------------------------------------------------------------
+# Context / setup -- replaces the old CLI wizard (applypilot init). One
+# status model (get_context_status) powers both the "nothing configured
+# yet" onboarding view and the ongoing gap checklist in the webapp.
+# ---------------------------------------------------------------------------
+
+class ProfilePersonalManual(BaseModel):
+    password: str | None = None
+    linkedin_password: str | None = None
+    linkedin_email: str | None = None
+
+
+class ProfileManualBody(BaseModel):
+    work_authorization: dict = {}
+    compensation: dict = {}
+    availability: dict = {}
+    knowledge_base_dir: str = ""
+    personal: ProfilePersonalManual = ProfilePersonalManual()
+
+
+class ProfileExtractBody(BaseModel):
+    cv_name: str | None = None
+
+
+class SearchSuggestBody(BaseModel):
+    cv_name: str | None = None
+
+
+class SetupEnvBody(BaseModel):
+    provider: str
+    api_key: str = ""
+    model: str = ""
+    url: str = ""
+    capsolver_key: str = ""
+
+
+@app.get("/api/context/status")
+def api_context_status() -> dict:
+    return get_context_status()
+
+
+@app.get("/api/profile")
+def api_get_profile() -> dict:
+    if not PROFILE_PATH.exists():
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return load_profile()
+
+
+def _resume_text_for(cv_name: str | None) -> str:
+    name = cv_name or get_primary_cv_name()
+    if not name:
+        raise HTTPException(status_code=400, detail="No CV available -- upload one first.")
+    text = read_cv_text(name)
+    if not text:
+        raise HTTPException(status_code=400, detail=f"'{name}' has no extracted text (scanned PDF?).")
+    return text
+
+
+@app.post("/api/profile/extract")
+def api_extract_profile(body: ProfileExtractBody) -> dict:
+    if get_tier() < 2:
+        raise HTTPException(status_code=400, detail=_NEEDS_LLM_KEY_DETAIL)
+
+    resume_text = _resume_text_for(body.cv_name)
+    extracted = extract_profile_fields(resume_text)
+
+    current = load_profile() if PROFILE_PATH.exists() else {}
+    merged = apply_profile_extraction(current, extracted)
+
+    PROFILE_PATH.write_text(json.dumps(merged, indent=2, ensure_ascii=False), encoding="utf-8")
+    return merged
+
+
+@app.put("/api/profile/manual")
+def api_put_profile_manual(body: ProfileManualBody) -> dict:
+    current = load_profile() if PROFILE_PATH.exists() else {
+        "personal": {}, "experience": {}, "skills_boundary": {}, "resume_facts": {},
+    }
+    current["work_authorization"] = body.work_authorization
+    current["compensation"] = body.compensation
+    current["availability"] = body.availability
+    current["knowledge_base_dir"] = body.knowledge_base_dir
+    current.setdefault("eeo_voluntary", {
+        "gender": "Decline to self-identify",
+        "race_ethnicity": "Decline to self-identify",
+        "veteran_status": "Decline to self-identify",
+        "disability_status": "Decline to self-identify",
+    })
+
+    personal = dict(current.get("personal", {}))
+    for key, value in body.personal.model_dump(exclude_none=True).items():
+        personal[key] = value
+    current["personal"] = personal
+
+    PROFILE_PATH.write_text(json.dumps(current, indent=2, ensure_ascii=False), encoding="utf-8")
+    return current
+
+
+@app.post("/api/search/suggest")
+def api_suggest_search(body: SearchSuggestBody) -> dict:
+    if get_tier() < 2:
+        raise HTTPException(status_code=400, detail=_NEEDS_LLM_KEY_DETAIL)
+
+    resume_text = _resume_text_for(body.cv_name)
+    profile = load_profile() if PROFILE_PATH.exists() else {}
+    return suggest_search_config(resume_text, profile)
+
+
+@app.post("/api/setup/env")
+def api_setup_env(body: SetupEnvBody) -> dict:
+    if body.provider not in ("gemini", "openai", "local"):
+        raise HTTPException(status_code=400, detail="provider must be gemini, openai, or local")
+
+    lines = ["# ApplyPilot configuration", ""]
+    if body.provider == "gemini":
+        if not body.api_key:
+            raise HTTPException(status_code=400, detail="api_key is required for gemini")
+        lines.append(f"GEMINI_API_KEY={body.api_key}")
+        lines.append(f"LLM_MODEL={body.model or 'gemini-2.0-flash'}")
+    elif body.provider == "openai":
+        if not body.api_key:
+            raise HTTPException(status_code=400, detail="api_key is required for openai")
+        lines.append(f"OPENAI_API_KEY={body.api_key}")
+        lines.append(f"LLM_MODEL={body.model or 'gpt-4o-mini'}")
+    elif body.provider == "local":
+        if not body.url:
+            raise HTTPException(status_code=400, detail="url is required for local")
+        lines.append(f"LLM_URL={body.url}")
+        lines.append(f"LLM_MODEL={body.model or 'local-model'}")
+    if body.capsolver_key:
+        lines.append(f"CAPSOLVER_API_KEY={body.capsolver_key}")
+    lines.append("")
+
+    ensure_dirs()
+    ENV_PATH.write_text("\n".join(lines), encoding="utf-8")
+    load_env()
+    return get_context_status()
 
 
 @app.get("/api/jobs/{url:path}")
@@ -592,7 +751,7 @@ def run_search() -> dict:
             status_code=400,
             detail=(
                 "Search now includes AI scoring and requires an LLM API key. "
-                "Run 'applypilot init' or set GEMINI_API_KEY / OPENAI_API_KEY / LLM_URL."
+                "Set it on the Context page, or set GEMINI_API_KEY / OPENAI_API_KEY / LLM_URL."
             ),
         )
 

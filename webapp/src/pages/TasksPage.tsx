@@ -3,6 +3,8 @@ import { cancelAutoSubmit, cancelStatusCheck, deleteTask, dismissAutoSubmit, get
 import type { DiscoverLogEntry, StatusCheckLogEntry, TaskRecord, TaskRecordStatus, TaskType } from '../api/types'
 import { formatDate, formatDuration } from '../lib/format'
 import { ProgressBar } from '../components/ProgressBar'
+import { TopBar } from '../components/TopBar'
+import { useTheme } from '../hooks/useTheme'
 
 const POLL_INTERVAL_MS = 2000
 
@@ -300,6 +302,7 @@ function TaskRow({ task, onStop, onDelete }: TaskRowProps) {
 }
 
 export function TasksPage() {
+  const { theme, toggleTheme } = useTheme()
   const records = usePolling(getAllTasks, POLL_INTERVAL_MS)
   const tasks = useMemo(() => (records ?? []).map(mapTask), [records])
 
@@ -338,14 +341,11 @@ export function TasksPage() {
   const successCount = tasks.filter((t) => t.status === 'success').length
 
   return (
-    <div className="app-container">
+    <>
+      <TopBar theme={theme} onToggleTheme={toggleTheme} />
+      <div className="app-container">
       <div className="app-header">
         <h1>Background Tasks</h1>
-        <div className="app-header-actions">
-          <a className="pagination-button" href="#/">
-            ← Dashboard
-          </a>
-        </div>
       </div>
       <p className="subtitle">
         Search runs, status checks, and auto-applies running in the background — reflects live backend state.
@@ -375,6 +375,7 @@ export function TasksPage() {
           ))}
         </ul>
       )}
-    </div>
+      </div>
+    </>
   )
 }
