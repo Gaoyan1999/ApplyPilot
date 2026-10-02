@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { JobType, UserAction } from '../api/types'
 import { DateRangeFilter } from './DateRangeFilter'
 import type { DateKey } from '../lib/dateRange'
@@ -28,6 +29,10 @@ interface Props {
   onScoreRangeChange: (min: number | null, max: number | null) => void
   starredOnly: boolean
   onStarredOnlyChange: (value: boolean) => void
+  // Right-aligned extras for the filter-pills row (e.g. Search, Check Job
+  // Status) -- keeps page-level action buttons on the same row as the
+  // filters instead of a separate row of their own.
+  actions?: ReactNode
 }
 
 const JOB_TYPE_OPTIONS = JOB_TYPE_ORDER.map((jobType) => ({
@@ -61,6 +66,7 @@ export function SearchFilterBar({
   onScoreRangeChange,
   starredOnly,
   onStarredOnlyChange,
+  actions,
 }: Props) {
   return (
     <div className="filter-bar">
@@ -101,6 +107,7 @@ export function SearchFilterBar({
           <StarIcon filled={starredOnly} />
           Starred only
         </button>
+        {actions && <div className="filter-pills-actions">{actions}</div>}
       </div>
     </div>
   )

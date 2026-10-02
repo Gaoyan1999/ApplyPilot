@@ -298,12 +298,13 @@ function App() {
         }}
         starredOnly={starredOnly}
         onStarredOnlyChange={setStarredOnly}
+        actions={
+          <>
+            <SearchPanel onActivity={refresh} />
+            <StatusCheckPanel filters={filterParams} onActivity={refresh} />
+          </>
+        }
       />
-
-      <div className="dashboard-actions-row">
-        <SearchPanel onActivity={refresh} />
-        <StatusCheckPanel filters={filterParams} onActivity={refresh} />
-      </div>
 
       <JobsTable
         jobs={jobs}

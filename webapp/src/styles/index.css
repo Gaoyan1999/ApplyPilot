@@ -1165,6 +1165,12 @@
   gap: 8px;
 }
 
+.filter-pills-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .filter-pill {
   position: relative;
   display: inline-flex;
