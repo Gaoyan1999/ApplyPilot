@@ -15,9 +15,9 @@ from applypilot.scoring.tailor import extract_json
 
 log = logging.getLogger(__name__)
 
-# The profile.json sections an LLM extraction is allowed to produce.
+# The profile sections an LLM extraction is allowed to produce.
 # `personal` here is further filtered down to an allowlist of keys before
-# being merged into profile.json -- see config.apply_profile_extraction --
+# being merged into profile.md -- see config.apply_profile_extraction --
 # since the section also holds manual-only, sensitive fields (passwords)
 # this function's prompt never asks the LLM for in the first place.
 PROFILE_AI_SECTIONS = ("personal", "experience", "skills_boundary", "resume_facts")

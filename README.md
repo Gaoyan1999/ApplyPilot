@@ -56,7 +56,7 @@ pip install --no-deps python-jobspy && pip install pydantic tls-client requests 
 
 > `python-jobspy` (needed to search LinkedIn/Indeed) pins a numpy version that conflicts with pip's resolver, so it's installed separately with `--no-deps`.
 
-Setup itself happens in the web dashboard (see step 4 below) — its **Context** page walks you through your LLM API key, resume upload (AI pre-fills your profile from it), and the few fields AI can't know (work authorization, salary expectations, availability), then generates your `profile.json`, `searches.yaml`, and `.env`.
+Setup itself happens in the web dashboard (see step 4 below) — its **Context** page holds your prompts, your `profile.md` (basic info plus a short summary — AI pre-fills it from your resume, and you fill in what it can't know, like work authorization and salary), your CV, and your knowledge base. The LLM API key is set in **Settings**.
 
 ### 3. Set up the frontend and backend
 

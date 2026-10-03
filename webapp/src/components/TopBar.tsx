@@ -1,16 +1,13 @@
 import type { Theme } from '../hooks/useTheme'
 import { useHashRoute } from '../hooks/useHashRoute'
-import { CvLibraryModal } from './CvLibraryModal'
 import { SettingsModal } from './SettingsModal'
 import type { SortKey } from './JobsTable'
 
 interface Props {
   theme: Theme
   onToggleTheme: () => void
-  // Dashboard-only extras, passed through to SettingsModal/CvLibraryModal --
-  // omitted on Tasks/Context since there's no job table or CV list activity
-  // to react to there.
-  onCvActivity?: () => void
+  // Dashboard-only extras, passed through to SettingsModal -- omitted on
+  // Tasks/Context since there's no job table there.
   showDismissed?: boolean
   onToggleShowDismissed?: () => void
   hiddenColumns?: SortKey[]
@@ -36,11 +33,11 @@ function BrandMark() {
 }
 
 /** Persistent top bar: present on every page (Dashboard, Tasks, Context) so
- * page navigation and the global CV/Settings modals are always reachable,
+ * page navigation and the global Settings modal are always reachable,
  * regardless of which page is currently active. Page-specific actions (e.g.
  * Search, Check Job Status) live in the page body instead, not here. */
 export function TopBar({
-  theme, onToggleTheme, onCvActivity,
+  theme, onToggleTheme,
   showDismissed, onToggleShowDismissed, hiddenColumns, onToggleColumn, rightInset,
 }: Props) {
   const path = useHashRoute()
@@ -64,7 +61,6 @@ export function TopBar({
           ))}
         </nav>
         <div className="top-bar-actions">
-          <CvLibraryModal onActivity={onCvActivity ?? (() => {})} />
           <SettingsModal
             theme={theme}
             onToggleTheme={onToggleTheme}

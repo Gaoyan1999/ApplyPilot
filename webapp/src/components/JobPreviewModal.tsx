@@ -381,7 +381,7 @@ export function JobPreviewModal({
                 disabled={autoSubmitStarting || (!job.tailored_at && cvCount === 0)}
                 title={
                   !job.tailored_at && cvCount === 0
-                    ? 'Add a CV in the CV library or tailor a resume for this job first'
+                    ? 'Add a CV on the Context page (CV section) or tailor a resume for this job first'
                     : undefined
                 }
                 onClick={handleAutoSubmit}

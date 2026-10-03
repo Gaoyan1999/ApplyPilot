@@ -12,7 +12,10 @@ APP_DIR = Path(os.environ.get("APPLYPILOT_DIR", Path.home() / ".applypilot"))
 
 # Core paths
 DB_PATH = APP_DIR / "applypilot.db"
-PROFILE_PATH = APP_DIR / "profile.json"
+PROFILE_PATH = APP_DIR / "profile.md"
+# Pre-Profile.md storage -- migrated into PROFILE_PATH on first read and
+# then left in place untouched (see _migrate_legacy_profile).
+LEGACY_PROFILE_JSON_PATH = APP_DIR / "profile.json"
 SEARCH_CONFIG_PATH = APP_DIR / "searches.yaml"
 PROMPTS_DIR = APP_DIR / "prompts"
 ENV_PATH = APP_DIR / ".env"
@@ -96,17 +99,126 @@ def ensure_dirs():
         d.mkdir(parents=True, exist_ok=True)
 
 
-def load_profile() -> dict:
-    """Load user profile from ~/.applypilot/profile.json."""
+# Profile.md layout: a YAML front matter block holding the structured
+# fields code reads one by one (name, address, visa, salary, skills, ...),
+# then a free Markdown body -- the user's own high-level summary. The body
+# is exposed as profile["summary"]; detailed work/project history stays in
+# the CV and the knowledge base, not here.
+_FRONT_MATTER_RE = re.compile(r"\A---\n(.*?)\n---\n?(.*)\Z", re.DOTALL)
+
+_DEFAULT_PROFILE_SUMMARY = (
+    "## Summary\n\n"
+    "<!-- A few lines about who you are and what you're looking for. Keep it "
+    "high level -- detailed work and project history lives in your CV and "
+    "knowledge base. -->\n"
+)
+
+# Field skeleton for a brand-new Profile.md, so the editor shows every key
+# the rest of the app reads even before an AI extraction has run.
+_PROFILE_SKELETON = {
+    "personal": {
+        "full_name": "", "preferred_name": "", "email": "", "phone": "",
+        "address": "", "city": "", "province_state": "", "country": "", "postal_code": "",
+        "linkedin_url": "", "github_url": "", "portfolio_url": "", "website_url": "",
+    },
+    "experience": {
+        "current_title": "", "target_role": "", "years_of_experience_total": "", "education_level": "",
+    },
+    "work_authorization": {
+        "legally_authorized_to_work": True, "require_sponsorship": False, "work_permit_type": "",
+    },
+    "compensation": {
+        "salary_expectation": "", "salary_currency": "USD", "salary_range_min": "", "salary_range_max": "",
+    },
+    "availability": {"earliest_start_date": "Immediately"},
+    "knowledge_base_dir": "",
+}
+
+
+def parse_profile_markdown(text: str) -> dict:
+    """Parse Profile.md text into the profile dict. Raises ValueError if the
+    front matter is missing or isn't a YAML mapping."""
+    import yaml
+    match = _FRONT_MATTER_RE.match(text.replace("\r\n", "\n"))
+    if not match:
+        raise ValueError("Profile.md must start with a '---' YAML front matter block")
+    try:
+        fields = yaml.safe_load(match.group(1)) or {}
+    except yaml.YAMLError as e:
+        raise ValueError(f"Invalid YAML in front matter: {e}") from e
+    if not isinstance(fields, dict):
+        raise ValueError("Front matter must be a set of 'key: value' fields")
+    fields["summary"] = match.group(2).strip()
+    return fields
+
+
+def render_profile_markdown(profile: dict) -> str:
+    """Inverse of parse_profile_markdown."""
+    import yaml
+    fields = {k: v for k, v in profile.items() if k != "summary"}
+    front = yaml.safe_dump(fields, sort_keys=False, allow_unicode=True, default_flow_style=False)
+    summary = profile.get("summary") or _DEFAULT_PROFILE_SUMMARY
+    return f"---\n{front}---\n\n{summary.strip()}\n"
+
+
+def profile_skeleton_markdown() -> str:
+    """Starter Profile.md text for a user who has no profile yet."""
+    import copy
+    return render_profile_markdown(copy.deepcopy(_PROFILE_SKELETON))
+
+
+def _migrate_legacy_profile() -> None:
     import json
-    if not PROFILE_PATH.exists():
+    if PROFILE_PATH.exists() or not LEGACY_PROFILE_JSON_PATH.exists():
+        return
+    legacy = json.loads(LEGACY_PROFILE_JSON_PATH.read_text(encoding="utf-8"))
+    PROFILE_PATH.write_text(render_profile_markdown(legacy), encoding="utf-8")
+
+
+def profile_exists() -> bool:
+    _migrate_legacy_profile()
+    return PROFILE_PATH.exists()
+
+
+def read_profile_markdown() -> str:
+    _migrate_legacy_profile()
+    return PROFILE_PATH.read_text(encoding="utf-8")
+
+
+def load_profile() -> dict:
+    """Load the user profile from ~/.applypilot/profile.md.
+
+    Returns the front matter fields plus "summary" (the Markdown body, with
+    unfilled "<!-- ... -->" template hints stripped)."""
+    if not profile_exists():
         raise FileNotFoundError(
             f"Profile not found at {PROFILE_PATH}. Open the Context page in the dashboard to set one up."
         )
-    return json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
+    profile = parse_profile_markdown(read_profile_markdown())
+    summary = re.sub(r"<!--.*?-->", "", profile["summary"], flags=re.DOTALL).strip()
+    # Headings alone (the untouched template) carry nothing for the LLM.
+    has_prose = re.sub(r"^#{1,6}.*$", "", summary, flags=re.MULTILINE).strip()
+    profile["summary"] = summary if has_prose else ""
+    return profile
 
 
-# profile.json's "personal" section mixes AI-derivable fields (name, email,
+def save_profile(profile: dict) -> None:
+    """Write a profile dict back to profile.md, keeping the existing summary
+    body (with its template hints) when `profile` doesn't carry one."""
+    ensure_dirs()
+    if "summary" not in profile and PROFILE_PATH.exists():
+        profile = {**profile, "summary": parse_profile_markdown(read_profile_markdown())["summary"]}
+    PROFILE_PATH.write_text(render_profile_markdown(profile), encoding="utf-8")
+
+
+def save_profile_markdown(text: str) -> None:
+    """Validate and write raw Profile.md text (as edited on the Context page)."""
+    parse_profile_markdown(text)
+    ensure_dirs()
+    PROFILE_PATH.write_text(text if text.endswith("\n") else text + "\n", encoding="utf-8")
+
+
+# The profile's "personal" section mixes AI-derivable fields (name, email,
 # urls, ...) with manual-only, sensitive fields (password, linkedin_password,
 # linkedin_email) that must never be sent to an LLM prompt and must never be
 # clobbered by a re-extraction. This is the allowlist of keys an AI
@@ -118,7 +230,7 @@ _PROFILE_AI_PERSONAL_KEYS = (
     "linkedin_url", "github_url", "portfolio_url", "website_url",
 )
 
-# profile.json sections an AI extraction produces (see profile_ai.py).
+# Profile sections an AI extraction produces (see profile_ai.py).
 _PROFILE_AI_SECTIONS = ("personal", "experience", "skills_boundary", "resume_facts")
 
 # Default EEO answers for a brand-new profile -- never prompted for, never
@@ -671,7 +783,8 @@ def get_context_status() -> dict:
     }
 
     profile: dict = {}
-    if PROFILE_PATH.exists():
+    has_profile = profile_exists()
+    if has_profile:
         try:
             profile = load_profile()
         except Exception:
@@ -680,7 +793,7 @@ def get_context_status() -> dict:
     skills = profile.get("skills_boundary", {})
     skills_count = sum(len(v) for v in skills.values() if isinstance(v, list))
     profile_section = {
-        "exists": PROFILE_PATH.exists(),
+        "exists": has_profile,
         "has_name": bool(personal.get("full_name")),
         "has_email": bool(personal.get("email")),
         "skills_count": skills_count,
@@ -716,17 +829,17 @@ def get_context_status() -> dict:
 
     missing: list[str] = []
     if not has_llm:
-        missing.append("LLM API key")
+        missing.append("LLM API key (set it in Settings)")
     if not primary_name:
         missing.append("A primary CV")
     elif cv_section["resume_text_chars"] == 0:
         missing.append(f"'{primary_name}' has no extracted text (scanned PDF?)")
     if not profile_section["exists"] or not profile_section["has_name"]:
-        missing.append("Profile (upload a CV and run AI extraction)")
+        missing.append("Profile name (upload a CV to fill Profile.md, or write it yourself)")
     if profile_section["exists"] and not profile_section["work_authorization_set"]:
-        missing.append("Work authorization (manual field)")
+        missing.append("Work authorization (set it in Profile.md)")
     if not search_section["exists"] or search_section["query_count"] == 0:
-        missing.append("Search queries")
+        missing.append("Search queries (set them from the dashboard's Search)")
     if kb_section["empty_folders"]:
         missing.append(f"Knowledge base folder(s) with no content: {', '.join(kb_section['empty_folders'])}")
 
@@ -740,5 +853,8 @@ def get_context_status() -> dict:
         "search": search_section,
         "claude_cli": has_claude,
         "chrome": has_chrome,
+        # The jev apply engine's key -- optional: without it, auto-apply
+        # falls back to the Claude Code engine (see launcher.py).
+        "jev_key": bool(os.environ.get("TYPESAFE_API_KEY")),
         "missing": missing,
     }

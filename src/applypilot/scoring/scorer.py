@@ -76,6 +76,8 @@ def _build_candidate_context(profile: dict) -> str:
             if not value:
                 continue
             lines.append(f"{key.replace('_', ' ')}: {value}")
+    if profile.get("summary"):
+        lines.append(f"summary:\n{profile['summary']}")
     return "\n".join(lines)
 
 
@@ -84,7 +86,7 @@ def _load_knowledge_base(kb_dir: str) -> str:
 
     The knowledge base is a set of Markdown notes (e.g. an Obsidian vault
     folder) organized as topic subfolders -- projects, courses, prepared
-    interview answers, etc. -- documenting things a resume and profile.json
+    interview answers, etc. -- documenting things a resume and profile.md
     are too compact to hold. Rather than reading every note (unbounded,
     grows without limit), only each subfolder's own `index.md` is read: a
     short, hand-maintained summary of what that folder contains. New

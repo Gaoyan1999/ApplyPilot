@@ -152,7 +152,7 @@ def apply(
     """Launch auto-apply to submit job applications."""
     _bootstrap()
 
-    from applypilot.config import check_tier, PROFILE_PATH as _profile_path
+    from applypilot.config import check_tier, profile_exists, APP_DIR
     from applypilot.database import get_connection
 
     # --- Utility modes (no Chrome/Claude needed) ---
@@ -181,7 +181,7 @@ def apply(
     check_tier(3, "auto-apply")
 
     # Check 2: Profile exists
-    if not _profile_path.exists():
+    if not profile_exists():
         console.print(
             "[red]Profile not found.[/red]\n"
             "Open the Context page in the dashboard to set one up."
@@ -213,7 +213,7 @@ def apply(
         if not prompt_file:
             console.print("[red]No matching job found for that URL.[/red]")
             raise typer.Exit(code=1)
-        mcp_path = _profile_path.parent / ".mcp-apply-0.json"
+        mcp_path = APP_DIR / ".mcp-apply-0.json"
         console.print(f"[green]Wrote prompt to:[/green] {prompt_file}")
         console.print(f"\n[bold]Run manually:[/bold]")
         console.print(
@@ -342,7 +342,7 @@ def doctor() -> None:
     """Check your setup and diagnose missing requirements."""
     import shutil
     from applypilot.config import (
-        load_env, PROFILE_PATH, get_primary_cv_name, read_cv_text,
+        load_env, PROFILE_PATH, profile_exists, get_primary_cv_name, read_cv_text,
         SEARCH_CONFIG_PATH, ENV_PATH, get_chrome_path,
     )
 
@@ -356,10 +356,10 @@ def doctor() -> None:
 
     # --- Tier 1 checks ---
     # Profile
-    if PROFILE_PATH.exists():
-        results.append(("profile.json", ok_mark, str(PROFILE_PATH)))
+    if profile_exists():
+        results.append(("profile.md", ok_mark, str(PROFILE_PATH)))
     else:
-        results.append(("profile.json", fail_mark, "Open the Context page in the dashboard to create"))
+        results.append(("profile.md", fail_mark, "Open the Context page in the dashboard to create"))
 
     # Primary CV (resume)
     primary_name = get_primary_cv_name()

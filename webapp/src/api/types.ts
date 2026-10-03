@@ -277,6 +277,7 @@ export interface ContextStatus {
   search: { exists: boolean; query_count: number }
   claude_cli: boolean
   chrome: boolean
+  jev_key: boolean
   missing: string[]
 }
 
@@ -309,6 +310,16 @@ export interface Profile {
   eeo_voluntary: Record<string, string>
   availability: { earliest_start_date?: string }
   knowledge_base_dir?: string
+  /** Profile.md's Markdown body -- the user's own high-level summary. */
+  summary?: string
+}
+
+/** Raw ~/.applypilot/profile.md as edited on the Context page. `exists` is
+ * false when `text` is the starter skeleton, not a saved file. */
+export interface ProfileMarkdown {
+  text: string
+  exists: boolean
+  path: string
 }
 
 export interface SearchSuggestion {
@@ -316,7 +327,6 @@ export interface SearchSuggestion {
   exclude_titles: string[]
 }
 
-export type LlmProvider = 'gemini' | 'openai' | 'local'
 
 export interface Status {
   total: number

@@ -28,7 +28,7 @@ function toApiSortKey(key: SortKey): SearchJobsParams['sort_by'] {
 function App() {
   const { theme, toggleTheme } = useTheme()
   const { data: status, error: statusError, refresh: refreshStatus } = useRefreshable(getStatus)
-  const { data: cvs, refresh: refreshCvs } = useRefreshable(listCvs)
+  const { data: cvs } = useRefreshable(listCvs)
 
   const [search, setSearch] = useLocalStorageState('applypilot-filter-search', '')
   const [debouncedSearch, setDebouncedSearch] = useState(search)
@@ -251,7 +251,6 @@ function App() {
       <TopBar
         theme={theme}
         onToggleTheme={toggleTheme}
-        onCvActivity={refreshCvs}
         showDismissed={showDismissed}
         onToggleShowDismissed={() => setShowDismissed((v) => !v)}
         hiddenColumns={hiddenColumns}

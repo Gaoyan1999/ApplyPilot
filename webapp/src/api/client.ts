@@ -1,4 +1,4 @@
-import type { AutoSubmitStatus, ContextStatus, Cv, Job, JobFilterParams, LlmProvider, Profile, PromptsConfig, SearchConfig, SearchJobsParams, SearchJobsResponse, SearchStatus, SearchSuggestion, Status, StatusCheckStatus, TaskRecord, UserAction } from './types'
+import type { AutoSubmitStatus, ContextStatus, Cv, Job, JobFilterParams, Profile, ProfileMarkdown, PromptsConfig, SearchConfig, SearchJobsParams, SearchJobsResponse, SearchStatus, SearchSuggestion, Status, StatusCheckStatus, TaskRecord, UserAction } from './types'
 
 // Translates the app-wide FilterMode ('is' | 'is not') to the API's
 // 'is' | 'is_not' -- shared by every endpoint that takes job_type_mode/
@@ -226,24 +226,20 @@ export function getContextStatus(): Promise<ContextStatus> {
   return getJson<ContextStatus>('/api/context/status')
 }
 
-export function getProfile(): Promise<Profile> {
-  return getJson<Profile>('/api/profile')
+export function getProfileMarkdown(): Promise<ProfileMarkdown> {
+  return getJson<ProfileMarkdown>('/api/profile/markdown')
+}
+
+export function saveProfileMarkdown(text: string): Promise<ProfileMarkdown> {
+  return sendJson<ProfileMarkdown>('/api/profile/markdown', 'PUT', { text })
 }
 
 export function extractProfile(cvName?: string): Promise<Profile> {
   return sendJson<Profile>('/api/profile/extract', 'POST', cvName ? { cv_name: cvName } : {})
 }
 
-export interface ManualProfileFields {
-  work_authorization: Profile['work_authorization']
-  compensation: Profile['compensation']
-  availability: Profile['availability']
-  knowledge_base_dir: string
-  personal?: { password?: string; linkedin_password?: string; linkedin_email?: string }
-}
-
-export function saveManualProfile(fields: ManualProfileFields): Promise<Profile> {
-  return sendJson<Profile>('/api/profile/manual', 'PUT', fields)
+export function saveKnowledgeBaseDir(dir: string): Promise<ContextStatus> {
+  return sendJson<ContextStatus>('/api/knowledge-base', 'PUT', { dir })
 }
 
 export function suggestSearchConfig(cvName?: string): Promise<SearchSuggestion> {
@@ -251,11 +247,52 @@ export function suggestSearchConfig(cvName?: string): Promise<SearchSuggestion> 
 }
 
 export interface SetupEnvFields {
-  provider: LlmProvider
-  api_key?: string
-  model?: string
-  url?: string
-  capsolver_key?: string
+  url: string
+  model: string
+  /** Blank keeps the saved key. */
+  api_key: string
+}
+
+/** The LLM config in use now. The key itself is never sent back. */
+export interface LlmEnvConfig {
+  url: string
+  model: string
+  has_api_key: boolean
+  /** e.g. "************a1b2" -- empty when no key is saved. */
+  api_key_masked: string
+}
+
+export function getEnvConfig(): Promise<LlmEnvConfig> {
+  return getJson<LlmEnvConfig>('/api/setup/env')
+}
+
+export interface ConnectionTestResult {
+  ok: boolean
+  model: string | null
+  latency_ms: number | null
+  error: string | null
+}
+
+export function testLlmConnection(): Promise<ConnectionTestResult> {
+  return sendJson<ConnectionTestResult>('/api/setup/llm-test', 'POST', {})
+}
+
+export interface JevKeyConfig {
+  has_api_key: boolean
+  api_key_masked: string
+}
+
+export function getJevKey(): Promise<JevKeyConfig> {
+  return getJson<JevKeyConfig>('/api/setup/jev')
+}
+
+/** Blank removes the key. */
+export function saveJevKey(apiKey: string): Promise<JevKeyConfig> {
+  return sendJson<JevKeyConfig>('/api/setup/jev', 'PUT', { api_key: apiKey })
+}
+
+export function testJevConnection(): Promise<ConnectionTestResult> {
+  return sendJson<ConnectionTestResult>('/api/setup/jev-test', 'POST', {})
 }
 
 export function saveEnvConfig(fields: SetupEnvFields): Promise<ContextStatus> {
