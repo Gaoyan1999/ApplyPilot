@@ -90,6 +90,9 @@ def _build_profile_summary(profile: dict) -> str:
     lines.append(f"Veteran: {eeo.get('veteran_status', 'I am not a protected veteran')}")
     lines.append(f"Disability: {eeo.get('disability_status', 'I do not wish to answer')}")
 
+    if p.get("summary"):
+        lines.append(f"\nSummary (in the applicant's own words):\n{p['summary']}")
+
     return "\n".join(lines)
 
 

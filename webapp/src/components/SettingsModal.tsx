@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react'
-import { ApiError, getPrompts, getSearchConfig, savePrompts, saveSearchConfig } from '../api/client'
-import type { SearchConfig } from '../api/types'
+import { ApiError, getContextStatus, getSearchConfig, saveSearchConfig } from '../api/client'
+import type { ContextStatus, SearchConfig } from '../api/types'
 import type { Theme } from '../hooks/useTheme'
 import { COLUMNS, type SortKey } from './JobsTable'
-import { SEARCHABLE_SITES, SITE_META } from './SiteIcon'
+import { CheckItem } from './CheckItem'
+import { JevKeyCheck } from './JevKeyCheck'
+import { LlmProviderForm } from './LlmProviderForm'
+import { SEARCHABLE_SITES, SITE_META, SiteIcon } from './SiteIcon'
 import { TIME_RANGES } from './SearchPanel'
 import { Switch } from './Switch'
+import { TagInput } from './TagInput'
 import { ThemeToggle } from './ThemeToggle'
 
 function SettingsIcon() {
@@ -14,72 +18,6 @@ function SettingsIcon() {
       <circle cx="12" cy="8" r="4" />
       <path d="M4 21v-1a7 7 0 0 1 7-7h2a7 7 0 0 1 7 7v1" />
     </svg>
-  )
-}
-
-interface PromptFieldProps {
-  label: string
-  description: string
-  value: string
-  onChange: (value: string) => void
-  onReset: () => void
-  resetDisabled: boolean
-}
-
-function PromptField({ label, description, value, onChange, onReset, resetDisabled }: PromptFieldProps) {
-  return (
-    <div className="prompt-field">
-      <p className="prompt-field-description">{description}</p>
-      <textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        spellCheck={false}
-        aria-label={label}
-      />
-      <div className="prompt-field-footer">
-        <button type="button" className="reset-btn" disabled={resetDisabled} onClick={onReset}>
-          Reset to default
-        </button>
-      </div>
-    </div>
-  )
-}
-
-interface PromptTabContentProps {
-  title: string
-  field: PromptFieldProps
-  loaded: boolean
-  loadError: string | null
-  saving: boolean
-  saveMessage: string | null
-  saveError: string | null
-  onSave: () => void
-}
-
-function PromptTabContent({
-  title, field, loaded, loadError, saving, saveMessage, saveError, onSave,
-}: PromptTabContentProps) {
-  return (
-    <>
-      <h3 className="settings-content-title">{title}</h3>
-      <p className="prompt-field-description">
-        Saved to <code>~/.applypilot/prompts/{title.toLowerCase().replace(' ', '_')}.md</code> — only written once you customize this prompt; until then it falls back to the built-in default.
-      </p>
-      {loadError && <p className="search-result search-error">{loadError}</p>}
-      {!loaded && !loadError && <p className="search-result">Loading…</p>}
-      {loaded && (
-        <>
-          <PromptField {...field} />
-          <div className="config-actions">
-            <button type="button" disabled={saving} onClick={onSave}>
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-          </div>
-          {saveMessage && <span className="search-result">{saveMessage}</span>}
-          {saveError && <span className="search-result search-error">{saveError}</span>}
-        </>
-      )}
-    </>
   )
 }
 
@@ -95,16 +33,12 @@ interface Props {
   onToggleColumn?: (key: SortKey) => void
 }
 
-const EMPTY_DEFAULTS = { cover_letter: '', tailoring: '', scoring: '' }
-
-type SettingsTab = 'general' | 'search' | 'cover_letter' | 'scoring' | 'tailoring'
+type SettingsTab = 'general' | 'setup' | 'search'
 
 const TABS: { key: SettingsTab; label: string }[] = [
   { key: 'general', label: 'General' },
+  { key: 'setup', label: 'AI & Setup' },
   { key: 'search', label: 'Search Defaults' },
-  { key: 'cover_letter', label: 'Cover Letter' },
-  { key: 'scoring', label: 'Scoring' },
-  { key: 'tailoring', label: 'Tailoring' },
 ]
 
 export function SettingsModal({
@@ -113,19 +47,11 @@ export function SettingsModal({
   const [open, setOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<SettingsTab>('general')
 
-  const [promptsLoaded, setPromptsLoaded] = useState(false)
-  const [promptsLoadError, setPromptsLoadError] = useState<string | null>(null)
-  const [defaults, setDefaults] = useState(EMPTY_DEFAULTS)
-  const [coverLetterText, setCoverLetterText] = useState('')
-  const [tailoringText, setTailoringText] = useState('')
-  const [scoringText, setScoringText] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [saveMessage, setSaveMessage] = useState<string | null>(null)
-  const [saveError, setSaveError] = useState<string | null>(null)
+  const [contextStatus, setContextStatus] = useState<ContextStatus | null>(null)
+  const [contextStatusError, setContextStatusError] = useState<string | null>(null)
 
   const [searchConfig, setSearchConfig] = useState<SearchConfig | null>(null)
   const [searchConfigError, setSearchConfigError] = useState<string | null>(null)
-  const [excludeTitlesText, setExcludeTitlesText] = useState('')
   const [searchSaving, setSearchSaving] = useState(false)
   const [searchSaveMessage, setSearchSaveMessage] = useState<string | null>(null)
   const [searchSaveError, setSearchSaveError] = useState<string | null>(null)
@@ -146,37 +72,25 @@ export function SettingsModal({
     if (!open) return
     setSearchConfigError(null)
     getSearchConfig()
-      .then((cfg) => {
-        setSearchConfig(cfg)
-        setExcludeTitlesText(cfg.exclude_titles.join('\n'))
-      })
+      .then(setSearchConfig)
       .catch(() => setSearchConfigError('Could not load search config'))
   }, [open])
 
+  function refreshContextStatus() {
+    setContextStatusError(null)
+    getContextStatus()
+      .then(setContextStatus)
+      .catch(() => setContextStatusError('Could not load setup status'))
+  }
+
   useEffect(() => {
-    if (!open || promptsLoaded) return
-    getPrompts()
-      .then((cfg) => {
-        setCoverLetterText(cfg.cover_letter.text)
-        setTailoringText(cfg.tailoring.text)
-        setScoringText(cfg.scoring.text)
-        setDefaults({
-          cover_letter: cfg.cover_letter.default,
-          tailoring: cfg.tailoring.default,
-          scoring: cfg.scoring.default,
-        })
-      })
-      .catch(() => setPromptsLoadError('Could not load prompts'))
-      .finally(() => setPromptsLoaded(true))
-  }, [open, promptsLoaded])
+    if (open) refreshContextStatus()
+  }, [open])
 
   function toggleBoard(board: string) {
-    setSearchConfig((c) =>
-      c && {
-        ...c,
-        boards: c.boards.includes(board) ? c.boards.filter((b) => b !== board) : [...c.boards, board],
-      },
-    )
+    if (!searchConfig) return
+    const boards = searchConfig.boards
+    updateSearchConfig({ boards: boards.includes(board) ? boards.filter((b) => b !== board) : [...boards, board] })
   }
 
   async function handleSaveSearchDefaults() {
@@ -185,14 +99,8 @@ export function SettingsModal({
     setSearchSaveMessage(null)
     setSearchSaveError(null)
     try {
-      const excludeTitles = excludeTitlesText
-        .split('\n')
-        .map((t) => t.trim())
-        .filter(Boolean)
-      const saved = await saveSearchConfig({ ...searchConfig, exclude_titles: excludeTitles })
-      setSearchConfig(saved)
-      setExcludeTitlesText(saved.exclude_titles.join('\n'))
-      setSearchSaveMessage('Search defaults saved')
+      setSearchConfig(await saveSearchConfig(searchConfig))
+      setSearchSaveMessage('Saved')
     } catch (e) {
       setSearchSaveError(e instanceof ApiError ? e.message : 'Failed to save search defaults')
     } finally {
@@ -200,25 +108,9 @@ export function SettingsModal({
     }
   }
 
-  async function handleSavePrompts() {
-    setSaving(true)
-    setSaveMessage(null)
-    setSaveError(null)
-    try {
-      const saved = await savePrompts({
-        cover_letter: coverLetterText,
-        tailoring: tailoringText,
-        scoring: scoringText,
-      })
-      setCoverLetterText(saved.cover_letter.text)
-      setTailoringText(saved.tailoring.text)
-      setScoringText(saved.scoring.text)
-      setSaveMessage('Prompts saved')
-    } catch (e) {
-      setSaveError(e instanceof ApiError ? e.message : 'Failed to save prompts')
-    } finally {
-      setSaving(false)
-    }
+  function updateSearchConfig(patch: Partial<SearchConfig>) {
+    setSearchSaveMessage(null)
+    setSearchConfig((c) => c && { ...c, ...patch })
   }
 
   return (
@@ -302,6 +194,40 @@ export function SettingsModal({
                   </>
                 )}
 
+                {activeTab === 'setup' && (
+                  <>
+                    <h3 className="settings-content-title">AI & Setup</h3>
+                    <p className="prompt-field-description">
+                      Keys are saved to <code>~/.applypilot/.env</code>.
+                    </p>
+                    {contextStatusError && <p className="search-result search-error">{contextStatusError}</p>}
+                    {!contextStatus && !contextStatusError && <p className="search-result">Loading…</p>}
+                    {contextStatus && (
+                      <>
+                        <div className="config-section">
+                          <h3>LLM provider</h3>
+                          <LlmProviderForm configured={contextStatus.env.configured} onSaved={refreshContextStatus} />
+                        </div>
+                        <div className="config-section">
+                          <h3>Auto-apply readiness</h3>
+                          <ul className="check-list">
+                            <JevKeyCheck configured={contextStatus.jev_key} onSaved={refreshContextStatus} />
+                            <CheckItem
+                              label="Claude Code CLI"
+                              state={contextStatus.claude_cli ? 'ok' : 'warn'}
+                              hint={
+                                contextStatus.claude_cli
+                                  ? 'Full apply agent, used when jev is unavailable or fails.'
+                                  : 'Not found on PATH. Install it from claude.ai/code.'
+                              }
+                            />
+                          </ul>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+
                 {activeTab === 'search' && (
                   <>
                     <h3 className="settings-content-title">Search Defaults</h3>
@@ -314,58 +240,62 @@ export function SettingsModal({
                       <>
                         <div className="config-section">
                           <h3>Job boards</h3>
-                          <div className="site-checks">
-                            {SEARCHABLE_SITES.map((site) => (
-                              <label key={site} className="toggle-check">
-                                <input
-                                  type="checkbox"
-                                  checked={searchConfig.boards.includes(site)}
-                                  onChange={() => toggleBoard(site)}
-                                />
-                                {SITE_META[site].label}
-                              </label>
-                            ))}
+                          <div className="board-chips">
+                            {SEARCHABLE_SITES.map((site) => {
+                              const on = searchConfig.boards.includes(site)
+                              return (
+                                <button
+                                  key={site}
+                                  type="button"
+                                  className={`board-chip${on ? ' on' : ''}`}
+                                  aria-pressed={on}
+                                  onClick={() => toggleBoard(site)}
+                                >
+                                  <SiteIcon site={site} />
+                                  {SITE_META[site].label}
+                                </button>
+                              )
+                            })}
                           </div>
                         </div>
 
                         <div className="config-section">
                           <h3>Exclude titles</h3>
-                          <textarea
-                            placeholder="One term per line, e.g. senior director"
-                            rows={3}
-                            value={excludeTitlesText}
-                            onChange={(e) => setExcludeTitlesText(e.target.value)}
+                          <p className="ctx-hint">Jobs whose title contains any of these words are skipped.</p>
+                          <TagInput
+                            values={searchConfig.exclude_titles}
+                            onChange={(exclude_titles) => updateSearchConfig({ exclude_titles })}
+                            placeholder="Add a word, then press Enter"
                           />
                         </div>
 
                         <div className="config-section">
                           <h3>Defaults</h3>
-                          <div className="config-row">
-                            <label className="field-label">
-                              Results per board
+                          <div className="field-grid">
+                            <label className="ctx-field">
+                              <span className="ctx-field-label">Results per board</span>
                               <input
                                 type="number"
+                                className="ctx-input"
                                 min={1}
                                 max={100}
                                 value={searchConfig.defaults.results_per_site}
                                 onChange={(e) =>
-                                  setSearchConfig((c) =>
-                                    c && {
-                                      ...c,
-                                      defaults: { ...c.defaults, results_per_site: Number(e.target.value) },
-                                    },
-                                  )
+                                  updateSearchConfig({
+                                    defaults: { ...searchConfig.defaults, results_per_site: Number(e.target.value) },
+                                  })
                                 }
                               />
                             </label>
-                            <label className="field-label">
-                              Posted within
+                            <label className="ctx-field">
+                              <span className="ctx-field-label">Posted within</span>
                               <select
+                                className="ctx-input"
                                 value={searchConfig.defaults.hours_old}
                                 onChange={(e) =>
-                                  setSearchConfig((c) =>
-                                    c && { ...c, defaults: { ...c.defaults, hours_old: Number(e.target.value) } },
-                                  )
+                                  updateSearchConfig({
+                                    defaults: { ...searchConfig.defaults, hours_old: Number(e.target.value) },
+                                  })
                                 }
                               >
                                 {TIME_RANGES.map((r) => (
@@ -378,76 +308,17 @@ export function SettingsModal({
                           </div>
                         </div>
 
-                        <div className="config-actions">
-                          <button type="button" disabled={searchSaving} onClick={handleSaveSearchDefaults}>
+                        <div className="ctx-actions">
+                          {searchSaveMessage && <span className="ctx-saved">{searchSaveMessage}</span>}
+                          {searchSaveError && <span className="search-result search-error">{searchSaveError}</span>}
+                          <span className="ctx-actions-spacer" />
+                          <button type="button" className="ctx-btn primary" disabled={searchSaving} onClick={handleSaveSearchDefaults}>
                             {searchSaving ? 'Saving…' : 'Save'}
                           </button>
                         </div>
-                        {searchSaveMessage && <span className="search-result">{searchSaveMessage}</span>}
-                        {searchSaveError && <span className="search-result search-error">{searchSaveError}</span>}
                       </>
                     )}
                   </>
-                )}
-
-                {activeTab === 'cover_letter' && (
-                  <PromptTabContent
-                    title="Cover Letter"
-                    field={{
-                      label: 'Cover Letter prompt',
-                      description: 'Structure and voice for the four paragraphs (Intro, Why This Company, Why You, Closing). Banned words, the anti-fabrication guardrails, and sign-off format are always enforced by the code, regardless of what you write here.',
-                      value: coverLetterText,
-                      onChange: setCoverLetterText,
-                      onReset: () => setCoverLetterText(defaults.cover_letter),
-                      resetDisabled: saving,
-                    }}
-                    loaded={promptsLoaded}
-                    loadError={promptsLoadError}
-                    saving={saving}
-                    saveMessage={saveMessage}
-                    saveError={saveError}
-                    onSave={handleSavePrompts}
-                  />
-                )}
-
-                {activeTab === 'scoring' && (
-                  <PromptTabContent
-                    title="Scoring"
-                    field={{
-                      label: 'Scoring prompt',
-                      description: 'The rubric (1-10 score bands, what factors matter) used to rate how well each job matches your resume. The exact response format the app parses is always enforced by the code.',
-                      value: scoringText,
-                      onChange: setScoringText,
-                      onReset: () => setScoringText(defaults.scoring),
-                      resetDisabled: saving,
-                    }}
-                    loaded={promptsLoaded}
-                    loadError={promptsLoadError}
-                    saving={saving}
-                    saveMessage={saveMessage}
-                    saveError={saveError}
-                    onSave={handleSavePrompts}
-                  />
-                )}
-
-                {activeTab === 'tailoring' && (
-                  <PromptTabContent
-                    title="Tailoring"
-                    field={{
-                      label: 'Tailoring prompt',
-                      description: 'Recruiter-scan framing, tailoring rules, and voice guidance for rewriting your resume per job. Skills boundaries, banned words, hard fabrication rules, and the JSON output format are always enforced by the code.',
-                      value: tailoringText,
-                      onChange: setTailoringText,
-                      onReset: () => setTailoringText(defaults.tailoring),
-                      resetDisabled: saving,
-                    }}
-                    loaded={promptsLoaded}
-                    loadError={promptsLoadError}
-                    saving={saving}
-                    saveMessage={saveMessage}
-                    saveError={saveError}
-                    onSave={handleSavePrompts}
-                  />
                 )}
               </div>
             </div>

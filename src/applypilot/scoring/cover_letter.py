@@ -85,8 +85,11 @@ def _build_cover_letter_prompt(profile: dict, template: str) -> str:
         .replace("{{METRICS_HINT}}", metrics_hint)
     )
 
-    return f"""Write a cover letter for {sign_off_name}. The goal is to get an interview.
+    summary = profile.get("summary", "")
+    summary_section = f"\nCANDIDATE SUMMARY (in their own words):\n{summary}\n" if summary else ""
 
+    return f"""Write a cover letter for {sign_off_name}. The goal is to get an interview.
+{summary_section}
 {structure_section}
 
 BANNED WORDS AND PHRASES (automated validator rejects ANY of these — do not use even once):

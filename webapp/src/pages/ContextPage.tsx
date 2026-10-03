@@ -3,17 +3,18 @@ import {
   ApiError,
   extractProfile,
   getContextStatus,
-  getProfile,
-  saveEnvConfig,
-  saveManualProfile,
-  suggestSearchConfig,
+  getProfileMarkdown,
   getSearchConfig,
+  saveKnowledgeBaseDir,
+  saveProfileMarkdown,
   saveSearchConfig,
-  uploadCv,
+  suggestSearchConfig,
 } from '../api/client'
-import type { ContextStatus, LlmProvider, Profile } from '../api/types'
-import { SearchPanel } from '../components/SearchPanel'
+import type { ContextStatus } from '../api/types'
+import { CvLibrary } from '../components/CvLibrary'
+import { PromptsEditor } from '../components/PromptsEditor'
 import { TopBar } from '../components/TopBar'
+import { useLocalStorageState } from '../hooks/useLocalStorageState'
 import { useTheme } from '../hooks/useTheme'
 
 function useAsyncAction() {
@@ -33,219 +34,199 @@ function useAsyncAction() {
   return { busy, error, run }
 }
 
-function EnvForm({ configured, onSaved }: { configured: boolean; onSaved: () => void }) {
-  const [open, setOpen] = useState(!configured)
-  const [provider, setProvider] = useState<LlmProvider>('gemini')
-  const [apiKey, setApiKey] = useState('')
-  const [model, setModel] = useState('')
-  const [url, setUrl] = useState('')
-  const { busy, error, run } = useAsyncAction()
+/** First CV only: AI fills Profile.md and search queries from it. Search
+ * suggestion is best-effort -- the upload and profile fill already succeeded. */
+async function onboardFromFirstCv() {
+  await extractProfile()
+  try {
+    const current = await getSearchConfig()
+    const suggestion = await suggestSearchConfig()
+    if (suggestion.queries.length > 0) {
+      await saveSearchConfig({ ...current, queries: suggestion.queries, exclude_titles: suggestion.exclude_titles })
+    }
+  } catch {
+    // ignore
+  }
+}
 
-  if (!open) {
-    return (
-      <div className="context-card-row">
-        <span className="context-ok">LLM provider configured</span>
-        <button type="button" className="cv-set-primary-btn" onClick={() => setOpen(true)}>
-          Change
+/** Raw editor for ~/.applypilot/profile.md. Remounted (via `key`) after an
+ * AI extraction rewrites the file, so it never shows stale text. */
+function ProfileEditor({ hasCv, onSaved, onExtracted }: { hasCv: boolean; onSaved: () => void; onExtracted: () => void }) {
+  const [text, setText] = useState<string | null>(null)
+  const [savedText, setSavedText] = useState('')
+  const [path, setPath] = useState('~/.applypilot/profile.md')
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
+  const save = useAsyncAction()
+  const extract = useAsyncAction()
+
+  useEffect(() => {
+    getProfileMarkdown()
+      .then((p) => {
+        setText(p.text)
+        // A starter skeleton isn't saved yet -- leave Save enabled for it.
+        setSavedText(p.exists ? p.text : '')
+        setPath(p.path)
+      })
+      .catch(() => setLoadError('Could not load Profile.md'))
+  }, [])
+
+  if (loadError) return <p className="search-result search-error">{loadError}</p>
+  if (text === null) return <p className="search-result">Loading…</p>
+
+  const dirty = text !== savedText
+
+  return (
+    <div className="ctx-editor-wrap">
+      <textarea
+        className="ctx-editor ctx-editor-tall"
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value)
+          setMessage(null)
+        }}
+        spellCheck={false}
+        aria-label="Profile.md"
+      />
+      {save.error && <p className="search-result search-error">{save.error}</p>}
+      {extract.error && <p className="search-result search-error">{extract.error}</p>}
+      <div className="ctx-actions">
+        <span className="ctx-file-path" title={path}>{path}</span>
+        {dirty ? <span className="ctx-dirty">Unsaved changes</span> : message && <span className="ctx-saved">{message}</span>}
+        <span className="ctx-actions-spacer" />
+        {hasCv && (
+          <button
+            type="button"
+            className="ctx-btn"
+            disabled={extract.busy || dirty}
+            title={dirty ? 'Save or undo your edits first' : 'Refill basic info and skills from your primary CV. Your summary, visa and salary fields are kept.'}
+            onClick={() => extract.run(async () => { await extractProfile(); onExtracted() })}
+          >
+            {extract.busy ? 'Filling…' : 'Refill from CV with AI'}
+          </button>
+        )}
+        <button
+          type="button"
+          className="ctx-btn primary"
+          disabled={!dirty || save.busy}
+          onClick={() =>
+            save.run(async () => {
+              const saved = await saveProfileMarkdown(text)
+              setText(saved.text)
+              setSavedText(saved.text)
+              setMessage('Saved')
+              onSaved()
+            })
+          }
+        >
+          {save.busy ? 'Saving…' : 'Save'}
         </button>
       </div>
-    )
-  }
+    </div>
+  )
+}
+
+function KnowledgeBaseForm({ status, onSaved }: { status: ContextStatus['knowledge_base']; onSaved: () => void }) {
+  const [dir, setDir] = useState(status.dir ?? '')
+  const { busy, error, run } = useAsyncAction()
 
   return (
     <div className="context-form">
-      <div className="config-row">
-        <select value={provider} onChange={(e) => setProvider(e.target.value as LlmProvider)}>
-          <option value="gemini">Gemini (recommended, free tier)</option>
-          <option value="openai">OpenAI</option>
-          <option value="local">Local (Ollama / llama.cpp)</option>
-        </select>
+      <label className="ctx-field-label" htmlFor="kb-dir">Folder path</label>
+      <div className="ctx-inline-field">
+        <input
+          id="kb-dir"
+          type="text"
+          className="ctx-input"
+          placeholder="/Users/you/Notes/Career"
+          value={dir}
+          onChange={(e) => setDir(e.target.value)}
+        />
+        <button
+          type="button"
+          className="ctx-btn primary"
+          disabled={busy || dir === (status.dir ?? '')}
+          onClick={() => run(async () => { await saveKnowledgeBaseDir(dir); onSaved() })}
+        >
+          {busy ? 'Saving…' : 'Save'}
+        </button>
       </div>
-      {provider !== 'local' ? (
-        <div className="config-row">
-          <input
-            type="password"
-            placeholder={provider === 'gemini' ? 'Gemini API key (aistudio.google.com)' : 'OpenAI API key'}
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-          />
-        </div>
-      ) : (
-        <div className="config-row">
-          <input
-            type="text"
-            placeholder="Local LLM endpoint URL (e.g. http://localhost:8080/v1)"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-          />
+      {error && <p className="search-result search-error">{error}</p>}
+      {status.dir && (
+        <div className="ctx-stat-row">
+          <span className="ctx-stat"><strong>{status.folder_count}</strong> folder(s) with an index.md</span>
+          {status.empty_folders.length > 0 && (
+            <span className="ctx-stat warn">No content yet: {status.empty_folders.join(', ')}</span>
+          )}
         </div>
       )}
-      <div className="config-row">
-        <input
-          type="text"
-          placeholder={`Model (default: ${provider === 'gemini' ? 'gemini-2.0-flash' : provider === 'openai' ? 'gpt-4o-mini' : 'local-model'})`}
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-        />
-      </div>
-      {error && <p className="search-result search-error">{error}</p>}
-      <button
-        type="button"
-        className="cv-upload-btn"
-        disabled={busy}
-        onClick={() =>
-          run(async () => {
-            await saveEnvConfig({ provider, api_key: apiKey, model, url })
-            setOpen(false)
-            onSaved()
-          })
-        }
-      >
-        {busy ? 'Saving…' : 'Save'}
-      </button>
     </div>
   )
 }
 
-function ResumeUpload({ onDone }: { onDone: () => void }) {
-  const [file, setFile] = useState<File | null>(null)
-  const [name, setName] = useState('')
-  const { busy, error, run } = useAsyncAction()
+type SectionKey = 'prompts' | 'profile' | 'cv' | 'kb'
+type SectionState = 'ok' | 'warn' | 'none'
 
-  return (
-    <div className="context-form">
-      <p className="prompt-field-description">
-        Upload your resume PDF. It becomes your primary CV, and AI pre-fills your profile and
-        search queries from it — you'll only need to fill in a few fields AI can't know.
-      </p>
-      <div className="config-row cv-upload-form">
-        <input
-          type="text"
-          className="cv-name-input"
-          placeholder="Name (e.g. Backend Engineer) — defaults to filename"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <input type="file" accept="application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-      </div>
-      {error && <p className="search-result search-error">{error}</p>}
-      <button
-        type="button"
-        className="cv-upload-btn"
-        disabled={!file || busy}
-        onClick={() =>
-          run(async () => {
-            if (!file) return
-            await uploadCv(file, name.trim())
-            await extractProfile()
-            try {
-              const current = await getSearchConfig()
-              const suggestion = await suggestSearchConfig()
-              if (suggestion.queries.length > 0) {
-                await saveSearchConfig({ ...current, queries: suggestion.queries, exclude_titles: suggestion.exclude_titles })
-              }
-            } catch {
-              // Search suggestion is best-effort -- the CV/profile upload above already succeeded.
-            }
-            onDone()
-          })
-        }
-      >
-        {busy ? 'Uploading…' : 'Upload & extract'}
-      </button>
-    </div>
-  )
-}
+const SECTIONS: { key: SectionKey; label: string; title: string; description: string }[] = [
+  {
+    key: 'prompts',
+    label: 'Prompts',
+    title: 'Prompts',
+    description: 'How the AI writes cover letters, scores jobs, and tailors your resume.',
+  },
+  {
+    key: 'profile',
+    label: 'Profile',
+    title: 'Profile.md',
+    description:
+      'A high-level summary of you. The --- block at the top holds basic info that forms are filled from (name, address, title, visa, salary). Below it, write a few lines about who you are and what you want. Detailed work history belongs in your CV and knowledge base.',
+  },
+  {
+    key: 'cv',
+    label: 'CV',
+    title: 'CV',
+    description: 'Master resumes you maintain yourself. The primary CV is the base resume for scoring, tailoring, and cover letters. When auto-submitting a job with no tailored resume, the best-matching CV here is used as-is.',
+  },
+  {
+    key: 'kb',
+    label: 'Knowledge base',
+    title: 'Knowledge base',
+    description:
+      "A folder of Markdown notes (e.g. an Obsidian vault) with the detail your CV is too short for: projects, courses, prepared answers. Each subfolder's index.md is read as a summary of that folder.",
+  },
+]
 
-function ManualFieldsForm({ profile, onSaved }: { profile: Profile | null; onSaved: () => void }) {
-  const [authorized, setAuthorized] = useState(profile?.work_authorization.legally_authorized_to_work ?? true)
-  const [sponsorship, setSponsorship] = useState(profile?.work_authorization.require_sponsorship ?? false)
-  const [permitType, setPermitType] = useState(profile?.work_authorization.work_permit_type ?? '')
-  const [salary, setSalary] = useState(profile?.compensation.salary_expectation ?? '')
-  const [currency, setCurrency] = useState(profile?.compensation.salary_currency ?? 'USD')
-  const [startDate, setStartDate] = useState(profile?.availability.earliest_start_date ?? 'Immediately')
-  const [kbDir, setKbDir] = useState(profile?.knowledge_base_dir ?? '')
-  const { busy, error, run } = useAsyncAction()
-
-  return (
-    <div className="context-form">
-      <p className="prompt-field-description">
-        Visa status, pay expectations, and availability aren't in your resume — AI can't guess
-        these, they're yours to set.
-      </p>
-      <div className="config-row">
-        <label className="toggle-check">
-          <input type="checkbox" checked={authorized} onChange={(e) => setAuthorized(e.target.checked)} />
-          Legally authorized to work in your target country
-        </label>
-      </div>
-      <div className="config-row">
-        <label className="toggle-check">
-          <input type="checkbox" checked={sponsorship} onChange={(e) => setSponsorship(e.target.checked)} />
-          Will need visa sponsorship
-        </label>
-      </div>
-      <div className="config-row">
-        <input type="text" placeholder="Work permit type (e.g. Citizen, PR — optional)" value={permitType} onChange={(e) => setPermitType(e.target.value)} />
-      </div>
-      <div className="config-row">
-        <input type="text" placeholder="Expected salary" value={salary} onChange={(e) => setSalary(e.target.value)} />
-        <input type="text" placeholder="Currency" value={currency} onChange={(e) => setCurrency(e.target.value)} style={{ maxWidth: 90 }} />
-      </div>
-      <div className="config-row">
-        <input type="text" placeholder="Earliest start date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-      </div>
-      <div className="config-row">
-        <input type="text" placeholder="Knowledge base folder path (optional)" value={kbDir} onChange={(e) => setKbDir(e.target.value)} />
-      </div>
-      {error && <p className="search-result search-error">{error}</p>}
-      <button
-        type="button"
-        className="cv-upload-btn"
-        disabled={busy}
-        onClick={() =>
-          run(async () => {
-            await saveManualProfile({
-              work_authorization: {
-                legally_authorized_to_work: authorized,
-                require_sponsorship: sponsorship,
-                work_permit_type: permitType,
-              },
-              compensation: {
-                salary_expectation: salary,
-                salary_currency: currency,
-                salary_range_min: profile?.compensation.salary_range_min ?? salary,
-                salary_range_max: profile?.compensation.salary_range_max ?? salary,
-              },
-              availability: { earliest_start_date: startDate },
-              knowledge_base_dir: kbDir,
-            })
-            onSaved()
-          })
-        }
-      >
-        {busy ? 'Saving…' : 'Save'}
-      </button>
-    </div>
-  )
+function sectionState(key: SectionKey, status: ContextStatus): SectionState {
+  switch (key) {
+    case 'prompts':
+      return 'none'
+    case 'profile':
+      return status.profile.has_name && status.profile.work_authorization_set ? 'ok' : 'warn'
+    case 'cv':
+      return status.cv.primary_cv && status.cv.resume_text_chars > 0 ? 'ok' : 'warn'
+    case 'kb':
+      if (!status.knowledge_base.dir) return 'none'
+      return status.knowledge_base.empty_folders.length > 0 ? 'warn' : 'ok'
+  }
 }
 
 export function ContextPage() {
   const { theme, toggleTheme } = useTheme()
   const [status, setStatus] = useState<ContextStatus | null>(null)
-  const [profile, setProfile] = useState<Profile | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const extractAction = useAsyncAction()
+  // Bumped whenever profile.md is rewritten outside the editor (AI extraction).
+  const [profileVersion, setProfileVersion] = useState(0)
+  const [active, setActive] = useLocalStorageState<SectionKey>('applypilot-context-section', 'prompts')
 
   function refresh() {
     getContextStatus()
       .then(setStatus)
       .catch(() => setLoadError('Could not load context status'))
-    getProfile()
-      .then(setProfile)
-      .catch((e) => {
-        if (e instanceof ApiError && e.status === 404) setProfile(null)
-      })
+  }
+
+  function onProfileRewritten() {
+    setProfileVersion((v) => v + 1)
+    refresh()
   }
 
   useEffect(() => {
@@ -268,109 +249,67 @@ export function ContextPage() {
 
   return (
     <>
-      <TopBar theme={theme} onToggleTheme={toggleTheme} onCvActivity={refresh} />
+      <TopBar theme={theme} onToggleTheme={toggleTheme} />
       <div className="app-container">
       <div className="app-header">
         <h1>Context</h1>
       </div>
       <p className="subtitle">
-        What ApplyPilot currently knows about you — where it comes from, and what's missing.
+        Everything the AI uses about you: how it writes, who you are, and the detail behind it.
       </p>
 
-      {status.missing.length > 0 ? (
-        <div className="context-card context-gap-card">
-          <h3>Needs attention</h3>
-          <ul className="context-gap-list">
-            {status.missing.map((m) => (
-              <li key={m}>{m}</li>
-            ))}
-          </ul>
-        </div>
-      ) : (
-        <div className="context-card context-ok-card">
-          <span className="context-ok">Everything's set up — Tier {status.tier} ({status.tier_label})</span>
-        </div>
-      )}
+      <div className="ctx-layout">
+        <nav className="ctx-nav" aria-label="Context sections">
+          {SECTIONS.map((sec, i) => {
+            const state = sectionState(sec.key, status)
+            return (
+              <button
+                key={sec.key}
+                type="button"
+                className={`ctx-nav-item${active === sec.key ? ' active' : ''}`}
+                aria-current={active === sec.key ? 'page' : undefined}
+                onClick={() => setActive(sec.key)}
+              >
+                <span className="ctx-nav-num">{i + 1}</span>
+                <span className="ctx-nav-label">{sec.label}</span>
+                {state !== 'none' && (
+                  <span className={`ctx-nav-dot ${state}`} title={state === 'ok' ? 'Set up' : 'Needs attention'} />
+                )}
+              </button>
+            )
+          })}
+        </nav>
 
-      <div className="context-card">
-        <h3>LLM Provider</h3>
-        <EnvForm configured={status.env.configured} onSaved={refresh} />
-      </div>
+        <section className="ctx-panel">
+          {SECTIONS.filter((sec) => sec.key === active).map((sec) => (
+            <header key={sec.key} className="ctx-panel-header">
+              <h2>{sec.title}</h2>
+              <p>{sec.description}</p>
+            </header>
+          ))}
 
-      <div className="context-card">
-        <h3>Resume / CV</h3>
-        {status.cv.primary_cv ? (
-          <div className="context-card-row">
-            <span>
-              Primary: <strong>{status.cv.primary_cv}</strong> — {status.cv.resume_text_chars.toLocaleString()} chars extracted
-              {status.cv.resume_text_chars === 0 && <span className="context-warn"> (no text — scanned PDF?)</span>}
-            </span>
-          </div>
-        ) : (
-          <ResumeUpload onDone={refresh} />
-        )}
-        <p className="prompt-field-description">Manage CVs from the library icon in the top bar.</p>
-      </div>
+          {active === 'prompts' && <PromptsEditor />}
 
-      {status.cv.primary_cv && (
-        <div className="context-card">
-          <h3>Profile (AI-extracted)</h3>
-          {profile ? (
-            <div className="context-profile-grid">
-              <div><span className="context-label">Name</span>{profile.personal.full_name || '—'}</div>
-              <div><span className="context-label">Email</span>{profile.personal.email || '—'}</div>
-              <div><span className="context-label">Current title</span>{profile.experience.current_title || '—'}</div>
-              <div><span className="context-label">Target role</span>{profile.experience.target_role || '—'}</div>
-              <div><span className="context-label">Experience</span>{profile.experience.years_of_experience_total || '—'} years</div>
-              <div><span className="context-label">Education</span>{profile.experience.education_level || '—'}</div>
-              <div className="context-profile-grid-wide">
-                <span className="context-label">Skills ({status.profile.skills_count})</span>
-                {[...profile.skills_boundary.programming_languages, ...profile.skills_boundary.frameworks, ...profile.skills_boundary.tools].join(', ') || '—'}
-              </div>
-            </div>
-          ) : (
-            <p className="prompt-field-description">No profile yet.</p>
+          {active === 'profile' && (
+            <ProfileEditor
+              key={profileVersion}
+              hasCv={!!status.cv.primary_cv}
+              onSaved={refresh}
+              onExtracted={onProfileRewritten}
+            />
           )}
-          {extractAction.error && <p className="search-result search-error">{extractAction.error}</p>}
-          <button
-            type="button"
-            className="cv-set-primary-btn"
-            disabled={extractAction.busy}
-            onClick={() => extractAction.run(async () => { await extractProfile(); refresh() })}
-          >
-            {extractAction.busy ? 'Extracting…' : 'Re-extract from resume'}
-          </button>
-        </div>
-      )}
 
-      <div className="context-card">
-        <h3>Manual settings</h3>
-        <ManualFieldsForm profile={profile} onSaved={refresh} />
-      </div>
-
-      {status.knowledge_base.dir && (
-        <div className="context-card">
-          <h3>Knowledge base</h3>
-          <p className="context-card-row">{status.knowledge_base.dir} — {status.knowledge_base.folder_count} folder(s)</p>
-          {status.knowledge_base.empty_folders.length > 0 && (
-            <p className="context-warn">No content yet: {status.knowledge_base.empty_folders.join(', ')}</p>
+          {active === 'cv' && (
+            <CvLibrary
+              onActivity={onProfileRewritten}
+              afterUpload={async (isFirst) => {
+                if (isFirst) await onboardFromFirstCv()
+              }}
+            />
           )}
-        </div>
-      )}
 
-      <div className="context-card">
-        <h3>Search queries</h3>
-        <p className="context-card-row">{status.search.query_count} quer{status.search.query_count === 1 ? 'y' : 'ies'} configured</p>
-        <SearchPanel onActivity={refresh} />
-      </div>
-
-      <div className="context-card">
-        <h3>Auto-apply readiness</h3>
-        <ul className="context-gap-list">
-          <li className={status.env.configured ? 'context-ok' : 'context-warn'}>LLM API key: {status.env.configured ? 'configured' : 'missing'}</li>
-          <li className={status.claude_cli ? 'context-ok' : 'context-warn'}>Claude Code CLI: {status.claude_cli ? 'found' : 'not found — install from claude.ai/code'}</li>
-          <li className={status.chrome ? 'context-ok' : 'context-warn'}>Chrome: {status.chrome ? 'found' : 'not found'}</li>
-        </ul>
+          {active === 'kb' && <KnowledgeBaseForm status={status.knowledge_base} onSaved={refresh} />}
+        </section>
       </div>
       </div>
     </>

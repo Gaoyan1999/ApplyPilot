@@ -295,3 +295,42 @@ def get_client() -> LLMClient:
         log.info("LLM provider: %s  model: %s", base_url, model)
         _instance = LLMClient(base_url, model, api_key)
     return _instance
+
+
+def reset_client() -> None:
+    """Drop the cached client so the next get_client() re-reads the env --
+    called after the LLM provider is changed from the dashboard."""
+    global _instance
+    if _instance is not None:
+        _instance.close()
+    _instance = None
+
+
+def test_connection() -> dict:
+    """One tiny request against the configured provider, without chat()'s
+    retry/backoff loop (which can wait minutes on a 429) -- for the
+    dashboard's "Test connection" button."""
+    try:
+        base_url, model, api_key = _detect_provider()
+    except RuntimeError as e:
+        return {"ok": False, "model": None, "latency_ms": None, "error": str(e)}
+
+    client = LLMClient(base_url, model, api_key)
+    client._client.timeout = httpx.Timeout(20)
+    messages = [{"role": "user", "content": "Reply with the single word: ok"}]
+    start = time.monotonic()
+    try:
+        try:
+            client._chat_compat(messages, 0.0, 16)
+        except _GeminiCompatForbidden:
+            client._chat_native_gemini(messages, 0.0, 16)
+    except httpx.HTTPStatusError as e:
+        error = f"HTTP {e.response.status_code}: {e.response.text[:200]}"
+        return {"ok": False, "model": model, "latency_ms": None, "error": error}
+    except httpx.HTTPError as e:
+        return {"ok": False, "model": model, "latency_ms": None, "error": f"Could not reach {base_url}: {e}"}
+    except Exception as e:
+        return {"ok": False, "model": model, "latency_ms": None, "error": str(e)[:200]}
+    finally:
+        client.close()
+    return {"ok": True, "model": model, "latency_ms": round((time.monotonic() - start) * 1000), "error": None}

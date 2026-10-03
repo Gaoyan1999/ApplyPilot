@@ -253,3 +253,34 @@ def field_text(context):
         "latency_ms": round((time.perf_counter() - started) * 1000),
         "usage": {},
     }
+
+
+def test_connection() -> dict:
+    """One minimal TypeSafe request, without post_json()'s retries -- for the
+    dashboard's "Test connection" button. Same shape as llm.test_connection."""
+    key = os.environ.get("TYPESAFE_API_KEY", "")
+    model = os.environ.get("TYPESAFE_MODEL", "jev-latest")
+    if not key:
+        return {"ok": False, "model": None, "latency_ms": None, "error": "TYPESAFE_API_KEY is not set."}
+    body = {
+        "model": model,
+        "state": {"page": {"url": "about:blank", "title": "Connection test", "text": ""}},
+        "questions": {
+            "operation": {
+                "type": "choice",
+                "criteria": {"DONE": "Nothing to do.", "BLOCKED": "Cannot continue."},
+                "instructions": {"goal": "Connection test: choose DONE."},
+            }
+        },
+    }
+    started = time.perf_counter()
+    try:
+        response = CLIENT.post(
+            "https://api.typesafe.ai/v1/systemone", json=body, headers={"Authorization": f"Bearer {key}"}
+        )
+    except httpx.HTTPError as e:
+        return {"ok": False, "model": model, "latency_ms": None, "error": f"Could not reach TypeSafe: {e}"}
+    if response.is_error:
+        error = f"HTTP {response.status_code}: {response.text[:200]}"
+        return {"ok": False, "model": model, "latency_ms": None, "error": error}
+    return {"ok": True, "model": model, "latency_ms": round((time.perf_counter() - started) * 1000), "error": None}

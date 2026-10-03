@@ -8,8 +8,8 @@ triggering a discover -> enrich -> score run (/api/search/run). No auth
 WebSockets.
 """
 
-import json
 import logging
+import os
 import sys
 import threading
 import webbrowser
@@ -37,9 +37,15 @@ from applypilot.config import (
     load_profile,
     load_prompts,
     load_search_config,
+    parse_profile_markdown,
+    profile_exists,
+    profile_skeleton_markdown,
     read_cv_text,
+    read_profile_markdown,
     safe_cv_name,
     save_cv,
+    save_profile,
+    save_profile_markdown,
     save_prompts,
     save_search_config,
     set_primary_cv,
@@ -53,6 +59,7 @@ from applypilot.database import (
     reconcile_orphaned_tasks,
     search_jobs,
 )
+from applypilot import llm
 from applypilot.profile_ai import extract_profile_fields, suggest_search_config
 from applypilot.search_config import SearchYamlConfig
 from applypilot.server import apply_state, search_state, status_check_state
@@ -505,18 +512,12 @@ def api_get_cv_file(name: str):
 # yet" onboarding view and the ongoing gap checklist in the webapp.
 # ---------------------------------------------------------------------------
 
-class ProfilePersonalManual(BaseModel):
-    password: str | None = None
-    linkedin_password: str | None = None
-    linkedin_email: str | None = None
+class ProfileMarkdownBody(BaseModel):
+    text: str
 
 
-class ProfileManualBody(BaseModel):
-    work_authorization: dict = {}
-    compensation: dict = {}
-    availability: dict = {}
-    knowledge_base_dir: str = ""
-    personal: ProfilePersonalManual = ProfilePersonalManual()
+class KnowledgeBaseBody(BaseModel):
+    dir: str = ""
 
 
 class ProfileExtractBody(BaseModel):
@@ -528,11 +529,10 @@ class SearchSuggestBody(BaseModel):
 
 
 class SetupEnvBody(BaseModel):
-    provider: str
+    url: str
+    model: str
+    # Blank keeps the key already saved -- the GET below never sends it back.
     api_key: str = ""
-    model: str = ""
-    url: str = ""
-    capsolver_key: str = ""
 
 
 @app.get("/api/context/status")
@@ -542,9 +542,30 @@ def api_context_status() -> dict:
 
 @app.get("/api/profile")
 def api_get_profile() -> dict:
-    if not PROFILE_PATH.exists():
+    if not profile_exists():
         raise HTTPException(status_code=404, detail="Profile not found")
     return load_profile()
+
+
+@app.get("/api/profile/markdown")
+def api_get_profile_markdown() -> dict:
+    """Raw Profile.md text for the Context page editor -- a starter skeleton
+    when no profile exists yet, so it can be written by hand without a CV."""
+    exists = profile_exists()
+    return {
+        "text": read_profile_markdown() if exists else profile_skeleton_markdown(),
+        "exists": exists,
+        "path": str(PROFILE_PATH),
+    }
+
+
+@app.put("/api/profile/markdown")
+def api_put_profile_markdown(body: ProfileMarkdownBody) -> dict:
+    try:
+        save_profile_markdown(body.text)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return api_get_profile_markdown()
 
 
 def _resume_text_for(cv_name: str | None) -> str:
@@ -557,6 +578,12 @@ def _resume_text_for(cv_name: str | None) -> str:
     return text
 
 
+def _raw_profile() -> dict:
+    """The profile as stored -- unlike load_profile(), the summary keeps its
+    "<!-- ... -->" template hints so a rewrite doesn't drop them."""
+    return parse_profile_markdown(read_profile_markdown()) if profile_exists() else {}
+
+
 @app.post("/api/profile/extract")
 def api_extract_profile(body: ProfileExtractBody) -> dict:
     if get_tier() < 2:
@@ -564,37 +591,16 @@ def api_extract_profile(body: ProfileExtractBody) -> dict:
 
     resume_text = _resume_text_for(body.cv_name)
     extracted = extract_profile_fields(resume_text)
-
-    current = load_profile() if PROFILE_PATH.exists() else {}
-    merged = apply_profile_extraction(current, extracted)
-
-    PROFILE_PATH.write_text(json.dumps(merged, indent=2, ensure_ascii=False), encoding="utf-8")
-    return merged
+    save_profile(apply_profile_extraction(_raw_profile(), extracted))
+    return load_profile()
 
 
-@app.put("/api/profile/manual")
-def api_put_profile_manual(body: ProfileManualBody) -> dict:
-    current = load_profile() if PROFILE_PATH.exists() else {
-        "personal": {}, "experience": {}, "skills_boundary": {}, "resume_facts": {},
-    }
-    current["work_authorization"] = body.work_authorization
-    current["compensation"] = body.compensation
-    current["availability"] = body.availability
-    current["knowledge_base_dir"] = body.knowledge_base_dir
-    current.setdefault("eeo_voluntary", {
-        "gender": "Decline to self-identify",
-        "race_ethnicity": "Decline to self-identify",
-        "veteran_status": "Decline to self-identify",
-        "disability_status": "Decline to self-identify",
-    })
-
-    personal = dict(current.get("personal", {}))
-    for key, value in body.personal.model_dump(exclude_none=True).items():
-        personal[key] = value
-    current["personal"] = personal
-
-    PROFILE_PATH.write_text(json.dumps(current, indent=2, ensure_ascii=False), encoding="utf-8")
-    return current
+@app.put("/api/knowledge-base")
+def api_put_knowledge_base(body: KnowledgeBaseBody) -> dict:
+    profile = _raw_profile()
+    profile["knowledge_base_dir"] = body.dir.strip()
+    save_profile(profile)
+    return get_context_status()
 
 
 @app.post("/api/search/suggest")
@@ -603,39 +609,108 @@ def api_suggest_search(body: SearchSuggestBody) -> dict:
         raise HTTPException(status_code=400, detail=_NEEDS_LLM_KEY_DETAIL)
 
     resume_text = _resume_text_for(body.cv_name)
-    profile = load_profile() if PROFILE_PATH.exists() else {}
+    profile = load_profile() if profile_exists() else {}
     return suggest_search_config(resume_text, profile)
 
 
-@app.post("/api/setup/env")
-def api_setup_env(body: SetupEnvBody) -> dict:
-    if body.provider not in ("gemini", "openai", "local"):
-        raise HTTPException(status_code=400, detail="provider must be gemini, openai, or local")
+# Every key the LLM provider can come from (llm._detect_provider). Saving
+# from the dashboard always writes the generic LLM_URL / LLM_API_KEY /
+# LLM_MODEL trio and drops the older provider-specific keys.
+_LLM_ENV_KEYS = ("GEMINI_API_KEY", "OPENAI_API_KEY", "LLM_URL", "LLM_API_KEY", "LLM_MODEL")
 
-    lines = ["# ApplyPilot configuration", ""]
-    if body.provider == "gemini":
-        if not body.api_key:
-            raise HTTPException(status_code=400, detail="api_key is required for gemini")
-        lines.append(f"GEMINI_API_KEY={body.api_key}")
-        lines.append(f"LLM_MODEL={body.model or 'gemini-2.0-flash'}")
-    elif body.provider == "openai":
-        if not body.api_key:
-            raise HTTPException(status_code=400, detail="api_key is required for openai")
-        lines.append(f"OPENAI_API_KEY={body.api_key}")
-        lines.append(f"LLM_MODEL={body.model or 'gpt-4o-mini'}")
-    elif body.provider == "local":
-        if not body.url:
-            raise HTTPException(status_code=400, detail="url is required for local")
-        lines.append(f"LLM_URL={body.url}")
-        lines.append(f"LLM_MODEL={body.model or 'local-model'}")
-    if body.capsolver_key:
-        lines.append(f"CAPSOLVER_API_KEY={body.capsolver_key}")
+
+def _current_llm_config() -> tuple[str, str, str]:
+    """(url, model, api_key) the app is using now, or blanks if none."""
+    load_env()
+    try:
+        return llm._detect_provider()
+    except RuntimeError:
+        return "", "", ""
+
+
+def _mask_secret(value: str) -> str:
+    """Only the last 4 characters ever leave the server, so a form can show
+    which key is saved without exposing it."""
+    if not value:
+        return ""
+    return "*" * 12 + (value[-4:] if len(value) > 8 else "")
+
+
+def _write_env_keys(remove: tuple[str, ...], values: dict[str, str]) -> None:
+    """Rewrite ~/.applypilot/.env: drop every key in `remove`, then append the
+    non-empty `values`. All other lines (other services' keys) are kept."""
+    kept = []
+    if ENV_PATH.exists():
+        for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
+            if "=" in line and line.split("=", 1)[0].strip() in remove:
+                continue
+            kept.append(line)
+    for key in remove:
+        os.environ.pop(key, None)
+
+    lines = [line for line in kept if line.strip()] or ["# ApplyPilot configuration"]
+    lines.append("")
+    lines += [f"{key}={value}" for key, value in values.items() if value]
     lines.append("")
 
     ensure_dirs()
     ENV_PATH.write_text("\n".join(lines), encoding="utf-8")
     load_env()
+
+
+@app.get("/api/setup/env")
+def api_get_setup_env() -> dict:
+    url, model, api_key = _current_llm_config()
+    return {"url": url, "model": model, "has_api_key": bool(api_key), "api_key_masked": _mask_secret(api_key)}
+
+
+@app.post("/api/setup/env")
+def api_setup_env(body: SetupEnvBody) -> dict:
+    url, model = body.url.strip().rstrip("/"), body.model.strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="LLM URL is required")
+    if not model:
+        raise HTTPException(status_code=400, detail="Model is required")
+    api_key = body.api_key.strip() or _current_llm_config()[2]
+
+    _write_env_keys(_LLM_ENV_KEYS, {"LLM_URL": url, "LLM_MODEL": model, "LLM_API_KEY": api_key})
+    llm.reset_client()
     return get_context_status()
+
+
+class JevKeyBody(BaseModel):
+    api_key: str
+
+
+@app.get("/api/setup/jev")
+def api_get_setup_jev() -> dict:
+    load_env()
+    key = os.environ.get("TYPESAFE_API_KEY", "")
+    return {"has_api_key": bool(key), "api_key_masked": _mask_secret(key)}
+
+
+@app.put("/api/setup/jev")
+def api_put_setup_jev(body: JevKeyBody) -> dict:
+    """Set the TypeSafe key (jev apply engine). Blank removes it, which sends
+    auto-apply back to the Claude Code engine."""
+    _write_env_keys(("TYPESAFE_API_KEY",), {"TYPESAFE_API_KEY": body.api_key.strip()})
+    return api_get_setup_jev()
+
+
+@app.post("/api/setup/llm-test")
+def api_test_llm() -> dict:
+    """Send one tiny prompt to the saved LLM provider and report the result."""
+    load_env()
+    return llm.test_connection()
+
+
+@app.post("/api/setup/jev-test")
+def api_test_jev() -> dict:
+    """Send one minimal request to TypeSafe (the jev apply engine's API)."""
+    from applypilot.apply.jev.model import test_connection
+
+    load_env()
+    return test_connection()
 
 
 @app.get("/api/jobs/{url:path}")
