@@ -86,6 +86,27 @@ def _upload_resume(agent: Agent, resume_pdf_path: Path) -> bool:
     return True
 
 
+def _scroll_for_more(agent: Agent) -> bool:
+    """Scroll one step down before honoring DONE. The snapshot only shows
+    elements inside the viewport (see jev/snapshot.js), so on a long
+    single-page form (e.g. Lever) the model sees every *visible* field filled
+    and says DONE while the rest of the form is still below the fold.
+
+    Returns True if the scroll brought new content into view (keep going),
+    False if there's nothing more below or the page didn't change (DONE is
+    real)."""
+    page = agent.state["page"]
+    scroll = next((a for a in page["actions"] if a["kind"] == "scroll" and a["delta"] > 0), None)
+    if not scroll:
+        return False
+    agent.browser.act(scroll, page)
+    new_page = agent.browser.observe(screenshot=agent.screenshots)
+    # The DONE decision was never acted on -- drop it so the next predict()
+    # starts clean from the scrolled page.
+    agent.state.update(page=new_page, decision=None, status="ready")
+    return new_page["fingerprint"] != page["fingerprint"]
+
+
 def _activate_tab(agent: Agent) -> None:
     """Bring Jev's background tab to the front -- it's invisible by design
     until now (see module docstring)."""
@@ -228,7 +249,10 @@ def run_job_jev(job: dict, port: int, resume_pdf_path: Path, worker_id: int = 0,
         "completely and accurately using the applicant's real profile and resume "
         "information (already provided to you). Answer any screening questions "
         "reasonably from that same information. Do NOT click the final Submit/Apply "
-        "button -- stop once every required field is filled and correct. This is "
+        "button -- stop once every required field is filled and correct. You only "
+        "see the part of the page currently on screen: once every visible field "
+        "is filled, SCROLL_DOWN to look for more fields before choosing DONE. "
+        "Only choose DONE when scrolling down shows nothing new. This is "
         "often a multi-page/multi-step form: if every required field on the CURRENT "
         "page already has a value and nothing is missing, click Next/Continue "
         "immediately -- don't stop just because you're unsure a previously-filled "
@@ -304,6 +328,15 @@ def run_job_jev(job: dict, port: int, resume_pdf_path: Path, worker_id: int = 0,
                 continue
             if choice != "BLOCKED":
                 blocked_grace_used = 0
+
+            if choice == "DONE":
+                try:
+                    scrolled = _scroll_for_more(agent)
+                except StalePage:
+                    continue
+                if scrolled:
+                    _log_step("DONE deferred: scrolled down to check for more fields")
+                    continue
 
             if choice in ("DONE", "BLOCKED"):
                 try:
