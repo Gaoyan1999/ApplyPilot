@@ -271,12 +271,19 @@ body {
   max-width: 1800px;
   margin: 0 auto;
   padding: 32px 32px 64px;
-  transition: margin-right 0.15s ease;
+  transition: margin-right 0.2s ease-out;
+}
+
+/* Matches .job-detail-panel's 0.2s ease-out slide-in so the top bar shrinks
+   in step with the drawer instead of jumping. */
+.top-bar-wrap {
+  transition: margin-right 0.2s ease-out;
 }
 
 /* No transition lag while actively dragging the panel's resize handle --
    only animate the open/close snap. */
-body.col-resizing .app-container {
+body.col-resizing .app-container,
+body.col-resizing .top-bar-wrap {
   transition: none;
 }
 
