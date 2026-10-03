@@ -15,6 +15,9 @@ interface Props {
   onToggleShowDismissed?: () => void
   hiddenColumns?: SortKey[]
   onToggleColumn?: (key: SortKey) => void
+  // Width (px) of a right-side panel (the job detail drawer) to shrink away
+  // from, so the bar stays fully visible instead of sliding under it.
+  rightInset?: number
 }
 
 const NAV_ITEMS = [
@@ -38,12 +41,12 @@ function BrandMark() {
  * Search, Check Job Status) live in the page body instead, not here. */
 export function TopBar({
   theme, onToggleTheme, onCvActivity,
-  showDismissed, onToggleShowDismissed, hiddenColumns, onToggleColumn,
+  showDismissed, onToggleShowDismissed, hiddenColumns, onToggleColumn, rightInset,
 }: Props) {
   const path = useHashRoute()
 
   return (
-    <div className="top-bar-wrap">
+    <div className="top-bar-wrap" style={{ marginRight: rightInset }}>
       <div className="top-bar">
         <a className="top-bar-brand" href="#/">
           <BrandMark />

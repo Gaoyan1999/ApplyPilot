@@ -256,6 +256,7 @@ function App() {
         onToggleShowDismissed={() => setShowDismissed((v) => !v)}
         hiddenColumns={hiddenColumns}
         onToggleColumn={toggleColumnVisibility}
+        rightInset={previewJob ? panelWidth : undefined}
       />
       <div className="app-container" style={{ marginRight: previewJob ? panelWidth : undefined }}>
       <div className="app-header">
