@@ -139,7 +139,9 @@ def apply(
     limit: Optional[int] = typer.Option(None, "--limit", "-l", help="Max applications to submit."),
     workers: int = typer.Option(1, "--workers", "-w", help="Number of parallel browser workers."),
     min_score: int = typer.Option(7, "--min-score", help="Minimum fit score for job selection."),
-    model: str = typer.Option("haiku", "--model", "-m", help="Claude model name."),
+    model: Optional[str] = typer.Option(
+        None, "--model", "-m", help="Claude model name (default: the one chosen in Settings, else opus)."
+    ),
     continuous: bool = typer.Option(False, "--continuous", "-c", help="Run forever, polling for new jobs."),
     headless: bool = typer.Option(False, "--headless", help="Run browsers in headless mode."),
     url: Optional[str] = typer.Option(None, "--url", help="Apply to a specific job URL."),
@@ -154,6 +156,9 @@ def apply(
 
     from applypilot.config import check_tier, profile_exists, APP_DIR
     from applypilot.database import get_connection
+
+    from applypilot.config import get_apply_engine, get_claude_apply_model
+    model = model or get_claude_apply_model()
 
     # --- Utility modes (no Chrome/Claude needed) ---
 
@@ -230,6 +235,7 @@ def apply(
     console.print("\n[bold blue]Launching Auto-Apply[/bold blue]")
     console.print(f"  Limit:    {'unlimited' if continuous else effective_limit}")
     console.print(f"  Workers:  {workers}")
+    console.print(f"  Engine:   {get_apply_engine()}")
     console.print(f"  Model:    {model}")
     console.print(f"  Headless: {headless}")
     if url:

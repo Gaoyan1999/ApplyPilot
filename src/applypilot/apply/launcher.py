@@ -688,14 +688,14 @@ def worker_loop(worker_id: int = 0, limit: int = 1,
         min_score: Minimum fit_score threshold.
         headless: Run Chrome headless.
         model: Claude model name.
-        apply_engine: "claude" (default) or "jev" (see apply/jev_engine.py).
-            None reads config.DEFAULTS["apply_engine"].
+        apply_engine: "claude" or "jev" (see apply/jev_engine.py).
+            None reads the Settings choice (config.get_apply_engine()).
 
     Returns:
         Tuple of (applied_count, failed_count).
     """
     if apply_engine is None:
-        apply_engine = config.DEFAULTS["apply_engine"]
+        apply_engine = config.get_apply_engine()
     applied = 0
     failed = 0
     continuous = limit == 0

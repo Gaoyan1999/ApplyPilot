@@ -120,7 +120,7 @@ def get_all_statuses() -> list[dict]:
     return [_slot_status(i, s) for i, s in occupied]
 
 
-def start_apply(url: str, model: str = "haiku") -> int | None:
+def start_apply(url: str, model: str | None = None) -> int | None:
     """Start a background auto-submit run for one job in the first free slot
     (not running and not awaiting review). Returns the slot id it landed in,
     or None if every slot is currently busy, or if `url` already owns a
@@ -163,6 +163,9 @@ def start_apply(url: str, model: str = "haiku") -> int | None:
         payload={"slot_id": free_id},
     )
 
+    # The engine itself (claude/jev) is read by worker_loop from Settings;
+    # the model only matters for the Claude Code engine (or jev's fallback).
+    model = model or config.get_claude_apply_model()
     thread = threading.Thread(target=_run, args=(free_id, url, model), daemon=True)
     thread.start()
     return free_id

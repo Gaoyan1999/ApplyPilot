@@ -646,12 +646,18 @@ DEFAULTS = {
     # each slot gets its own Chrome instance/CDP port/browser profile, mirroring
     # launcher.py's worker_id-parameterized CLI batch mode.
     "web_apply_workers": 3,
-    # "claude" (default, full Claude Code agent) or "jev" (fast TypeSafe-based
-    # engine, apply/jev_engine.py) -- jev falls back to the Claude engine on
-    # any genuine infrastructure failure, but not on a stuck/blocked outcome
+    # "claude" (full Claude Code agent) or "jev" (fast TypeSafe-based engine,
+    # apply/jev_engine.py) -- jev falls back to the Claude engine on any
+    # genuine infrastructure failure, but not on a stuck/blocked outcome
     # (those are reported to the dashboard for manual review instead).
+    # Overridden by APPLY_ENGINE in .env (set from the dashboard's Settings).
     "apply_engine": "jev",
+    # Model the Claude Code engine runs with. Overridden by APPLY_CLAUDE_MODEL.
+    "claude_apply_model": "opus",
 }
+
+APPLY_ENGINES = ("claude", "jev")
+CLAUDE_APPLY_MODELS = ("opus", "sonnet", "haiku")
 
 
 def load_env():
@@ -661,6 +667,20 @@ def load_env():
         load_dotenv(ENV_PATH)
     # Also try CWD .env as fallback
     load_dotenv()
+
+
+def get_apply_engine() -> str:
+    """Auto-apply engine chosen in Settings (APPLY_ENGINE), else the default."""
+    load_env()
+    engine = os.environ.get("APPLY_ENGINE", "").strip().lower()
+    return engine if engine in APPLY_ENGINES else DEFAULTS["apply_engine"]
+
+
+def get_claude_apply_model() -> str:
+    """Claude model for the Claude Code engine (APPLY_CLAUDE_MODEL), else the default."""
+    load_env()
+    model = os.environ.get("APPLY_CLAUDE_MODEL", "").strip().lower()
+    return model if model in CLAUDE_APPLY_MODELS else DEFAULTS["claude_apply_model"]
 
 
 # ---------------------------------------------------------------------------
