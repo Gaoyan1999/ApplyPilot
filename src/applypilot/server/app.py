@@ -22,12 +22,16 @@ from pydantic import BaseModel
 from rich.console import Console
 
 from applypilot.config import (
+    APPLY_ENGINES,
+    CLAUDE_APPLY_MODELS,
     CV_DIR,
     ENV_PATH,
     PROFILE_PATH,
     apply_profile_extraction,
     delete_cv,
     ensure_dirs,
+    get_apply_engine,
+    get_claude_apply_model,
     get_context_status,
     get_primary_cv_name,
     get_prompt_seed,
@@ -695,6 +699,29 @@ def api_put_setup_jev(body: JevKeyBody) -> dict:
     auto-apply back to the Claude Code engine."""
     _write_env_keys(("TYPESAFE_API_KEY",), {"TYPESAFE_API_KEY": body.api_key.strip()})
     return api_get_setup_jev()
+
+
+class ApplyEngineBody(BaseModel):
+    engine: str
+    claude_model: str
+
+
+@app.get("/api/setup/apply-engine")
+def api_get_apply_engine() -> dict:
+    return {"engine": get_apply_engine(), "claude_model": get_claude_apply_model()}
+
+
+@app.put("/api/setup/apply-engine")
+def api_put_apply_engine(body: ApplyEngineBody) -> dict:
+    """Choose the auto-submit engine: the Claude Code CLI or jev. Applies to
+    the next run -- a run already in progress keeps its engine."""
+    engine, model = body.engine.strip().lower(), body.claude_model.strip().lower()
+    if engine not in APPLY_ENGINES:
+        raise HTTPException(status_code=400, detail=f"Engine must be one of: {', '.join(APPLY_ENGINES)}")
+    if model not in CLAUDE_APPLY_MODELS:
+        raise HTTPException(status_code=400, detail=f"Model must be one of: {', '.join(CLAUDE_APPLY_MODELS)}")
+    _write_env_keys(("APPLY_ENGINE", "APPLY_CLAUDE_MODEL"), {"APPLY_ENGINE": engine, "APPLY_CLAUDE_MODEL": model})
+    return api_get_apply_engine()
 
 
 @app.post("/api/setup/llm-test")

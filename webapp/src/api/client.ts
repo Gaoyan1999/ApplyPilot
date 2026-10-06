@@ -295,6 +295,22 @@ export function testJevConnection(): Promise<ConnectionTestResult> {
   return sendJson<ConnectionTestResult>('/api/setup/jev-test', 'POST', {})
 }
 
+export type ApplyEngine = 'claude' | 'jev'
+export type ClaudeApplyModel = 'opus' | 'sonnet' | 'haiku'
+
+export interface ApplyEngineConfig {
+  engine: ApplyEngine
+  claude_model: ClaudeApplyModel
+}
+
+export function getApplyEngine(): Promise<ApplyEngineConfig> {
+  return getJson<ApplyEngineConfig>('/api/setup/apply-engine')
+}
+
+export function saveApplyEngine(config: ApplyEngineConfig): Promise<ApplyEngineConfig> {
+  return sendJson<ApplyEngineConfig>('/api/setup/apply-engine', 'PUT', config)
+}
+
 export function saveEnvConfig(fields: SetupEnvFields): Promise<ContextStatus> {
   return sendJson<ContextStatus>('/api/setup/env', 'POST', fields)
 }

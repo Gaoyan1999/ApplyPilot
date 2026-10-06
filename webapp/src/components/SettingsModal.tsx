@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ApplyEngineSetting } from './ApplyEngineSetting'
 import { ApiError, getContextStatus, getSearchConfig, saveSearchConfig } from '../api/client'
 import type { ContextStatus, SearchConfig } from '../api/types'
 import type { Theme } from '../hooks/useTheme'
@@ -209,6 +210,10 @@ export function SettingsModal({
                           <LlmProviderForm configured={contextStatus.env.configured} onSaved={refreshContextStatus} />
                         </div>
                         <div className="config-section">
+                          <h3>Auto-submit engine</h3>
+                          <ApplyEngineSetting />
+                        </div>
+                        <div className="config-section">
                           <h3>Auto-apply readiness</h3>
                           <ul className="check-list">
                             <JevKeyCheck configured={contextStatus.jev_key} onSaved={refreshContextStatus} />
@@ -217,7 +222,7 @@ export function SettingsModal({
                               state={contextStatus.claude_cli ? 'ok' : 'warn'}
                               hint={
                                 contextStatus.claude_cli
-                                  ? 'Full apply agent, used when jev is unavailable or fails.'
+                                  ? 'Full apply agent. Used when it is the chosen engine, or when jev fails.'
                                   : 'Not found on PATH. Install it from claude.ai/code.'
                               }
                             />
