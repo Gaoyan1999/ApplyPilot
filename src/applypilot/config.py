@@ -859,7 +859,7 @@ def get_context_status() -> dict:
     if profile_section["exists"] and not profile_section["work_authorization_set"]:
         missing.append("Work authorization (set it in Profile.md)")
     if not search_section["exists"] or search_section["query_count"] == 0:
-        missing.append("Search queries (set them from the dashboard's Search)")
+        missing.append("Search queries (set them in the dashboard's Settings > Search)")
     if kb_section["empty_folders"]:
         missing.append(f"Knowledge base folder(s) with no content: {', '.join(kb_section['empty_folders'])}")
 

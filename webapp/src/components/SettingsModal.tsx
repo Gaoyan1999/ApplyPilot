@@ -39,7 +39,7 @@ type SettingsTab = 'general' | 'setup' | 'search'
 const TABS: { key: SettingsTab; label: string }[] = [
   { key: 'general', label: 'General' },
   { key: 'setup', label: 'AI & Setup' },
-  { key: 'search', label: 'Search Defaults' },
+  { key: 'search', label: 'Search' },
 ]
 
 export function SettingsModal({
@@ -67,8 +67,8 @@ export function SettingsModal({
   }, [open])
 
   // Refetches on every open (same reasoning as SearchPanel's config load) so
-  // a stale in-memory copy here can't clobber queries/locations edited from
-  // the search modal in the meantime.
+  // a stale in-memory copy here can't clobber locations edited from the
+  // search modal in the meantime.
   useEffect(() => {
     if (!open) return
     setSearchConfigError(null)
@@ -103,10 +103,15 @@ export function SettingsModal({
       setSearchConfig(await saveSearchConfig(searchConfig))
       setSearchSaveMessage('Saved')
     } catch (e) {
-      setSearchSaveError(e instanceof ApiError ? e.message : 'Failed to save search defaults')
+      setSearchSaveError(e instanceof ApiError ? e.message : 'Failed to save search settings')
     } finally {
       setSearchSaving(false)
     }
+  }
+
+  function updateQuery(i: number, query: string) {
+    if (!searchConfig) return
+    updateSearchConfig({ queries: searchConfig.queries.map((q, idx) => (idx === i ? { ...q, query } : q)) })
   }
 
   function updateSearchConfig(patch: Partial<SearchConfig>) {
@@ -210,11 +215,8 @@ export function SettingsModal({
                           <LlmProviderForm configured={contextStatus.env.configured} onSaved={refreshContextStatus} />
                         </div>
                         <div className="config-section">
-                          <h3>Auto-submit engine</h3>
+                          <h3>Auto-apply</h3>
                           <ApplyEngineSetting />
-                        </div>
-                        <div className="config-section">
-                          <h3>Auto-apply readiness</h3>
                           <ul className="check-list">
                             <JevKeyCheck configured={contextStatus.jev_key} onSaved={refreshContextStatus} />
                             <CheckItem
@@ -235,14 +237,44 @@ export function SettingsModal({
 
                 {activeTab === 'search' && (
                   <>
-                    <h3 className="settings-content-title">Search Defaults</h3>
+                    <h3 className="settings-content-title">Search</h3>
                     <p className="prompt-field-description">
-                      Saved to <code>~/.applypilot/searches.yaml</code> — the same file as the queries/locations in the Search modal, and also used by <code>applypilot run discover</code>.
+                      Saved to <code>~/.applypilot/searches.yaml</code> — the same file as the locations in the Search modal, and also used by <code>applypilot run discover</code>.
                     </p>
                     {searchConfigError && <p className="search-result search-error">{searchConfigError}</p>}
                     {!searchConfig && !searchConfigError && <p className="search-result">Loading…</p>}
                     {searchConfig && (
                       <>
+                        <div className="config-section">
+                          <h3>Search queries ({searchConfig.queries.length})</h3>
+                          {searchConfig.queries.map((q, i) => (
+                            <div className="config-row" key={i}>
+                              <input
+                                type="text"
+                                className="ctx-input"
+                                placeholder="Job title or keywords"
+                                value={q.query}
+                                onChange={(e) => updateQuery(i, e.target.value)}
+                              />
+                              <button
+                                type="button"
+                                className="remove-btn"
+                                onClick={() => updateSearchConfig({ queries: searchConfig.queries.filter((_, idx) => idx !== i) })}
+                                aria-label="Remove query"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            className="add-btn"
+                            onClick={() => updateSearchConfig({ queries: [...searchConfig.queries, { query: '', tier: 1 }] })}
+                          >
+                            + Add query
+                          </button>
+                        </div>
+
                         <div className="config-section">
                           <h3>Job boards</h3>
                           <div className="board-chips">

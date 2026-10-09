@@ -328,7 +328,6 @@ export function SearchPanel({ onActivity }: Props) {
   const [open, setOpen] = useState(false)
   const [minimized, setMinimized] = useState(false)
   const [config, setConfig] = useState<SearchConfig>(EMPTY_CONFIG)
-  const [queriesOpen, setQueriesOpen] = useState(false)
   const [running, setRunning] = useState(false)
   const [saving, setSaving] = useState(false)
   const [stage, setStage] = useState<SearchRunStage>(null)
@@ -362,7 +361,7 @@ export function SearchPanel({ onActivity }: Props) {
   }, [])
 
   // Refetches on every open (rather than caching after the first load) so
-  // boards/exclude-titles/defaults edited from Settings in the meantime
+  // queries/boards/exclude-titles/defaults edited from Settings in the meantime
   // aren't clobbered by a stale in-memory copy on the next Save here --
   // saving PUTs back the whole managed config, including fields this modal
   // never shows.
@@ -409,21 +408,6 @@ export function SearchPanel({ onActivity }: Props) {
     }, 2000)
     return () => clearInterval(timer)
   }, [running, onActivity])
-
-  function addQuery() {
-    setConfig((c) => ({ ...c, queries: [...c.queries, { query: '', tier: 1 }] }))
-  }
-
-  function updateQuery(i: number, patch: Partial<SearchConfig['queries'][number]>) {
-    setConfig((c) => ({
-      ...c,
-      queries: c.queries.map((q, idx) => (idx === i ? { ...q, ...patch } : q)),
-    }))
-  }
-
-  function removeQuery(i: number) {
-    setConfig((c) => ({ ...c, queries: c.queries.filter((_, idx) => idx !== i) }))
-  }
 
   function addLocation() {
     setConfig((c) => ({ ...c, locations: [...c.locations, { location: '', remote: false }] }))
@@ -581,7 +565,7 @@ export function SearchPanel({ onActivity }: Props) {
                   ) : (
                     <>
                       Edits ~/.applypilot/searches.yaml — also used by <code>applypilot run discover</code>.
-                      Job boards, excluded titles, and result defaults are in Settings.
+                      Search queries, job boards, excluded titles, and result defaults are in Settings.
                     </>
                   )}
                 </p>
@@ -653,38 +637,6 @@ export function SearchPanel({ onActivity }: Props) {
 
               {phase === 'config' && (
                 <>
-                  <div className="config-section">
-                    <button
-                      type="button"
-                      className="config-section-toggle"
-                      onClick={() => setQueriesOpen((o) => !o)}
-                      aria-expanded={queriesOpen}
-                    >
-                      <h3>Search queries ({config.queries.length})</h3>
-                      <span className="chevron">{queriesOpen ? '▾' : '▸'}</span>
-                    </button>
-                    {queriesOpen && (
-                      <>
-                        {config.queries.map((q, i) => (
-                          <div className="config-row" key={i}>
-                            <input
-                              type="text"
-                              placeholder="Job title or keywords"
-                              value={q.query}
-                              onChange={(e) => updateQuery(i, { query: e.target.value })}
-                            />
-                            <button type="button" className="remove-btn" onClick={() => removeQuery(i)} aria-label="Remove query">
-                              ✕
-                            </button>
-                          </div>
-                        ))}
-                        <button type="button" className="add-btn" onClick={addQuery}>
-                          + Add query
-                        </button>
-                      </>
-                    )}
-                  </div>
-
                   <div className="config-section">
                     <h3>Locations</h3>
                     {config.locations.map((loc, i) => (
