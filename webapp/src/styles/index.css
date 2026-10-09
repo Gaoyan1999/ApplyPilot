@@ -554,7 +554,9 @@
 }
 
 .search-panel .add-btn,
-.search-panel .remove-btn {
+.search-panel .remove-btn,
+.settings-panel .add-btn,
+.settings-panel .remove-btn {
   border: none;
   background: transparent;
   color: var(--text-muted);
@@ -563,14 +565,17 @@
   padding: 4px 6px;
 }
 
-.search-panel .add-btn {
+.search-panel .add-btn,
+.settings-panel .add-btn {
   align-self: flex-start;
   font-weight: 600;
   padding-left: 0;
 }
 
 .search-panel .add-btn:hover,
-.search-panel .remove-btn:hover {
+.search-panel .remove-btn:hover,
+.settings-panel .add-btn:hover,
+.settings-panel .remove-btn:hover {
   color: var(--text);
 }
 
@@ -2591,6 +2596,10 @@ body.col-resizing {
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
+}
+
+.toggle-check ~ .check-list {
+  margin-top: 12px;
 }
 
 .check-item {
