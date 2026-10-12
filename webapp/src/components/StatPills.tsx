@@ -23,7 +23,7 @@ export function StatPills({ status }: { status: Status }) {
           {status.high_fit}
           <span className="stat-pill-value-suffix">/ {status.total}</span>
         </div>
-        <div className="label">High Fit (7+)</div>
+        <div className="label">Strong Fit</div>
       </div>
       <div className="stat-pill stat-pill-wide">
         <div className="value">{inProgressTotal}</div>

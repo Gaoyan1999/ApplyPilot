@@ -11,8 +11,8 @@ const PROMPTS: { key: PromptKey; label: string; description: string }[] = [
   },
   {
     key: 'scoring',
-    label: 'Scoring',
-    description: 'The rubric (1-10 score bands, what factors matter) used to rate how well each job matches your resume. The exact response format the app parses is always enforced by the code.',
+    label: 'Grading',
+    description: 'The rubric (what green / yellow / red mean, what factors matter) used to grade how well each job matches your resume. The exact response format the app parses is always enforced by the code.',
   },
   {
     key: 'tailoring',

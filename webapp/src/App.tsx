@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ApiError, getContextStatus, getJob, getStatus, listCvs, searchJobs, setJobDismissed, setJobStarred, setJobUserAction } from './api/client'
-import type { Job, JobFilterParams, JobType, SearchJobsParams, UserAction } from './api/types'
+import type { FitGradeFilterValue, Job, JobFilterParams, JobType, SearchJobsParams, UserAction } from './api/types'
 import { useRefreshable } from './hooks/useRefreshable'
 import { useTheme } from './hooks/useTheme'
 import { useLocalStorageState } from './hooks/useLocalStorageState'
@@ -47,13 +47,22 @@ function App() {
   )
   const [dateFrom, setDateFrom] = useLocalStorageState<DateKey | null>('applypilot-filter-date-from', null)
   const [dateTo, setDateTo] = useLocalStorageState<DateKey | null>('applypilot-filter-date-to', null)
-  const [scoreMin, setScoreMin] = useLocalStorageState<number | null>('applypilot-filter-score-min', null)
-  const [scoreMax, setScoreMax] = useLocalStorageState<number | null>('applypilot-filter-score-max', null)
+  const [fitGradeFilter, setFitGradeFilter] = useLocalStorageState<FitGradeFilterValue[]>(
+    'applypilot-filter-fit-grade',
+    [],
+  )
+  const [fitGradeFilterMode, setFitGradeFilterMode] = useLocalStorageState<FilterMode>(
+    'applypilot-filter-fit-grade-mode',
+    'is',
+  )
   const [showDismissed, setShowDismissed] = useLocalStorageState('applypilot-show-dismissed', false)
   const [starredOnly, setStarredOnly] = useLocalStorageState('applypilot-filter-starred-only', false)
   const [hiddenColumns, setHiddenColumns] = useLocalStorageState<SortKey[]>('applypilot-hidden-columns', [])
   const [panelWidth, setPanelWidth] = useLocalStorageState('applypilot-job-detail-width', DEFAULT_PANEL_WIDTH)
-  const [sortKey, setSortKey] = useLocalStorageState<SortKey>('applypilot-sort-key', 'discovered_at')
+  const [storedSortKey, setSortKey] = useLocalStorageState<SortKey>('applypilot-sort-key', 'discovered_at')
+  // 'fit_score' may still be saved from before the 1-10 score became a
+  // 3-grade fit; the API no longer accepts it.
+  const sortKey: SortKey = (storedSortKey as string) === 'fit_score' ? 'fit_grade' : storedSortKey
   const [sortDir, setSortDir] = useLocalStorageState<SortDir>('applypilot-sort-dir', 'desc')
   const [pageSize, setPageSize] = useLocalStorageState('applypilot-page-size', DEFAULT_PAGE_SIZE)
   const [page, setPage] = useState(1)
@@ -91,8 +100,8 @@ function App() {
     userActionFilterMode,
     dateFrom,
     dateTo,
-    scoreMin,
-    scoreMax,
+    fitGradeFilter,
+    fitGradeFilterMode,
     showDismissed,
     starredOnly,
     sortKey,
@@ -114,8 +123,8 @@ function App() {
       starred_only: starredOnly,
       discovered_after: dateFrom,
       discovered_before: dateTo,
-      score_min: scoreMin,
-      score_max: scoreMax,
+      fit_grade: fitGradeFilter,
+      fit_grade_mode: fitGradeFilterMode,
     }),
     [
       debouncedSearch,
@@ -127,8 +136,8 @@ function App() {
       starredOnly,
       dateFrom,
       dateTo,
-      scoreMin,
-      scoreMax,
+      fitGradeFilter,
+      fitGradeFilterMode,
     ],
   )
 
@@ -290,12 +299,10 @@ function App() {
           setDateFrom(from)
           setDateTo(to)
         }}
-        scoreMin={scoreMin}
-        scoreMax={scoreMax}
-        onScoreRangeChange={(min, max) => {
-          setScoreMin(min)
-          setScoreMax(max)
-        }}
+        fitGradeFilter={fitGradeFilter}
+        onFitGradeFilterChange={setFitGradeFilter}
+        fitGradeFilterMode={fitGradeFilterMode}
+        onFitGradeFilterModeChange={setFitGradeFilterMode}
         starredOnly={starredOnly}
         onStarredOnlyChange={setStarredOnly}
         actions={

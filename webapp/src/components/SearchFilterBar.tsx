@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react'
-import type { JobType, UserAction } from '../api/types'
+import type { FitGradeFilterValue, JobType, UserAction } from '../api/types'
 import { DateRangeFilter } from './DateRangeFilter'
+import { CLASS_BY_FIT_GRADE, LABEL_BY_FIT_GRADE } from './FitGradeBadge'
+import { FIT_GRADE_ORDER } from './fitGradeOrder'
 import type { DateKey } from '../lib/dateRange'
 import { CLASS_BY_JOB_TYPE, LABEL_BY_JOB_TYPE } from './JobTypeBadge'
 import { JOB_TYPE_ORDER } from './jobTypeOrder'
 import { MultiSelectFilter, type FilterMode } from './MultiSelectFilter'
-import { ScoreFilter } from './ScoreFilter'
 import { StarIcon } from './StarIcon'
 import { CLASS_BY_USER_ACTION, LABEL_BY_USER_ACTION } from './UserActionBadge'
 import { USER_ACTION_ORDER } from './userActionOrder'
@@ -24,9 +25,10 @@ interface Props {
   dateFrom: DateKey | null
   dateTo: DateKey | null
   onDateRangeChange: (from: DateKey | null, to: DateKey | null) => void
-  scoreMin: number | null
-  scoreMax: number | null
-  onScoreRangeChange: (min: number | null, max: number | null) => void
+  fitGradeFilter: FitGradeFilterValue[]
+  onFitGradeFilterChange: (value: FitGradeFilterValue[]) => void
+  fitGradeFilterMode: FilterMode
+  onFitGradeFilterModeChange: (mode: FilterMode) => void
   starredOnly: boolean
   onStarredOnlyChange: (value: boolean) => void
   // Right-aligned extras for the filter-pills row (e.g. Search, Check Job
@@ -39,6 +41,12 @@ const JOB_TYPE_OPTIONS = JOB_TYPE_ORDER.map((jobType) => ({
   value: jobType,
   label: LABEL_BY_JOB_TYPE[jobType],
   colorClassName: CLASS_BY_JOB_TYPE[jobType],
+}))
+
+const FIT_GRADE_OPTIONS = FIT_GRADE_ORDER.map((grade) => ({
+  value: grade,
+  label: LABEL_BY_FIT_GRADE[grade],
+  colorClassName: CLASS_BY_FIT_GRADE[grade],
 }))
 
 const USER_ACTION_OPTIONS = USER_ACTION_ORDER.map((action) => ({
@@ -61,9 +69,10 @@ export function SearchFilterBar({
   dateFrom,
   dateTo,
   onDateRangeChange,
-  scoreMin,
-  scoreMax,
-  onScoreRangeChange,
+  fitGradeFilter,
+  onFitGradeFilterChange,
+  fitGradeFilterMode,
+  onFitGradeFilterModeChange,
   starredOnly,
   onStarredOnlyChange,
   actions,
@@ -97,7 +106,14 @@ export function SearchFilterBar({
           onModeChange={onUserActionFilterModeChange}
         />
         <DateRangeFilter from={dateFrom} to={dateTo} onChange={onDateRangeChange} />
-        <ScoreFilter min={scoreMin} max={scoreMax} onChange={onScoreRangeChange} />
+        <MultiSelectFilter
+          label="Fit"
+          options={FIT_GRADE_OPTIONS}
+          selected={fitGradeFilter}
+          onChange={onFitGradeFilterChange}
+          mode={fitGradeFilterMode}
+          onModeChange={onFitGradeFilterModeChange}
+        />
         <button
           type="button"
           className={`starred-only-toggle${starredOnly ? ' starred-only-toggle-active' : ''}`}

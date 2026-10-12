@@ -19,6 +19,12 @@ export type UserAction =
   | 'rejected'
   | 'closed'
 
+export type FitGrade = 'green' | 'yellow' | 'red'
+
+// FitGrade plus 'ungraded' -- the jobs-table filter's way to match a null
+// fit_grade, same as JobType's 'unknown'.
+export type FitGradeFilterValue = FitGrade | 'ungraded'
+
 export interface Job {
   url: string
   title: string | null
@@ -28,6 +34,7 @@ export interface Job {
   location: string | null
   salary: string | null
   fit_score: number | null
+  fit_grade: FitGrade | null
   score_reasoning: string | null
   application_url: string | null
   // Omitted from GET /api/jobs/search list items (keeps page payloads small);
@@ -68,9 +75,8 @@ export interface JobFilterParams {
   // 'YYYY-MM-DD', inclusive on both ends. Either/both may be null (open-ended).
   discovered_after: string | null
   discovered_before: string | null
-  // fit_score bounds, inclusive on both ends. Either/both may be null (open-ended).
-  score_min: number | null
-  score_max: number | null
+  fit_grade: FitGradeFilterValue[]
+  fit_grade_mode: 'is' | 'is not'
 }
 
 export interface SearchJobsParams extends JobFilterParams {
@@ -78,7 +84,7 @@ export interface SearchJobsParams extends JobFilterParams {
   page_size: number
   // Excludes 'stage' -- JobsTable.SortKey's dead, unused sort option (no
   // column wires it up) that the server doesn't support sorting by.
-  sort_by: 'title' | 'company' | 'site' | 'location' | 'job_type' | 'fit_score' | 'discovered_at'
+  sort_by: 'title' | 'company' | 'site' | 'location' | 'job_type' | 'fit_grade' | 'discovered_at'
   sort_dir: 'asc' | 'desc'
 }
 

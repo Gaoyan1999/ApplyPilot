@@ -1,5 +1,6 @@
 """ApplyPilot configuration: paths, platform detection, user data."""
 
+import hashlib
 import os
 import platform
 import re
@@ -368,12 +369,23 @@ def get_prompt_seed(key: str) -> str:
     return (_SEED_PROMPTS_DIR / f"{key}.md").read_text(encoding="utf-8").strip()
 
 
+# SHA-256 of past package seeds whose live copy must be replaced because the
+# response contract around them changed (e.g. scoring moved from a 1-10 score
+# to a green/yellow/red grade). A live file matching one of these was never
+# edited by the user, so it's safe to overwrite with the current seed. Edited
+# files are left alone.
+_OUTDATED_PROMPT_SEEDS = {
+    "scoring": {"476599aa6c3294c717c354b2e7236d91322af58f4ccc49a583d21f498050ef88"},
+}
+
+
 def load_prompts() -> dict[str, str]:
     """Load the live prompt templates from ~/.applypilot/prompts/*.md.
 
     Any file that doesn't exist yet is seeded from the package default first,
     so every key is always present -- callers never need a separate
-    in-code fallback.
+    in-code fallback. A file that still holds an outdated, unedited seed is
+    upgraded to the current one (see _OUTDATED_PROMPT_SEEDS).
     """
     PROMPTS_DIR.mkdir(parents=True, exist_ok=True)
     prompts = {}
@@ -381,7 +393,11 @@ def load_prompts() -> dict[str, str]:
         path = PROMPTS_DIR / f"{key}.md"
         if not path.exists():
             path.write_text(get_prompt_seed(key), encoding="utf-8")
-        prompts[key] = path.read_text(encoding="utf-8").strip()
+        text = path.read_text(encoding="utf-8").strip()
+        if hashlib.sha256(text.encode("utf-8")).hexdigest() in _OUTDATED_PROMPT_SEEDS.get(key, ()):
+            text = get_prompt_seed(key)
+            path.write_text(text, encoding="utf-8")
+        prompts[key] = text
     return prompts
 
 
