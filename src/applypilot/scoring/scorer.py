@@ -1,6 +1,6 @@
 """Job fit scoring: LLM-powered evaluation of candidate-job match quality.
 
-Scores jobs on a 1-10 scale by comparing the user's resume, plus relevant
+Grades jobs green / yellow / red by comparing the user's resume, plus relevant
 fields from the user's profile (work authorization, location, availability,
 etc.), against each job description. All personal data is loaded at runtime
 from the user's profile and resume file.
@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from applypilot.config import get_primary_resume_text, load_profile, load_prompts
-from applypilot.database import get_connection, get_jobs_by_stage, grade_from_score
+from applypilot.database import get_connection, get_jobs_by_stage, score_from_grade
 from applypilot.llm import get_client
 
 log = logging.getLogger(__name__)
@@ -37,14 +37,14 @@ def _build_score_prompt(template: str) -> str:
     template, since it can't be edited away without breaking
     `_parse_score_response`.
     """
-    return f"""You are a job fit evaluator. Given a candidate's resume and a job description, score how well the candidate fits the role.
+    return f"""You are a job fit evaluator. Given a candidate's resume and a job description, grade how well the candidate fits the role.
 
 {template}
 
 RESPOND IN EXACTLY THIS FORMAT (no other text):
-SCORE: [1-10]
+GRADE: [GREEN, YELLOW or RED]
 KEYWORDS: [comma-separated ATS keywords from the job description that match or could match the candidate]
-CRITERIA: [One requirement per line, each prefixed with MET or GAP followed by " | " then a short (under 10 words) label naming that specific requirement. List the 2-5 requirements that most drove the score -- the ones a candidate would actually want to know about, not every minor detail. Example:
+CRITERIA: [One requirement per line, each prefixed with MET or GAP followed by " | " then a short (under 10 words) label naming that specific requirement. List the 2-5 requirements that most drove the grade -- the ones a candidate would actually want to know about, not every minor detail. Example:
 MET | 5+ years backend engineering
 MET | Python & distributed systems
 GAP | No healthcare/HIPAA domain experience]"""
@@ -61,7 +61,7 @@ def _build_candidate_context(profile: dict) -> str:
     `personal.password` is a credential and never belongs in an LLM prompt.
     `eeo_voluntary` (gender, race, veteran/disability status) is excluded on
     principle: those are protected characteristics and must never factor
-    into a job-fit score.
+    into a job-fit grade.
     """
     excluded_sections = {"eeo_voluntary"}
     lines = []
@@ -129,9 +129,11 @@ def _parse_score_response(response: str) -> dict:
         response: Raw LLM response text.
 
     Returns:
-        {"score": int, "keywords": str, "met": list[str], "gaps": list[str]}
+        {"grade": "green" | "yellow" | "red" | None, "keywords": str,
+         "met": list[str], "gaps": list[str]}. grade is None when the
+        response has no recognizable GRADE line.
     """
-    score = 0
+    grade = None
     keywords = ""
     met: list[str] = []
     gaps: list[str] = []
@@ -139,13 +141,10 @@ def _parse_score_response(response: str) -> dict:
 
     for raw_line in response.split("\n"):
         line = raw_line.strip()
-        if line.startswith("SCORE:"):
+        if line.startswith("GRADE:"):
             in_criteria = False
-            try:
-                score = int(re.search(r"\d+", line).group())
-                score = max(1, min(10, score))
-            except (AttributeError, ValueError):
-                score = 0
+            match = re.search(r"\b(GREEN|YELLOW|RED)\b", line.upper())
+            grade = match.group(1).lower() if match else None
         elif line.startswith("KEYWORDS:"):
             in_criteria = False
             keywords = line.replace("KEYWORDS:", "").strip()
@@ -165,7 +164,7 @@ def _parse_score_response(response: str) -> dict:
             elif label == "GAP":
                 gaps.append(text)
 
-    return {"score": score, "keywords": keywords, "met": met, "gaps": gaps}
+    return {"grade": grade, "keywords": keywords, "met": met, "gaps": gaps}
 
 
 def score_job(
@@ -191,7 +190,7 @@ def score_job(
             candidate_context.
 
     Returns:
-        {"score": int, "keywords": str, "met": list[str], "gaps": list[str]}
+        Same shape as _parse_score_response(); grade is None on LLM error.
     """
     job_text = (
         f"TITLE: {job['title']}\n"
@@ -218,7 +217,7 @@ def score_job(
         return _parse_score_response(response)
     except Exception as e:
         log.error("LLM error scoring job '%s': %s", job.get("title", "?"), e)
-        return {"score": 0, "keywords": "", "met": [], "gaps": [f"LLM error: {e}"]}
+        return {"grade": None, "keywords": "", "met": [], "gaps": [f"LLM error: {e}"]}
 
 
 def run_scoring(
@@ -236,7 +235,7 @@ def run_scoring(
             {"done": int, "total": int}.
         on_warning: Optional callback invoked when the LLM call for a job
             fails (after its own internal retries -- see `llm.py`). The job
-            is still scored 0 and the run continues; this just reports it.
+            is left ungraded and the run continues; this just reports it.
 
     Returns:
         {"scored": int, "errors": int, "elapsed": float, "distribution": list}
@@ -277,7 +276,7 @@ def run_scoring(
         result["url"] = job["url"]
         completed += 1
 
-        if result["score"] == 0:
+        if result["grade"] is None:
             errors += 1
             gaps = result.get("gaps") or []
             if on_warning and gaps and gaps[0].startswith("LLM error:"):
@@ -286,8 +285,8 @@ def run_scoring(
         results.append(result)
 
         log.info(
-            "[%d/%d] score=%d  %s",
-            completed, len(jobs), result["score"], job.get("title", "?")[:60],
+            "[%d/%d] grade=%s  %s",
+            completed, len(jobs), result["grade"] or "-", job.get("title", "?")[:60],
         )
         if on_progress:
             on_progress({"done": completed, "total": len(jobs)})
@@ -299,18 +298,18 @@ def run_scoring(
         reasoning_json = json.dumps({"met": r["met"], "gaps": r["gaps"]})
         conn.execute(
             "UPDATE jobs SET fit_score = ?, fit_grade = ?, score_reasoning = ?, scored_at = ? WHERE url = ?",
-            (r["score"], grade_from_score(r["score"]), reasoning_json, now, r["url"]),
+            (score_from_grade(r["grade"]), r["grade"], reasoning_json, now, r["url"]),
         )
     conn.commit()
 
     elapsed = time.time() - t0
     log.info("Done: %d scored in %.1fs (%.1f jobs/sec)", len(results), elapsed, len(results) / elapsed if elapsed > 0 else 0)
 
-    # Score distribution
+    # Grade distribution
     dist = conn.execute("""
-        SELECT fit_score, COUNT(*) FROM jobs
-        WHERE fit_score IS NOT NULL
-        GROUP BY fit_score ORDER BY fit_score DESC
+        SELECT fit_grade, COUNT(*) FROM jobs
+        WHERE fit_grade IS NOT NULL
+        GROUP BY fit_grade
     """).fetchall()
     distribution = [(row[0], row[1]) for row in dist]
 

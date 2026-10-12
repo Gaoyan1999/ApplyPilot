@@ -2,7 +2,7 @@ import type { AutoSubmitStatus, ContextStatus, Cv, Job, JobFilterParams, Profile
 
 // Translates the app-wide FilterMode ('is' | 'is not') to the API's
 // 'is' | 'is_not' -- shared by every endpoint that takes job_type_mode/
-// user_action_mode.
+// user_action_mode/fit_grade_mode.
 function apiFilterMode(mode: 'is' | 'is not'): 'is' | 'is_not' {
   return mode === 'is not' ? 'is_not' : 'is'
 }
@@ -20,8 +20,8 @@ function jobFilterBody(f: JobFilterParams) {
     starred_only: f.starred_only,
     discovered_after: f.discovered_after,
     discovered_before: f.discovered_before,
-    score_min: f.score_min,
-    score_max: f.score_max,
+    fit_grade: f.fit_grade,
+    fit_grade_mode: apiFilterMode(f.fit_grade_mode),
   }
 }
 
@@ -84,8 +84,8 @@ export function searchJobs(params: SearchJobsParams): Promise<SearchJobsResponse
   qs.set('starred_only', String(params.starred_only))
   if (params.discovered_after) qs.set('discovered_after', params.discovered_after)
   if (params.discovered_before) qs.set('discovered_before', params.discovered_before)
-  if (params.score_min !== null) qs.set('score_min', String(params.score_min))
-  if (params.score_max !== null) qs.set('score_max', String(params.score_max))
+  for (const g of params.fit_grade) qs.append('fit_grade', g)
+  qs.set('fit_grade_mode', apiFilterMode(params.fit_grade_mode))
   qs.set('sort_by', params.sort_by)
   qs.set('sort_dir', params.sort_dir)
   return getJson<SearchJobsResponse>(`/api/jobs/search?${qs.toString()}`)

@@ -108,7 +108,7 @@ reconcile_orphaned_tasks()
 # it's not needed for table rows and keeping it out shrinks page payloads.
 _JOB_DETAIL_FIELDS = [
     "url", "title", "company", "site", "job_type", "location", "salary",
-    "fit_score", "score_reasoning",
+    "fit_score", "fit_grade", "score_reasoning",
     "application_url", "full_description",
     "discovered_at", "scored_at",
     "tailored_at", "tailor_attempts",
@@ -125,7 +125,7 @@ def get_status() -> dict:
     stats = get_stats(conn)
 
     high_fit = conn.execute(
-        "SELECT COUNT(*) FROM jobs WHERE fit_score >= 7"
+        "SELECT COUNT(*) FROM jobs WHERE fit_grade = 'green'"
     ).fetchone()[0]
 
     rows = conn.execute("SELECT * FROM jobs").fetchall()
@@ -176,11 +176,11 @@ def api_search_jobs(
     starred_only: bool = False,
     discovered_after: str | None = Query(None, pattern="^\\d{4}-\\d{2}-\\d{2}$"),
     discovered_before: str | None = Query(None, pattern="^\\d{4}-\\d{2}-\\d{2}$"),
-    score_min: int | None = Query(None),
-    score_max: int | None = Query(None),
+    fit_grade: list[str] = Query([]),
+    fit_grade_mode: str = Query("is", pattern="^(is|is_not)$"),
     sort_by: str = Query(
         "discovered_at",
-        pattern="^(title|company|site|location|job_type|fit_score|discovered_at)$",
+        pattern="^(title|company|site|location|job_type|fit_grade|discovered_at)$",
     ),
     sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
 ) -> dict:
@@ -196,8 +196,8 @@ def api_search_jobs(
         starred_only=starred_only,
         discovered_after=discovered_after,
         discovered_before=discovered_before,
-        score_min=score_min,
-        score_max=score_max,
+        fit_grade=fit_grade,
+        fit_grade_mode=fit_grade_mode,
         sort_by=sort_by,
         sort_dir=sort_dir,
         page=page,
@@ -918,7 +918,7 @@ def confirm_new_search_results() -> dict:
 
 class JobFilterBody(BaseModel):
     """Same filters as GET /api/jobs/search (job_type/user_action/discovered
-    range/score/starred) -- lets the status-check scan operate on exactly
+    range/fit grade/starred) -- lets the status-check scan operate on exactly
     the set of jobs the user has filtered the table down to, rather than a
     separate ad hoc scope."""
 
@@ -931,8 +931,8 @@ class JobFilterBody(BaseModel):
     starred_only: bool = False
     discovered_after: str | None = None
     discovered_before: str | None = None
-    score_min: int | None = None
-    score_max: int | None = None
+    fit_grade: list[str] = []
+    fit_grade_mode: str = "is"
 
 
 def _status_check_candidates(body: JobFilterBody) -> list[dict]:
@@ -950,8 +950,8 @@ def _status_check_candidates(body: JobFilterBody) -> list[dict]:
         starred_only=body.starred_only,
         discovered_after=body.discovered_after,
         discovered_before=body.discovered_before,
-        score_min=body.score_min,
-        score_max=body.score_max,
+        fit_grade=body.fit_grade,
+        fit_grade_mode=body.fit_grade_mode,
         sort_by="discovered_at",
         sort_dir="desc",
         page=1,

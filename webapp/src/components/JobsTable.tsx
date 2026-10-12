@@ -2,13 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import type { Job, UserAction } from '../api/types'
 import { formatDate } from '../lib/format'
 import { useLocalStorageState } from '../hooks/useLocalStorageState'
+import { FitGradeBadge } from './FitGradeBadge'
 import { JobTypeBadge } from './JobTypeBadge'
-import { ScorePill } from './ScorePill'
 import { SiteIcon } from './SiteIcon'
 import { StarIcon } from './StarIcon'
 import { UserActionSelect } from './UserActionSelect'
 
-export type SortKey = 'title' | 'company' | 'site' | 'location' | 'job_type' | 'fit_score' | 'stage' | 'discovered_at'
+export type SortKey = 'title' | 'company' | 'site' | 'location' | 'job_type' | 'fit_grade' | 'stage' | 'discovered_at'
 export type SortDir = 'asc' | 'desc'
 
 interface Props {
@@ -31,7 +31,7 @@ export const COLUMNS: { key: SortKey; label: string; defaultWidth: number }[] = 
   { key: 'site', label: 'Link', defaultWidth: 60 },
   { key: 'location', label: 'Location', defaultWidth: 160 },
   { key: 'job_type', label: 'Job Type', defaultWidth: 120 },
-  { key: 'fit_score', label: 'Score', defaultWidth: 90 },
+  { key: 'fit_grade', label: 'Fit', defaultWidth: 110 },
   { key: 'discovered_at', label: 'Discovered', defaultWidth: 160 },
 ]
 
@@ -257,9 +257,9 @@ export function JobsTable({
                   <JobTypeBadge jobType={job.job_type} />
                 </td>
               )}
-              {isVisible('fit_score') && (
+              {isVisible('fit_grade') && (
                 <td>
-                  <ScorePill score={job.fit_score} />
+                  <FitGradeBadge grade={job.fit_grade} />
                 </td>
               )}
               {isVisible('discovered_at') && <td>{formatDate(job.discovered_at)}</td>}

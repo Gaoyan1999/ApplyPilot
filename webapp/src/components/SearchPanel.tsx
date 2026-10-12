@@ -11,7 +11,7 @@ import {
 } from '../api/client'
 import type { DiscoverLogEntry, Job, SearchConfig, SearchRunStage, SearchStatus } from '../api/types'
 import { ProgressBar } from './ProgressBar'
-import { ScorePill } from './ScorePill'
+import { FitGradeBadge } from './FitGradeBadge'
 import { SiteIcon } from './SiteIcon'
 
 // The dashboard displays discover+enrich as one "Searching" step (fetching
@@ -267,7 +267,7 @@ function SearchResultsStep({ count }: { count: number }) {
                 <span className="search-results-title">{job.title ?? 'Untitled'}</span>
                 <span className="search-results-meta">
                   <SiteIcon site={job.site} />
-                  <ScorePill score={job.fit_score} />
+                  <FitGradeBadge grade={job.fit_grade} />
                 </span>
               </li>
             ))}

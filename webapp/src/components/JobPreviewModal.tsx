@@ -14,8 +14,8 @@ import {
 } from '../api/client'
 import type { AutoSubmitStatus, Job, UserAction } from '../api/types'
 import { formatDate } from '../lib/format'
+import { FitGradeBadge } from './FitGradeBadge'
 import { ScoreCriteria } from './ScoreCriteria'
-import { ScorePill } from './ScorePill'
 import { SiteIcon } from './SiteIcon'
 import { UserActionSelect } from './UserActionSelect'
 
@@ -330,8 +330,8 @@ export function JobPreviewModal({
               onDismissChange={(dismissed) => onDismissChange(job, dismissed)}
             />
           </MetaRow>
-          <MetaRow label="Score">
-            <ScorePill score={job.fit_score} />
+          <MetaRow label="Fit">
+            <FitGradeBadge grade={job.fit_grade} />
             {job.score_reasoning && <ScoreCriteria reasoning={job.score_reasoning} />}
           </MetaRow>
           {job.salary && <MetaRow label="Salary">{job.salary}</MetaRow>}
@@ -348,7 +348,7 @@ export function JobPreviewModal({
             </MetaRow>
           )}
           <MetaRow label="Discovered">{formatDate(job.discovered_at)}</MetaRow>
-          {job.scored_at && <MetaRow label="Scored">{formatDate(job.scored_at)}</MetaRow>}
+          {job.scored_at && <MetaRow label="Graded">{formatDate(job.scored_at)}</MetaRow>}
           {job.tailored_at && (
             <MetaRow label="Tailored">
               {formatDate(job.tailored_at)}

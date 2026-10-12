@@ -274,6 +274,18 @@ def grade_from_score(score: int | None) -> str | None:
     return "red"
 
 
+# Transitional: the scorer now produces a fit_grade directly, but tailoring,
+# cover letters, apply, the dashboard filters and the score pill still read
+# fit_score with the 7 / 5 cut-offs. Writing a fit_score inside each grade's
+# band keeps those readers working until they move to fit_grade.
+_SCORE_FOR_GRADE = {"green": 8, "yellow": 5, "red": 2}
+
+
+def score_from_grade(grade: str | None) -> int:
+    """Map a fit_grade back to a fit_score in its band (0 for no grade)."""
+    return _SCORE_FOR_GRADE.get(grade or "", 0)
+
+
 # SQL twin of grade_from_score(), used to backfill rows scored before fit_grade existed.
 _FIT_GRADE_CASE_SQL = """CASE
             WHEN fit_score >= 7 THEN 'green'
@@ -552,9 +564,19 @@ def get_jobs_by_stage(conn: sqlite3.Connection | None = None,
     return []
 
 
-# Columns GET /api/jobs/search is allowed to sort by. Whitelisted so the
-# `sort_by` query param can never be interpolated into SQL unchecked.
-_SEARCH_SORT_COLUMNS = {"title", "company", "site", "location", "job_type", "fit_score", "discovered_at"}
+# Columns GET /api/jobs/search is allowed to sort by, mapped to the SQL
+# expression to order on. Whitelisted so the `sort_by` query param can never
+# be interpolated into SQL unchecked. fit_grade sorts by rank (green highest),
+# not alphabetically.
+_SEARCH_SORT_EXPRESSIONS = {
+    "title": "title",
+    "company": "company",
+    "site": "site",
+    "location": "location",
+    "job_type": "job_type",
+    "fit_grade": "CASE fit_grade WHEN 'green' THEN 3 WHEN 'yellow' THEN 2 WHEN 'red' THEN 1 END",
+    "discovered_at": "discovered_at",
+}
 
 
 def search_jobs(
@@ -568,8 +590,8 @@ def search_jobs(
     starred_only: bool = False,
     discovered_after: str | None = None,
     discovered_before: str | None = None,
-    score_min: int | None = None,
-    score_max: int | None = None,
+    fit_grade: list[str] | None = None,
+    fit_grade_mode: str = "is",
     sort_by: str = "discovered_at",
     sort_dir: str = "desc",
     page: int = 1,
@@ -594,8 +616,10 @@ def search_jobs(
     - `discovered_after`/`discovered_before` are 'YYYY-MM-DD' calendar dates,
       inclusive on both ends (the whole `discovered_before` day is included,
       not just up to midnight).
-    - `score_min`/`score_max` filter on `fit_score`, inclusive on both ends.
-      Jobs with a null `fit_score` (not yet scored) never match either bound.
+    - `fit_grade` matches 'green' / 'yellow' / 'red', plus 'ungraded' for
+      jobs with a null `fit_grade` (same null-defaulting as `job_type`).
+    - Sorting by `fit_grade` breaks ties within a grade by `fit_score`, so
+      jobs graded before the 3-grade scale keep their finer 1-10 order.
 
     Returns:
         (rows, total_count) -- `rows` is just the current page, `total_count`
@@ -644,27 +668,26 @@ def search_jobs(
         where_clauses.append("discovered_at < ?")
         params.append(f"{next_day.isoformat()}T00:00:00")
 
-    if score_min is not None:
-        where_clauses.append("fit_score >= ?")
-        params.append(score_min)
-
-    if score_max is not None:
-        where_clauses.append("fit_score <= ?")
-        params.append(score_max)
+    if fit_grade:
+        placeholders = ", ".join("?" for _ in fit_grade)
+        op = "NOT IN" if fit_grade_mode == "is_not" else "IN"
+        where_clauses.append(f"COALESCE(fit_grade, 'ungraded') {op} ({placeholders})")
+        params.extend(fit_grade)
 
     where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
     total = conn.execute(f"SELECT COUNT(*) FROM jobs WHERE {where_sql}", params).fetchone()[0]
 
-    sort_column = sort_by if sort_by in _SEARCH_SORT_COLUMNS else "discovered_at"
+    sort_expr = _SEARCH_SORT_EXPRESSIONS.get(sort_by, "discovered_at")
     sort_direction = "ASC" if sort_dir == "asc" else "DESC"
+    tie_break = f", fit_score {sort_direction}" if sort_by == "fit_grade" else ""
     page = max(page, 1)
     page_size = max(1, min(page_size, 200))
     offset = (page - 1) * page_size
 
     query = (
         f"SELECT * FROM jobs WHERE {where_sql} "
-        f"ORDER BY starred DESC, {sort_column} IS NULL, {sort_column} {sort_direction} "
+        f"ORDER BY starred DESC, ({sort_expr}) IS NULL, ({sort_expr}) {sort_direction}{tie_break} "
         "LIMIT ? OFFSET ?"
     )
     rows = conn.execute(query, [*params, page_size, offset]).fetchall()
