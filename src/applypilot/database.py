@@ -69,7 +69,7 @@ def init_db(db_path: Path | str | None = None) -> sqlite3.Connection:
     Schema columns by stage:
       - Discovery:  url, title, company, salary, description, location, site, strategy, job_type, discovered_at
       - Enrichment: full_description, application_url, detail_scraped_at, detail_error
-      - Scoring:    fit_score, score_reasoning, scored_at
+      - Scoring:    fit_score, fit_grade, score_reasoning, scored_at
       - Tailoring:  tailored_resume_path, tailored_at, tailor_attempts
       - Cover:      cover_letter_path, cover_letter_at, cover_attempts
       - Apply:      applied_at, apply_status, apply_error, apply_attempts,
@@ -113,6 +113,7 @@ def init_db(db_path: Path | str | None = None) -> sqlite3.Connection:
 
             -- Scoring stage (job_scorer)
             fit_score             INTEGER,
+            fit_grade             TEXT,
             score_reasoning       TEXT,
             scored_at             TEXT,
 
@@ -167,6 +168,7 @@ def init_db(db_path: Path | str | None = None) -> sqlite3.Connection:
     # Run migrations for any columns added after initial schema
     ensure_columns(conn)
     ensure_indexes(conn)
+    backfill_fit_grade(conn)
 
     return conn
 
@@ -193,6 +195,7 @@ _ALL_COLUMNS: dict[str, str] = {
     "detail_error": "TEXT",
     # Scoring
     "fit_score": "INTEGER",
+    "fit_grade": "TEXT",
     "score_reasoning": "TEXT",
     "scored_at": "TEXT",
     # Tailoring
@@ -254,6 +257,53 @@ def ensure_columns(conn: sqlite3.Connection | None = None) -> list[str]:
         conn.commit()
 
     return added
+
+
+def grade_from_score(score: int | None) -> str | None:
+    """Map a 1-10 fit_score to a 'green' / 'yellow' / 'red' fit_grade.
+
+    7-10 -> green, 5-6 -> yellow, 1-4 -> red. 0 (LLM call failed) and None
+    (not scored) -> None. Keep in sync with _FIT_GRADE_CASE_SQL below.
+    """
+    if not score:
+        return None
+    if score >= 7:
+        return "green"
+    if score >= 5:
+        return "yellow"
+    return "red"
+
+
+# SQL twin of grade_from_score(), used to backfill rows scored before fit_grade existed.
+_FIT_GRADE_CASE_SQL = """CASE
+            WHEN fit_score >= 7 THEN 'green'
+            WHEN fit_score >= 5 THEN 'yellow'
+            WHEN fit_score >= 1 THEN 'red'
+        END"""
+
+
+def backfill_fit_grade(conn: sqlite3.Connection | None = None) -> int:
+    """Fill fit_grade from fit_score for rows scored before the column existed.
+
+    Idempotent -- only touches rows where fit_grade is NULL and fit_score is
+    set. Rows with fit_score 0 map to NULL and stay untouched. fit_score
+    itself is never changed.
+
+    Args:
+        conn: Database connection. Uses get_connection() if None.
+
+    Returns:
+        Number of rows updated.
+    """
+    if conn is None:
+        conn = get_connection()
+
+    cur = conn.execute(
+        f"UPDATE jobs SET fit_grade = {_FIT_GRADE_CASE_SQL} "
+        "WHERE fit_grade IS NULL AND fit_score IS NOT NULL AND fit_score >= 1"
+    )
+    conn.commit()
+    return cur.rowcount
 
 
 # Columns the dashboard's search/filter/sort endpoint filters or sorts on.

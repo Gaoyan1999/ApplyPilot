@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from applypilot.config import get_primary_resume_text, load_profile, load_prompts
-from applypilot.database import get_connection, get_jobs_by_stage
+from applypilot.database import get_connection, get_jobs_by_stage, grade_from_score
 from applypilot.llm import get_client
 
 log = logging.getLogger(__name__)
@@ -298,8 +298,8 @@ def run_scoring(
     for r in results:
         reasoning_json = json.dumps({"met": r["met"], "gaps": r["gaps"]})
         conn.execute(
-            "UPDATE jobs SET fit_score = ?, score_reasoning = ?, scored_at = ? WHERE url = ?",
-            (r["score"], reasoning_json, now, r["url"]),
+            "UPDATE jobs SET fit_score = ?, fit_grade = ?, score_reasoning = ?, scored_at = ? WHERE url = ?",
+            (r["score"], grade_from_score(r["score"]), reasoning_json, now, r["url"]),
         )
     conn.commit()
 
