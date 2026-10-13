@@ -2207,6 +2207,7 @@ body.col-resizing {
 
 .job-type-full-time { background: var(--jobtype-fulltime-bg); color: var(--jobtype-fulltime-fg); }
 .job-type-intern { background: var(--jobtype-intern-bg); color: var(--jobtype-intern-fg); }
+.job-type-graduate { background: var(--jobtype-graduate-bg); color: var(--jobtype-graduate-fg); }
 .job-type-contract { background: var(--jobtype-contract-bg); color: var(--jobtype-contract-fg); }
 .job-type-unknown { background: var(--jobtype-unknown-bg); color: var(--jobtype-unknown-fg); }
 
