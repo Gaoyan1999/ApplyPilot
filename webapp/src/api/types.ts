@@ -10,7 +10,7 @@ export type Stage =
   | 'Applied'
   | 'Failed'
 
-export type JobType = 'full_time' | 'intern' | 'contract' | 'unknown'
+export type JobType = 'full_time' | 'intern' | 'graduate' | 'contract' | 'unknown'
 
 export type UserAction =
   | 'applied'

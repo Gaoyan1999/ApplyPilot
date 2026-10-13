@@ -3,6 +3,7 @@ import type { JobType } from '../api/types'
 export const LABEL_BY_JOB_TYPE: Record<JobType, string> = {
   full_time: 'Full-time',
   intern: 'Intern',
+  graduate: 'Graduate Program',
   contract: 'Contract',
   unknown: 'Unknown',
 }
@@ -10,6 +11,7 @@ export const LABEL_BY_JOB_TYPE: Record<JobType, string> = {
 export const CLASS_BY_JOB_TYPE: Record<JobType, string> = {
   full_time: 'job-type-full-time',
   intern: 'job-type-intern',
+  graduate: 'job-type-graduate',
   contract: 'job-type-contract',
   unknown: 'job-type-unknown',
 }

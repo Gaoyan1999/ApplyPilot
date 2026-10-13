@@ -41,6 +41,8 @@
   --jobtype-fulltime-fg: var(--stage-applied-fg);
   --jobtype-intern-bg: var(--stage-enriched-bg);
   --jobtype-intern-fg: var(--stage-enriched-fg);
+  --jobtype-graduate-bg: var(--stage-cover-bg);
+  --jobtype-graduate-fg: var(--stage-cover-fg);
   --jobtype-contract-bg: var(--stage-scored-bg);
   --jobtype-contract-fg: var(--stage-scored-fg);
   --jobtype-unknown-bg: var(--stage-discovered-bg);
@@ -107,6 +109,8 @@
     --jobtype-fulltime-fg: var(--stage-applied-fg);
     --jobtype-intern-bg: var(--stage-enriched-bg);
     --jobtype-intern-fg: var(--stage-enriched-fg);
+    --jobtype-graduate-bg: var(--stage-cover-bg);
+    --jobtype-graduate-fg: var(--stage-cover-fg);
     --jobtype-contract-bg: var(--stage-scored-bg);
     --jobtype-contract-fg: var(--stage-scored-fg);
     --jobtype-unknown-bg: var(--stage-discovered-bg);
@@ -161,6 +165,8 @@
   --jobtype-fulltime-fg: var(--stage-applied-fg);
   --jobtype-intern-bg: var(--stage-enriched-bg);
   --jobtype-intern-fg: var(--stage-enriched-fg);
+  --jobtype-graduate-bg: var(--stage-cover-bg);
+  --jobtype-graduate-fg: var(--stage-cover-fg);
   --jobtype-contract-bg: var(--stage-scored-bg);
   --jobtype-contract-fg: var(--stage-scored-fg);
   --jobtype-unknown-bg: var(--stage-discovered-bg);
@@ -226,6 +232,8 @@
   --jobtype-fulltime-fg: var(--stage-applied-fg);
   --jobtype-intern-bg: var(--stage-enriched-bg);
   --jobtype-intern-fg: var(--stage-enriched-fg);
+  --jobtype-graduate-bg: var(--stage-cover-bg);
+  --jobtype-graduate-fg: var(--stage-cover-fg);
   --jobtype-contract-bg: var(--stage-scored-bg);
   --jobtype-contract-fg: var(--stage-scored-fg);
   --jobtype-unknown-bg: var(--stage-discovered-bg);

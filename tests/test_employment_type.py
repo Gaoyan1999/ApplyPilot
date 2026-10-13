@@ -28,6 +28,8 @@ from applypilot.employment_type import (
         ("INTERN", "intern"),
         ("TEMPORARY", "contract"),
         ("PER_DIEM", "contract"),
+        ("Graduate", "graduate"),
+        ("new_grad", "graduate"),
     ],
 )
 def test_classify_native_job_type_maps_known_tokens(raw, expected):
@@ -46,6 +48,11 @@ def test_classify_native_job_type_returns_none_when_missing(raw):
         ("Summer 2026 Internship", "intern"),
         ("Contract Recruiter", "contract"),
         ("Co-op Student, Data", "intern"),
+        ("2027 Graduate Program", "graduate"),
+        ("Graduate Software Engineer", "graduate"),
+        ("New Grad Developer", "graduate"),
+        ("Undergraduate Tutor", "unknown"),
+        ("Graduate Internship", "intern"),
         ("Senior Backend Engineer", "unknown"),
         (None, "unknown"),
         ("", "unknown"),
@@ -71,3 +78,9 @@ def test_classify_job_type_title_intern_overrides_native():
     assert classify_job_type(native="fulltime", title="Marketing Intern") == "intern"
     assert classify_job_type(native="part_time", title="Marketing Intern") == "intern"
     assert classify_job_type(native="contract", title="Software Engineering Intern") == "intern"
+
+
+def test_classify_job_type_title_graduate_overrides_native():
+    """Graduate programs are usually tagged full_time natively -- the title wins."""
+    assert classify_job_type(native="fulltime", title="Technology Graduate Programme") == "graduate"
+    assert classify_job_type(native="fulltime", title="Graduate Intern") == "intern"
