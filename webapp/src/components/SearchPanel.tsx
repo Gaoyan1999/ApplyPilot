@@ -17,7 +17,9 @@ import { SiteIcon } from './SiteIcon'
 // The dashboard displays discover+enrich as one "Searching" step (fetching
 // full descriptions is an implementation detail of search, not something a
 // user needs to track separately) and score as "Rating" -- two steps live,
-// plus a third "Results" step once the run finishes.
+// plus a third "Results" step once the run finishes. Rating runs alongside
+// searching (it picks up each job as soon as it has a description), so both
+// steps are live at once; `stage` is the earliest step still running.
 const STAGE_LABELS: Record<Exclude<SearchRunStage, null>, string> = {
   discover: 'Searching…',
   enrich: 'Searching…',
@@ -39,11 +41,13 @@ function stageLabel(stage: SearchRunStage): string {
   return stage ? STAGE_LABELS[stage] : 'Searching…'
 }
 
-/** Terse one-line status for the minimized widget. */
+/** Terse one-line status for the minimized widget. While still searching,
+ * also shows how many jobs have been rated so far. */
 function compactStageDetail(status: SearchStatus | null): string | null {
   if (!status || !status.stage || status.stage === 'done') return null
-  if (status.stage === 'discover') return `${status.queries}/${status.queries_total} queries, ${status.new} found`
-  if (status.stage === 'enrich') return `${status.enriched}/${status.enrich_total} details fetched`
+  const rated = status.scored > 0 ? `, ${status.scored} rated` : ''
+  if (status.stage === 'discover') return `${status.queries}/${status.queries_total} queries, ${status.new} found${rated}`
+  if (status.stage === 'enrich') return `${status.enriched}/${status.enrich_total} details fetched${rated}`
   if (status.stage === 'score') return `${status.scored}/${status.score_total} scored`
   return null
 }
@@ -56,13 +60,18 @@ const DISPLAY_STAGE_TITLES: Record<DisplayStage, string> = {
 }
 
 /** Maps the backend's 3 pipeline stages onto the 2 steps shown live
- * (discover and enrich both count as "search"); anything past scoring
- * (i.e. 'done' or null once the run has finished) is capped to the last
- * step index by the caller. */
+ * (discover and enrich both count as "search"). */
 function displayStageIndex(stage: SearchRunStage): number {
   if (stage === 'discover' || stage === 'enrich') return 0
-  if (stage === 'score') return 1
-  return DISPLAY_STAGES.length
+  return 1
+}
+
+/** Whether the "Searching" step (discover + enrich) has finished. Task
+ * payloads saved before stages ran concurrently lack `enrich_done`, so fall
+ * back to the stage they were on. */
+function searchStepDone(status: SearchStatus): boolean {
+  if (status.enrich_done !== undefined) return status.enrich_done
+  return displayStageIndex(status.stage) > 0
 }
 
 function discoverStatusText(status: SearchStatus): string {
@@ -169,11 +178,20 @@ function SearchStepBody({ status, isCurrent }: { status: SearchStatus; isCurrent
 
 function RateStepBody({ status, isCurrent }: { status: SearchStatus; isCurrent: boolean }): ReactNode {
   if (isCurrent) {
+    const searching = !searchStepDone(status)
+    if (searching && status.score_total === 0) {
+      return <p className="search-stage-description">Waiting for the first job descriptions to rate…</p>
+    }
     return (
       <>
-        <p className="search-stage-description">{STAGE_DESCRIPTIONS.score}</p>
+        <p className="search-stage-description">
+          {STAGE_DESCRIPTIONS.score}
+          {searching && ' Jobs are rated as soon as they are found, while the search keeps going.'}
+        </p>
         <ProgressBar done={status.scored} total={status.score_total} label="Scoring" />
-        <p className="search-progress-summary">{status.scored} of {status.score_total} jobs rated.</p>
+        <p className="search-progress-summary">
+          {status.scored} of {status.score_total} jobs rated{searching ? ' so far' : ''}.
+        </p>
       </>
     )
   }
@@ -184,21 +202,18 @@ function RateStepBody({ status, isCurrent }: { status: SearchStatus; isCurrent: 
   )
 }
 
-/** Accumulating step-by-step log of a search run: "Searching" (discover +
- * enrich) then "Rating" (score). Earlier steps stay visible with their
- * frozen final summary once the run moves on, instead of being replaced --
- * used both mid-run (as steps complete one at a time) and on the final
- * overview (both steps shown as done). */
+/** Step-by-step log of a search run: "Searching" (discover + enrich) and
+ * "Rating" (score). Both steps are live at once, since rating picks up jobs
+ * while the search is still running; the search step freezes on its final
+ * summary once it finishes -- used both mid-run and on the final overview
+ * (both steps shown as done). */
 function SearchLog({ status }: { status: SearchStatus }) {
-  const stageIdx = Math.min(displayStageIndex(status.stage), DISPLAY_STAGES.length - 1)
-  const erroredIdx = status.error ? stageIdx : -1
-  const lastVisible = status.running || status.error ? stageIdx : DISPLAY_STAGES.length - 1
+  const erroredIdx = status.error ? displayStageIndex(status.error_stage ?? status.stage) : -1
 
   return (
     <div className="search-log">
       {DISPLAY_STAGES.map((s, i) => {
-        if (i > lastVisible) return null
-        const isCurrent = status.running && i === stageIdx
+        const isCurrent = status.running && (s === 'rate' || !searchStepDone(status))
         const isErrored = i === erroredIdx
         return (
           <div
