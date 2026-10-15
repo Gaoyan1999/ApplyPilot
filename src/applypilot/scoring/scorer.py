@@ -276,6 +276,23 @@ def run_scoring(
         result["url"] = job["url"]
         completed += 1
 
+        # Save each grade as soon as it's in, so the jobs table fills in live
+        # (the web search rates jobs while discovery is still running) and a
+        # crash mid-run doesn't throw away the grades already paid for.
+        # score_reasoning stores JSON: {"met": [...], "gaps": [...]} so the UI
+        # can render a checklist instead of a free-text sentence.
+        conn.execute(
+            "UPDATE jobs SET fit_score = ?, fit_grade = ?, score_reasoning = ?, scored_at = ? WHERE url = ?",
+            (
+                score_from_grade(result["grade"]),
+                result["grade"],
+                json.dumps({"met": result["met"], "gaps": result["gaps"]}),
+                datetime.now(timezone.utc).isoformat(),
+                result["url"],
+            ),
+        )
+        conn.commit()
+
         if result["grade"] is None:
             errors += 1
             gaps = result.get("gaps") or []
@@ -290,17 +307,6 @@ def run_scoring(
         )
         if on_progress:
             on_progress({"done": completed, "total": len(jobs)})
-
-    # Write scores to DB. score_reasoning stores JSON: {"met": [...], "gaps": [...]}
-    # so the UI can render a checklist instead of a free-text sentence.
-    now = datetime.now(timezone.utc).isoformat()
-    for r in results:
-        reasoning_json = json.dumps({"met": r["met"], "gaps": r["gaps"]})
-        conn.execute(
-            "UPDATE jobs SET fit_score = ?, fit_grade = ?, score_reasoning = ?, scored_at = ? WHERE url = ?",
-            (score_from_grade(r["grade"]), r["grade"], reasoning_json, now, r["url"]),
-        )
-    conn.commit()
 
     elapsed = time.time() - t0
     log.info("Done: %d scored in %.1fs (%.1f jobs/sec)", len(results), elapsed, len(results) / elapsed if elapsed > 0 else 0)

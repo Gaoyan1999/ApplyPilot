@@ -178,8 +178,13 @@ export interface SearchStatus {
   current_query: string | null
   current_location: string | null
   discover_log: DiscoverLogEntry[]
+  // The three stages run at the same time; these say which have finished.
+  // `stage` is the earliest one still running. Missing on task payloads
+  // saved before stages ran concurrently.
+  discover_done?: boolean
   enriched: number
   enrich_total: number
+  enrich_done?: boolean
   scored: number
   score_total: number
   warnings: string[]
